@@ -7,7 +7,6 @@
 
 import SwiftUI
 import Combine
-import UIKit
 import AVFoundation
 import AVKit
 
@@ -598,10 +597,10 @@ private struct PetVideoView: View {
         .onDisappear {
             teardown()
         }
-        .onChange(of: videoFileName) { _ in
+        .onChange(of: videoFileName) {
             configurePlayer()
         }
-        .onChange(of: isLoop) { _ in
+        .onChange(of: isLoop) {
             configurePlayer()
         }
     }
