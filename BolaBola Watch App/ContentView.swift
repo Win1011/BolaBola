@@ -81,7 +81,9 @@ enum AnimationScale {
 // watchOS 上循环播放时，图片/纹理缓存可能持续增长。
 // 通过限制“实际参与播放的独特帧数量”，可以显著降低 OOM 风险。
 enum AnimationLimits {
-    static let maxUniqueFrames: Int = 16
+    // 限制“参与解码/渲染的独特点帧数量”，避免 watchOS 因纹理/解码缓存累积而 OOM
+    // 设得足够大即可关掉“抽帧/采样”，恢复到逐帧播放的效果。
+    static let maxUniqueFrames: Int = 1000
 }
 
 /// 负责从 Bundle/Asset Catalog 中按前缀扫描所有帧的简单加载器（用于 PNG 帧序列兜底）
@@ -155,6 +157,13 @@ enum PetAnimationLoader {
 
 /// 所有可用动画的配置（只需要指定目录和基础参数）
 enum PetAnimations {
+    // 如果启用了帧采样（maxUniqueFrames），则实际“时间长度”会因为 stride 变短。
+    // 为了让观感更接近原始播放速度，这里把 fps 按 stride 成比例缩小。
+    private static func effectiveFPS(baseFPS: Double, maxFrames: Int) -> Double {
+        let stride = max(1, (maxFrames + AnimationLimits.maxUniqueFrames - 1) / AnimationLimits.maxUniqueFrames)
+        return baseFPS / Double(stride)
+    }
+
     // 当前只有 shake 这一套动画，我们先把它当作 idle 来用：
     // 资源名形如：shake0, shake1, ...
     static let idle: PetAnimation = PetAnimation(
@@ -162,7 +171,7 @@ enum PetAnimations {
         displayScale: AnimationScale.idle,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "shake", maxFrames: 23),
-            fps: 6,
+            fps: effectiveFPS(baseFPS: 6, maxFrames: 23),
             isLoop: true
         )
     )
@@ -175,7 +184,7 @@ enum PetAnimations {
         // 直接使用 idleone 帧序列来渲染，避免播放器控件出现。
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "idleone", maxFrames: 31, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 7,
+            fps: effectiveFPS(baseFPS: 7, maxFrames: 31),
             isLoop: true
         )
     )
@@ -187,7 +196,7 @@ enum PetAnimations {
         // 同上：改用帧序列，避免 VideoPlayer 控件层。
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "scale", maxFrames: 26, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 7,
+            fps: effectiveFPS(baseFPS: 7, maxFrames: 26),
             isLoop: true
         )
     )
@@ -199,7 +208,7 @@ enum PetAnimations {
         source: .frames(
             // 目前 Assets.xcassets 里不一定有 happy 资源；用很小的 maxFrames 避免无意义生成过多帧名。
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "happy", maxFrames: 1, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 1),
             isLoop: true
         )
     )
@@ -212,7 +221,7 @@ enum PetAnimations {
         displayScale: AnimationScale.angry2,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "angrytwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: true
         )
     )
@@ -222,7 +231,7 @@ enum PetAnimations {
         displayScale: AnimationScale.question1,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "questionone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: true
         )
     )
@@ -232,7 +241,7 @@ enum PetAnimations {
         displayScale: AnimationScale.question2,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "questiontwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: true
         )
     )
@@ -242,7 +251,7 @@ enum PetAnimations {
         displayScale: AnimationScale.question3,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "questionthree", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: true
         )
     )
@@ -252,7 +261,7 @@ enum PetAnimations {
         displayScale: AnimationScale.speak1,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "speakone", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 36),
             isLoop: true
         )
     )
@@ -262,7 +271,7 @@ enum PetAnimations {
         displayScale: AnimationScale.speak2,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "speaktwo", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 36),
             isLoop: true
         )
     )
@@ -272,7 +281,7 @@ enum PetAnimations {
         displayScale: AnimationScale.speak3,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "speakthree", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: true
         )
     )
@@ -282,7 +291,7 @@ enum PetAnimations {
         displayScale: AnimationScale.blowbubble1,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "blowbubbleone", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 36),
             isLoop: true
         )
     )
@@ -292,7 +301,7 @@ enum PetAnimations {
         displayScale: AnimationScale.blowbubble2,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "blowbubbletwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: true
         )
     )
@@ -302,7 +311,7 @@ enum PetAnimations {
         displayScale: AnimationScale.like1,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "likeone", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 36),
             isLoop: true
         )
     )
@@ -312,7 +321,7 @@ enum PetAnimations {
         displayScale: AnimationScale.like2,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "liketwo", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 36),
             isLoop: true
         )
     )
@@ -322,7 +331,7 @@ enum PetAnimations {
         displayScale: AnimationScale.sad1,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "sadone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: true
         )
     )
@@ -332,7 +341,7 @@ enum PetAnimations {
         displayScale: AnimationScale.sad2,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "sadtwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: true
         )
     )
@@ -342,7 +351,7 @@ enum PetAnimations {
         displayScale: AnimationScale.sleepy,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleepy", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: 8,
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: true
         )
     )
@@ -529,6 +538,12 @@ private struct PetFramesView: View {
                     .scaledToFit()
                     .scaleEffect(displayScale)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // 强制 SwiftUI 每帧重建该 Image，降低旧纹理/渲染缓存滞留概率
+                    .id(frameName)
+                    // 禁用隐式动画，避免中间帧/过渡导致额外纹理被保留
+                    .transaction { txn in
+                        txn.animation = nil
+                    }
             } else {
                 Color.clear
             }
