@@ -16,8 +16,14 @@ import AVKit
 enum PetEmotion {
     case idle
     case idleOne      // 新增：idleone 动作
+    case idleTwo      // 新增：idletwo 动作
+    case idleThree    // 新增：idlethree 动作
     case scale        // 新增：scale 动作
+    case die          // 新增：DIE 动作
     case angry2       // 新增：angry2 动作
+    case unhappy      // 新增：不高兴 动作
+    case letter       // 新增：信件 动作
+    case hurt         // 新增：委屈 动作
     case question1    // 新增：question1 动作
     case question2    // 新增：question2 动作
     case question3    // 新增：question3 动作
@@ -28,8 +34,12 @@ enum PetEmotion {
     case blowbubble2  // 新增：blowbubble2 动作
     case like1        // 新增：like1 动作
     case like2        // 新增：like2 动作
+    case surprisedOne // 新增：惊喜1 动作
+    case surprisedTwo // 新增：惊喜2 动作
     case sad1         // 新增：sad1 动作
     case sad2         // 新增：sad2 动作
+    case jumpTwo      // 新增：跳跃2 动作
+    case jumpTwoOnce  // 用于惊喜后“一次性”跳跃（2轮后自动回默认）
     case sleepy       // 新增：sleepy 动作
     case happy
     case angry
@@ -54,10 +64,16 @@ struct PetAnimation {
 enum AnimationScale {
     static let idle: CGFloat = 2.0
     static let idleOne: CGFloat = 3.0
+    static let idleTwo: CGFloat = 3.0
+    static let idleThree: CGFloat = 3.0
     static let scale: CGFloat = 2.0
 
+    static let die: CGFloat = 3.0
     static let happy: CGFloat = 2.0
     static let angry2: CGFloat = 2.0
+    static let unhappy: CGFloat = 2.5
+    static let letter: CGFloat = 2.5
+    static let hurt: CGFloat = 2.5
 
     static let question1: CGFloat = 2.5
     static let question2: CGFloat = 2.5
@@ -71,8 +87,11 @@ enum AnimationScale {
     static let blowbubble2: CGFloat = 2.5
     static let like1: CGFloat = 2.5
     static let like2: CGFloat = 2.5
+    static let surprisedOne: CGFloat = 2.5
+    static let surprisedTwo: CGFloat = 2.5
     static let sad1: CGFloat = 2.5
     static let sad2: CGFloat = 2.5
+    static let jumpTwo: CGFloat = 2.5
     static let sleepy: CGFloat = 2.5
 }
 
@@ -163,6 +182,16 @@ enum PetAnimations {
         return baseFPS / Double(stride)
     }
 
+    // 为了实现“播放两次后结束”，直接把同一套帧序列拼成两倍长度。
+    private static func loopTwiceFrames(prefix: String, maxFrames: Int) -> [String] {
+        let one = PetAnimationLoader.loadFrameNames(
+            prefix: prefix,
+            maxFrames: maxFrames,
+            maxUniqueFrames: AnimationLimits.maxUniqueFrames
+        )
+        return one + one
+    }
+
     // 当前只有 shake 这一套动画，我们先把它当作 idle 来用：
     // 资源名形如：shake0, shake1, ...
     static let idle: PetAnimation = PetAnimation(
@@ -188,6 +217,28 @@ enum PetAnimations {
         )
     )
 
+    // 新增 idleTwo：资源名形如 idletwo0, idletwo1, ...
+    static let idleTwo: PetAnimation = PetAnimation(
+        emotion: .idleTwo,
+        displayScale: AnimationScale.idleTwo,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idletwo", maxFrames: 31, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 7, maxFrames: 31),
+            isLoop: true
+        )
+    )
+
+    // 新增 idleThree：资源名形如 idlethree0, idlethree1, ...
+    static let idleThree: PetAnimation = PetAnimation(
+        emotion: .idleThree,
+        displayScale: AnimationScale.idleThree,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idlethree", maxFrames: 31, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 7, maxFrames: 31),
+            isLoop: true
+        )
+    )
+
     // 新增 scale 动作：资源名形如 scale0, scale1, ...
     static let scale: PetAnimation = PetAnimation(
         emotion: .scale,
@@ -196,6 +247,17 @@ enum PetAnimations {
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "scale", maxFrames: 26, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
             fps: effectiveFPS(baseFPS: 7, maxFrames: 26),
+            isLoop: true
+        )
+    )
+
+    // 新增 die：资源名形如 die0, die1, ...
+    static let die: PetAnimation = PetAnimation(
+        emotion: .die,
+        displayScale: AnimationScale.die,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "die", maxFrames: 31, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 7, maxFrames: 31),
             isLoop: true
         )
     )
@@ -221,6 +283,39 @@ enum PetAnimations {
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "angrytwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
             fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            isLoop: true
+        )
+    )
+
+    // 新增 unhappy：资源名形如 unhappy0, unhappy1, ...
+    static let unhappy: PetAnimation = PetAnimation(
+        emotion: .unhappy,
+        displayScale: AnimationScale.unhappy,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "unhappy", maxFrames: 31, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 31),
+            isLoop: true
+        )
+    )
+
+    // 新增 letter：资源名形如 letter0, letter1, ...
+    static let letter: PetAnimation = PetAnimation(
+        emotion: .letter,
+        displayScale: AnimationScale.letter,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "letter", maxFrames: 31, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 31),
+            isLoop: true
+        )
+    )
+
+    // 新增 hurt：资源名形如 hurt0, hurt1, ...
+    static let hurt: PetAnimation = PetAnimation(
+        emotion: .hurt,
+        displayScale: AnimationScale.hurt,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "hurt", maxFrames: 31, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 31),
             isLoop: true
         )
     )
@@ -325,6 +420,28 @@ enum PetAnimations {
         )
     )
 
+    // 新增 surprisedOne：资源名形如 surprisedone0, surprisedone1, ...
+    static let surprisedOne: PetAnimation = PetAnimation(
+        emotion: .surprisedOne,
+        displayScale: AnimationScale.surprisedOne,
+        source: .frames(
+            frameNames: loopTwiceFrames(prefix: "surprisedone", maxFrames: 31),
+            fps: effectiveFPS(baseFPS: 10, maxFrames: 31),
+            isLoop: false
+        )
+    )
+
+    // 新增 surprisedTwo：资源名形如 surprisetwo0, surprisetwo1, ...
+    static let surprisedTwo: PetAnimation = PetAnimation(
+        emotion: .surprisedTwo,
+        displayScale: AnimationScale.surprisedTwo,
+        source: .frames(
+            frameNames: loopTwiceFrames(prefix: "surprisetwo", maxFrames: 26),
+            fps: effectiveFPS(baseFPS: 10, maxFrames: 26),
+            isLoop: false
+        )
+    )
+
     static let sad1: PetAnimation = PetAnimation(
         emotion: .sad1,
         displayScale: AnimationScale.sad1,
@@ -345,6 +462,28 @@ enum PetAnimations {
         )
     )
 
+    // 新增 jumpTwo：资源名形如 jumptwo0, jumptwo1, ...
+    static let jumpTwo: PetAnimation = PetAnimation(
+        emotion: .jumpTwo,
+        displayScale: AnimationScale.jumpTwo,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "jumptwo", maxFrames: 31, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 10, maxFrames: 31),
+            isLoop: true
+        )
+    )
+
+    // 用于惊喜后“额外跳一下”的一次性版本：播放 2 轮后自动回默认状态。
+    static let jumpTwoOnce: PetAnimation = PetAnimation(
+        emotion: .jumpTwoOnce,
+        displayScale: AnimationScale.jumpTwo,
+        source: .frames(
+            frameNames: loopTwiceFrames(prefix: "jumptwo", maxFrames: 31),
+            fps: effectiveFPS(baseFPS: 10, maxFrames: 31),
+            isLoop: false
+        )
+    )
+
     static let sleepy: PetAnimation = PetAnimation(
         emotion: .sleepy,
         displayScale: AnimationScale.sleepy,
@@ -361,19 +500,101 @@ enum PetAnimations {
 final class PetViewModel: ObservableObject {
     @Published var currentEmotion: PetEmotion = .idle
     @Published var currentFrameIndex: Int = 0
+    @Published var companionValue: Double = 50
+    // 内部陪伴值允许小数（用于 5 分钟级别的 +/-0.1/-0.1 平滑），对外与状态机使用“四舍五入后的整数值”。
+    private var companionValueInternal: Double = 50
+
+    private let surpriseMilestoneHours: Double = {
+        // 为了方便你在真机上快速验证逻辑：Debug 下把 100 小时缩短到很小的数。
+        // Release 仍然是 100 小时。
+        #if DEBUG
+        return 0.02 // 0.02h ~= 72 秒
+        #else
+        return 100
+        #endif
+    }()
+
+    private let companionValueKey = "bola_companionValue"
+    private let lastTickTimestampKey = "bola_lastTickTimestamp"
+
+    // Surprise：累积“活跃时间”的总秒数（只在 App active 时计入）
+    private let totalActiveSecondsKey = "bola_totalActiveSeconds"
+    private let activeCarrySecondsKey = "bola_activeCarrySeconds"
+    // companionValue 的衰减：累积“非活跃扣减时长”的总秒数（00:00~07:00 不扣减）
+    private let inactiveCarrySecondsKey = "bola_inactiveCarrySeconds"
+
+    private let lastSurpriseAtHoursKey = "bola_lastSurpriseAtHours"
+
+    private var totalActiveSeconds: TimeInterval = 0
+    private var activeCarrySeconds: TimeInterval = 0
+    private var inactiveCarrySeconds: TimeInterval = 0
+    private var surprisePending: Bool = false
+    // 记录“上一次惊喜触发在多少小时里程碑”，用于实现 100h -> 200h -> 300h… 的幂等触发。
+    private var lastSurpriseMilestoneHours: Double = 0
+    // 惊喜播放完（surprisedOne/Two 2轮）后，需要排队再播放一次 jumpTwoOnce。
+    private var surpriseJumpTwoQueued: Bool = false
+    private var lastTapTimestamp: TimeInterval = 0
+
+    private var currentDefaultEmotion: PetEmotion = .idle
+    private var milestoneTimerCancellable: AnyCancellable?
+    private var lastTickTimestamp: TimeInterval = 0
 
     /// 点击宠物时轮换的动作列表（你后续加动作只要往这里补）
     private let tapCycleEmotions: [PetEmotion] = [
-        .idle, .idleOne, .scale,
+        .idle, .idleOne, .idleTwo, .idleThree, .scale,
+        .die,
         .angry2,
+        .unhappy, .letter, .hurt,
         .question1, .question2, .question3,
         .speak1, .speak2, .speak3
         ,
         .blowbubble1, .blowbubble2,
         .like1, .like2,
+        .surprisedOne, .surprisedTwo,
         .sad1, .sad2,
+        .jumpTwo,
         .sleepy
     ]
+
+    init() {
+        // 初始化：按“App active 时间 + 依据时段不扣减规则”计算 companionValue，
+        // 同时按 active 累计时间计算惊喜里程碑。
+        hydrateTotalTimeAndSurpriseState()
+
+        // DEBUG：为了你能立刻验证惊喜逻辑（而不是等几十秒/几小时），
+        // 直接把 totalActiveSeconds 拉到里程碑阈值，并清掉“已触发过惊喜”的记录。
+        #if DEBUG
+        lastSurpriseMilestoneHours = 0
+        surprisePending = false
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: lastSurpriseAtHoursKey)
+        totalActiveSeconds = max(totalActiveSeconds, surpriseMilestoneHours * 3600.0)
+        defaults.set(totalActiveSeconds, forKey: totalActiveSecondsKey)
+
+        // DEBUG：先固定一个陪伴值，方便你验证“播完回默认”的效果。
+        companionValueInternal = 80
+        companionValue = companionValueInternal.rounded()
+        defaults.set(companionValueInternal, forKey: companionValueKey)
+        activeCarrySeconds = 0
+        inactiveCarrySeconds = 0
+        defaults.set(activeCarrySeconds, forKey: activeCarrySecondsKey)
+        defaults.set(inactiveCarrySeconds, forKey: inactiveCarrySecondsKey)
+        #endif
+
+        selectDefaultEmotion()
+        currentEmotion = currentDefaultEmotion
+
+        // 启动后台检查：如果在运行过程中跨过 100 小时里程碑，则触发惊喜。
+        startMilestoneTimer()
+        #if DEBUG
+        // 给你几秒切换到“非默认动画”，验证“排队到播放结束后再触发惊喜”。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            self?.maybeTriggerSurpriseIfNeeded()
+        }
+        #else
+        maybeTriggerSurpriseIfNeeded()
+        #endif
+    }
 
     /// 当前情绪对应的动画配置
     var currentAnimation: PetAnimation {
@@ -382,10 +603,22 @@ final class PetViewModel: ObservableObject {
             return PetAnimations.idle
         case .idleOne:
             return PetAnimations.idleOne
+        case .idleTwo:
+            return PetAnimations.idleTwo
+        case .idleThree:
+            return PetAnimations.idleThree
         case .scale:
             return PetAnimations.scale
+        case .die:
+            return PetAnimations.die
         case .angry2:
             return PetAnimations.angry2
+        case .unhappy:
+            return PetAnimations.unhappy
+        case .letter:
+            return PetAnimations.letter
+        case .hurt:
+            return PetAnimations.hurt
         case .question1:
             return PetAnimations.question1
         case .question2:
@@ -406,10 +639,18 @@ final class PetViewModel: ObservableObject {
             return PetAnimations.like1
         case .like2:
             return PetAnimations.like2
+        case .surprisedOne:
+            return PetAnimations.surprisedOne
+        case .surprisedTwo:
+            return PetAnimations.surprisedTwo
         case .sad1:
             return PetAnimations.sad1
         case .sad2:
             return PetAnimations.sad2
+        case .jumpTwo:
+            return PetAnimations.jumpTwo
+        case .jumpTwoOnce:
+            return PetAnimations.jumpTwoOnce
         case .sleepy:
             return PetAnimations.sleepy
         case .happy:
@@ -433,8 +674,23 @@ final class PetViewModel: ObservableObject {
                 if isLoop {
                     currentFrameIndex = 0
                 } else {
-                    // 非循环动画播完回到 idle
-                    currentEmotion = .idle
+                    // 非循环动画播完：回到“默认状态”
+                    // 惊喜/插入类动画在播放完成后，统一回到 companionValue 决定的默认状态。
+                    if surpriseJumpTwoQueued {
+                        // 惊喜分两段：surprisedOne/Two 播完（2轮）后，额外再播一次 jumpTwoOnce。
+                        surpriseJumpTwoQueued = false
+                        currentEmotion = .jumpTwoOnce
+                        currentFrameIndex = 0
+                        // 提前返回：不要在 jumpTwoOnce 播放期间启动下一次惊喜排队。
+                        return
+                    } else {
+                        selectDefaultEmotion()
+                        currentEmotion = currentDefaultEmotion
+                    }
+                    // 如果里程碑触发时因为播放了别的动画而排队，则这里开始播放惊喜。
+                    if surprisePending {
+                        maybeTriggerSurpriseIfNeeded(forcePending: true)
+                    }
                     currentFrameIndex = 0
                 }
             } else {
@@ -447,15 +703,273 @@ final class PetViewModel: ObservableObject {
     }
 
     func cycleEmotionOnTap() {
-        guard let idx = tapCycleEmotions.firstIndex(of: currentEmotion) else {
-            currentEmotion = tapCycleEmotions.first ?? .idle
-            currentFrameIndex = 0
+        let nowTs = Date().timeIntervalSince1970
+        // 点击冷却：3 秒内不允许重复触发（避免狂点打乱状态）
+        if nowTs - lastTapTimestamp < 3 {
             return
         }
-        let nextIndex = (idx + 1) % tapCycleEmotions.count
-        currentEmotion = tapCycleEmotions[nextIndex]
+        lastTapTimestamp = nowTs
+
+        let v = Int(companionValue.rounded()) // companionValue 已经是四舍五入后的整数
+
+        // die 段：无反应（强化死亡无交互感）
+        if v <= 2 {
+            return
+        }
+
+        // 先刷新“主状态”，用它来确定当前分段的基础情绪。
+        selectDefaultEmotion()
+        let main = currentDefaultEmotion
+
+        let next: PetEmotion
+        switch v {
+        case 3...9:
+            // hurt ↔ sad1/sad2
+            next = Bool.random() ? .hurt : main
+        case 10...19:
+            // hurt ↔ unhappy
+            next = Bool.random() ? .hurt : .unhappy
+        case 20...39:
+            // question1 ↔ sad1
+            next = Bool.random() ? .question1 : .sad1
+        case 40...59:
+            // scale ↔ idleOne/idleTwo
+            next = Bool.random() ? .scale : main
+        case 60...69:
+            // speak1 ↔ question1/question2
+            next = Bool.random() ? .speak1 : main
+        case 70...79:
+            // speak* ↔ question*
+            next = Bool.random() ? main : (v % 2 == 0 ? .question1 : .question2)
+        case 80...89:
+            // like1 ↔ jumpTwo ↔ idleThree
+            next = [PetEmotion.like1, .jumpTwo, .idleThree].randomElement() ?? .like1
+        default:
+            // 90...100：like2 ↔ blowbubble2 ↔ jumpTwo
+            next = [PetEmotion.like2, .blowbubble2, .jumpTwo].randomElement() ?? .like2
+        }
+
+        currentEmotion = next
         currentFrameIndex = 0
         print("🐾 Tap -> switch emotion:", String(describing: currentEmotion))
+    }
+
+    // MARK: - Companion value time coupling
+
+    private func clampCompanionValue(_ v: Double) -> Double {
+        min(max(v, 0), 100)
+    }
+
+    // App active 时：每累计 5 分钟 +1（00:00~07:00 也计入加成）
+    private func applyActiveAddition(_ seconds: TimeInterval) {
+        activeCarrySeconds += seconds
+        while activeCarrySeconds >= 300 {
+            companionValueInternal += 1
+            activeCarrySeconds -= 300
+        }
+
+        // 清理浮点误差（-0.1 会产生 0.30000000004 之类的问题）
+        companionValueInternal = (companionValueInternal * 10).rounded() / 10
+        companionValueInternal = clampCompanionValue(companionValueInternal)
+        companionValue = companionValueInternal.rounded()
+    }
+
+    // App inactive 时：每累计 5 分钟 -0.1（00:00~07:00 不扣减）
+    private func applyInactiveDeduction(_ secondsToDeduct: TimeInterval) {
+        inactiveCarrySeconds += secondsToDeduct
+        while inactiveCarrySeconds >= 300 {
+            companionValueInternal -= 0.1
+            inactiveCarrySeconds -= 300
+        }
+        companionValueInternal = (companionValueInternal * 10).rounded() / 10
+        companionValueInternal = clampCompanionValue(companionValueInternal)
+        companionValue = companionValueInternal.rounded()
+    }
+
+    // 扣减窗口：每天 00:00~07:00 这段不扣减，其余时间都可用于扣减
+    private func deductibleSecondsOutsideNightWindow(from: Date, to: Date) -> TimeInterval {
+        if to <= from { return 0 }
+        let calendar = Calendar.current
+        var noDeduct: TimeInterval = 0
+
+        var cursor = from
+        while cursor < to {
+            let dayStart = calendar.startOfDay(for: cursor)
+            guard let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart) else { break }
+
+            let chunkEnd = min(to, nextDay)
+            let windowStart = dayStart
+            let windowEnd = dayStart.addingTimeInterval(7 * 3600)
+
+            let overlapStart = max(cursor, windowStart)
+            let overlapEnd = min(chunkEnd, windowEnd)
+
+            if overlapEnd > overlapStart {
+                noDeduct += overlapEnd.timeIntervalSince(overlapStart)
+            }
+            cursor = chunkEnd
+        }
+
+        return max(0, to.timeIntervalSince(from) - noDeduct)
+    }
+
+    // MARK: - Surprise / Default state machine (minimal, testable)
+
+    private func hydrateTotalTimeAndSurpriseState() {
+        let defaults = UserDefaults.standard
+        let now = Date()
+        let nowTs = now.timeIntervalSince1970
+
+        // 1) hydration: companionValue / totalActiveSeconds / carry
+        if defaults.object(forKey: companionValueKey) != nil {
+            companionValueInternal = defaults.double(forKey: companionValueKey)
+        } else {
+            companionValueInternal = 50 // 默认值：避免一开始就太悲伤
+        }
+
+        totalActiveSeconds = defaults.double(forKey: totalActiveSecondsKey)
+        activeCarrySeconds = defaults.double(forKey: activeCarrySecondsKey)
+        inactiveCarrySeconds = defaults.double(forKey: inactiveCarrySecondsKey)
+
+        companionValueInternal = clampCompanionValue(companionValueInternal)
+        companionValue = companionValueInternal.rounded()
+
+        // 2) inactive deduction: 上次 tick 到现在的非活跃时间
+        if defaults.object(forKey: lastTickTimestampKey) != nil {
+            lastTickTimestamp = defaults.double(forKey: lastTickTimestampKey)
+            let lastDate = Date(timeIntervalSince1970: lastTickTimestamp)
+            let inactiveDeductSeconds = deductibleSecondsOutsideNightWindow(from: lastDate, to: now)
+            applyInactiveDeduction(inactiveDeductSeconds)
+        } else {
+            lastTickTimestamp = nowTs
+        }
+
+        // 3) persist: lastTickTimestamp + 当前状态
+        lastTickTimestamp = nowTs
+        defaults.set(companionValueInternal, forKey: companionValueKey)
+        defaults.set(totalActiveSeconds, forKey: totalActiveSecondsKey)
+        defaults.set(activeCarrySeconds, forKey: activeCarrySecondsKey)
+        defaults.set(inactiveCarrySeconds, forKey: inactiveCarrySecondsKey)
+        defaults.set(lastTickTimestamp, forKey: lastTickTimestampKey)
+
+        // 4) surprise idempotency：lastSurpriseMilestoneHours >= 当前应该触发的下一档时则不触发
+        lastSurpriseMilestoneHours = defaults.double(forKey: lastSurpriseAtHoursKey)
+    }
+
+    private func startMilestoneTimer() {
+        milestoneTimerCancellable?.cancel()
+        milestoneTimerCancellable = Timer
+            .publish(every: 60, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.accumulateTimeAndMaybeTrigger()
+            }
+    }
+
+    private func accumulateTimeAndMaybeTrigger() {
+        let defaults = UserDefaults.standard
+        let now = Date()
+        let nowTs = now.timeIntervalSince1970
+
+        // active delta: App 处于运行状态时的时间增量
+        let effectiveDelta = max(0, nowTs - lastTickTimestamp)
+        if effectiveDelta > 0 {
+            let oldDefaultEmotion = currentDefaultEmotion
+
+            // 1) companionValue: 每累计 5 分钟 active +1
+            applyActiveAddition(effectiveDelta)
+
+            // 2) 根据新的 companionValue 重新计算默认状态；
+            //    如果当前就在“默认状态”，则切换到新的默认状态。
+            selectDefaultEmotion()
+            if currentEmotion == oldDefaultEmotion {
+                currentEmotion = currentDefaultEmotion
+                currentFrameIndex = 0
+            }
+
+            // 2) surprise: active 累计用于 100 小时里程碑
+            totalActiveSeconds += effectiveDelta
+
+            // persist
+            defaults.set(companionValueInternal, forKey: companionValueKey)
+            defaults.set(totalActiveSeconds, forKey: totalActiveSecondsKey)
+            defaults.set(activeCarrySeconds, forKey: activeCarrySecondsKey)
+            defaults.set(inactiveCarrySeconds, forKey: inactiveCarrySecondsKey)
+            lastTickTimestamp = nowTs
+            defaults.set(lastTickTimestamp, forKey: lastTickTimestampKey)
+        }
+
+        maybeTriggerSurpriseIfNeeded()
+    }
+
+    private func maybeTriggerSurpriseIfNeeded(forcePending: Bool = false) {
+        let totalHours = totalActiveSeconds / 3600.0
+
+        // 100h -> 200h -> 300h ...：每次在上一次触发点基础上再往后推一步。
+        let nextMilestoneHours: Double = (lastSurpriseMilestoneHours <= 0)
+        ? surpriseMilestoneHours
+        : (lastSurpriseMilestoneHours + surpriseMilestoneHours)
+
+        guard totalHours >= nextMilestoneHours else { return }
+        // 已经触发过下一档就不再触发
+        guard lastSurpriseMilestoneHours < nextMilestoneHours else { return }
+
+        // 规则：只有当当前动画属于默认状态时才立即触发；
+        // 如果当前在播放别的动画，则先排队（等待“非循环动画”播放结束后再触发）。
+        let canStartNow = (currentEmotion == currentDefaultEmotion)
+        if !canStartNow && !forcePending {
+            surprisePending = true
+            return
+        }
+
+        surprisePending = false
+        surpriseJumpTwoQueued = true
+
+        lastSurpriseMilestoneHours = nextMilestoneHours
+        UserDefaults.standard.set(nextMilestoneHours, forKey: lastSurpriseAtHoursKey)
+
+        // 里程碑触发后：随机只选一个惊喜动画。
+        currentEmotion = Bool.random() ? .surprisedOne : .surprisedTwo
+        currentFrameIndex = 0
+        print("🎉 Surprise triggered at hours:", totalHours, "(milestone:", nextMilestoneHours, ") =>", String(describing: currentEmotion))
+    }
+
+    private func selectDefaultEmotion() {
+        // 默认状态由 companionValue 决定（为了避免抖动，这里用确定性映射）。
+        let v = Int(companionValue.rounded())
+        if v <= 2 {
+            currentDefaultEmotion = .die
+        } else if v <= 9 {
+            // 3~9：sad1/sad2（随机循环的等价：按 v 做确定性分层）
+            currentDefaultEmotion = (v % 2 == 0) ? .sad2 : .sad1
+        } else if v <= 19 {
+            currentDefaultEmotion = .unhappy
+        } else if v <= 39 {
+            currentDefaultEmotion = .sad1
+        } else if v <= 59 {
+            // 40~59：idleOne/idleTwo
+            currentDefaultEmotion = (v % 2 == 0) ? .idleOne : .idleTwo
+        } else if v <= 69 {
+            // 60~69：question1/question2
+            currentDefaultEmotion = (v % 2 == 0) ? .question1 : .question2
+        } else if v <= 79 {
+            // 70~79：speak1/speak2
+            currentDefaultEmotion = (v % 2 == 0) ? .speak1 : .speak2
+        } else if v <= 89 {
+            // 80~89：like1/idleThree/jumpTwo
+            switch v % 3 {
+            case 0: currentDefaultEmotion = .like1
+            case 1: currentDefaultEmotion = .idleThree
+            default: currentDefaultEmotion = .jumpTwo
+            }
+        } else {
+            // 90~100：like2/blowbubble2/jumpTwo
+            switch v % 3 {
+            case 0: currentDefaultEmotion = .like2
+            case 1: currentDefaultEmotion = .blowbubble2
+            default: currentDefaultEmotion = .jumpTwo
+            }
+        }
     }
 }
 
@@ -466,26 +980,21 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            // 宠物动画区域
             PetAnimationView(viewModel: viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
-                // watchOS 下 VideoPlayer 可能会抢占点击并显示播放控制层，
-                // 用高优先级手势确保点击一定会切换动画。
                 .highPriorityGesture(
                     TapGesture().onEnded { viewModel.cycleEmotionOnTap() }
                 )
 
-            // 简单的时间 + 陪伴值占位
             Text(Date(), style: .time)
                 .font(.headline)
 
             HStack {
                 Text("陪伴值")
-                ProgressView(value: 0.3) // 后面接真实数据
+                ProgressView(value: viewModel.companionValue / 100.0)
             }
             .font(.footnote)
-
         }
         .padding()
     }

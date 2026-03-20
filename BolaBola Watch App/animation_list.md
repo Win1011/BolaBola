@@ -2,8 +2,14 @@
 
 - `shake`
 - `idleone`
+- `idleTwo`
+- `idleThree`
 - `scale`
+- `die`
 - `angry2`
+- `unhappy`
+- `letter`
+- `hurt`
 - `question1`
 - `question2`
 - `question3`
@@ -14,8 +20,11 @@
 - `blowbubble2`
 - `like1`
 - `like2`
+- `surprisedone`
+- `surprisetwo`
 - `sad1`
 - `sad2`
+- `jumptwo`
 - `sleepy`
 
 建议还需要做的动作（用于让宠物交互更完整）：
@@ -33,4 +42,4 @@
 - `bounce`：弹跳/蹦一下（短动作）
 
 测试串联顺序（点击切换用）：
-`shake -> idleone -> scale -> angry2 -> question1 -> question2 -> question3 -> speak1 -> speak2 -> speak3 -> blowbubble1 -> blowbubble2 -> like1 -> like2 -> sad1 -> sad2 -> sleepy`
+`shake -> idleone -> idleTwo -> idleThree -> scale -> die -> angry2 -> unhappy -> letter -> hurt -> question1 -> question2 -> question3 -> speak1 -> speak2 -> speak3 -> blowbubble1 -> blowbubble2 -> like1 -> like2 -> surprisedone -> surprisetwo -> sad1 -> sad2 -> jumptwo -> sleepy`

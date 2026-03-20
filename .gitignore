@@ -1,0 +1,6 @@
+# 语音/iPhone 配套等后续再纳入版本控制
+BolaBolaPhoneCompanion/
+
+# 本地备份与后端实验目录（按需自行提交）
+_asset_backups/
+backend/
