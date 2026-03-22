@@ -39,6 +39,10 @@ enum PetEmotion {
     case sad1         // 新增：sad1 动作
     case sad2         // 新增：sad2 动作
     case jumpTwo      // 新增：跳跃2 动作
+    /// 新增：happy1 序列帧（Assets：`happyone0`…`happyone35`）
+    case happy1
+    /// 新增：jump1 序列帧（Assets：`jumpone0`…`jumpone35`）
+    case jump1
     case jumpTwoOnce  // 用于惊喜后“一次性”跳跃（2轮后自动回默认）
     /// 与 `jumpTwo` 同一套 `jumptwo` 资源；仅播放模式不同（点一下播一轮即停，非第二套美术）
     case jumpTwoTap
@@ -97,6 +101,8 @@ enum AnimationScale {
     static let sad1: CGFloat = 1.5
     static let sad2: CGFloat = 1.5
     static let jumpTwo: CGFloat = 1.5
+    static let happy1: CGFloat = 1.5
+    static let jump1: CGFloat = 1.5
     static let sleepy: CGFloat = 1.5
 }
 
@@ -497,6 +503,28 @@ enum PetAnimations {
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "jumptwo", maxFrames: 31, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
             fps: effectiveFPS(baseFPS: 10, maxFrames: 31),
             isLoop: false
+        )
+    )
+
+    /// happy1：资源名形如 happyone0, happyone1, …（共 36 帧）
+    static let happy1: PetAnimation = PetAnimation(
+        emotion: .happy1,
+        displayScale: AnimationScale.happy1,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "happyone", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 36),
+            isLoop: true
+        )
+    )
+
+    /// jump1：资源名形如 jumpone0, jumpone1, …（共 36 帧）
+    static let jump1: PetAnimation = PetAnimation(
+        emotion: .jump1,
+        displayScale: AnimationScale.jump1,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "jumpone", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 10, maxFrames: 36),
+            isLoop: true
         )
     )
 

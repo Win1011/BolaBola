@@ -25,6 +25,8 @@
 - `sad1`
 - `sad2`
 - `jumptwo`
+- `happyone`（happy1 文件夹，36 帧）
+- `jumpone`（jump1 文件夹，36 帧）
 - `sleepy`
 
 建议还需要做的动作（用于让宠物交互更完整）：
@@ -42,4 +44,4 @@
 - `bounce`：弹跳/蹦一下（短动作）
 
 测试串联顺序（点击切换用）：
-`shake -> idleone -> idleTwo -> idleThree -> scale -> die -> angry2 -> unhappy -> letter -> hurt -> question1 -> question2 -> question3 -> speak1 -> speak2 -> speak3 -> blowbubble1 -> blowbubble2 -> like1 -> like2 -> surprisedone -> surprisetwo -> sad1 -> sad2 -> jumptwo -> sleepy`
+`shake -> idleone -> idleTwo -> idleThree -> scale -> die -> angry2 -> unhappy -> letter -> hurt -> question1 -> question2 -> question3 -> speak1 -> speak2 -> speak3 -> blowbubble1 -> blowbubble2 -> like1 -> like2 -> surprisedone -> surprisetwo -> sad1 -> sad2 -> jumptwo -> happyone -> jumpone -> sleepy`

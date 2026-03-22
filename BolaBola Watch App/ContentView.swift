@@ -91,6 +91,7 @@ final class PetViewModel: ObservableObject {
         .surprisedOne, .surprisedTwo,
         .sad1, .sad2,
         .jumpTwo,
+        .happy1, .jump1,
         .sleepy
     ]
 
@@ -237,6 +238,10 @@ final class PetViewModel: ObservableObject {
             return PetAnimations.sad2
         case .jumpTwo:
             return PetAnimations.jumpTwo
+        case .happy1:
+            return PetAnimations.happy1
+        case .jump1:
+            return PetAnimations.jump1
         case .jumpTwoOnce:
             return PetAnimations.jumpTwoOnce
         case .jumpTwoTap:
