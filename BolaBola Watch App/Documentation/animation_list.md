@@ -28,6 +28,13 @@
 - `happyone`（happy1 文件夹，36 帧）
 - `jumpone`（jump1 文件夹，36 帧）
 - `sleepy`
+- **插入/一次性（非循环一轮）**：`shakeOnce`（同 `shake`）、`sleep`（同 `sleepy` 资源，深夜随机）、`happy1Once`（同 `happyone`）、`jump1Tap` / `jumpTwoTap`（点击跳）、`jump1Once` / `jumpTwoOnce`（惊喜后双轮跳）
+
+**行为摘要**：
+- 陪伴 **25–80**：展示默认态时有机会插入 **shake 一轮**，播完回随机 idleone/idletwo/idlethree。
+- **本地 23:30–03:00**：有机会插入 **sleep 一轮**（sleepy 帧），播完回随机 idle。
+- **陪伴 >85**：有机会插入 **happy1 一轮**，播完回随机 idle。
+- **点击**普通跳：**jumpone** 与 **jumptwo** 随机一轮；高陪伴默认池中跳跃档为 **jump1 / jump2** 随机循环。
 
 建议还需要做的动作（用于让宠物交互更完整）：
 - `blink`：眨眼（循环）
@@ -35,7 +42,7 @@
 - `excited`：兴奋/跳动（短动作）
 - `yawn`：打哈欠（短动作）
 - `wakeUp`：醒来（短动作）
-- `sleep`：睡觉（循环/长动作）
+- （已实现）`sleep`：深夜随机插入一轮（`sleepy` 资源），播完回 idle
 - `pat`：被抚摸/蹭蹭（短动作）
 - `clap`：鼓掌（短动作）
 - `surprised`：惊讶（短动作）

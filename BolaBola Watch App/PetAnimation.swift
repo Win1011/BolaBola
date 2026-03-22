@@ -44,6 +44,14 @@ enum PetEmotion {
     /// 新增：jump1 序列帧（Assets：`jumpone0`…`jumpone35`）
     case jump1
     case jumpTwoOnce  // 用于惊喜后“一次性”跳跃（2轮后自动回默认）
+    /// `shake` 资源播一轮后回 idle（25–80 随机插入）
+    case shakeOnce
+    /// `happyone` 播一轮后回 idle（v>85 随机插入）
+    case happy1Once
+    /// `jumpone` 两轮长度（与 jumpTwoOnce 对应惊喜链）
+    case jump1Once
+    /// 与 `jump1` 同资源；点按播一轮
+    case jump1Tap
     /// 与 `jumpTwo` 同一套 `jumptwo` 资源；仅播放模式不同（点一下播一轮即停，非第二套美术）
     case jumpTwoTap
     /// 点击：三连喜欢，播一轮后回 idle
@@ -103,7 +111,9 @@ enum AnimationScale {
     static let jumpTwo: CGFloat = 1.5
     static let happy1: CGFloat = 1.5
     static let jump1: CGFloat = 1.5
+    static let shakeOnce: CGFloat = 1.5
     static let sleepy: CGFloat = 1.5
+    static let sleep: CGFloat = 1.5
 }
 
 // MARK: - 动画帧限制（用于控制 watchOS 内存）
@@ -212,6 +222,17 @@ enum PetAnimations {
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "shake", maxFrames: 23),
             fps: effectiveFPS(baseFPS: 6, maxFrames: 23),
             isLoop: true
+        )
+    )
+
+    /// shake 播一轮（非循环）
+    static let shakeOnce: PetAnimation = PetAnimation(
+        emotion: .shakeOnce,
+        displayScale: AnimationScale.shakeOnce,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "shake", maxFrames: 23),
+            fps: effectiveFPS(baseFPS: 6, maxFrames: 23),
+            isLoop: false
         )
     )
 
@@ -528,6 +549,39 @@ enum PetAnimations {
         )
     )
 
+    /// 惊喜后：jumpone 两轮长度，播完回默认展示
+    static let jump1Once: PetAnimation = PetAnimation(
+        emotion: .jump1Once,
+        displayScale: AnimationScale.jump1,
+        source: .frames(
+            frameNames: loopTwiceFrames(prefix: "jumpone", maxFrames: 36),
+            fps: effectiveFPS(baseFPS: 10, maxFrames: 36),
+            isLoop: false
+        )
+    )
+
+    /// 点击：jumpone 播一轮
+    static let jump1Tap: PetAnimation = PetAnimation(
+        emotion: .jump1Tap,
+        displayScale: AnimationScale.jump1,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "jumpone", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 10, maxFrames: 36),
+            isLoop: false
+        )
+    )
+
+    /// happy1 播一轮（非循环）
+    static let happy1Once: PetAnimation = PetAnimation(
+        emotion: .happy1Once,
+        displayScale: AnimationScale.happy1,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "happyone", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 36),
+            isLoop: false
+        )
+    )
+
     /// 点击三连：播放一轮 like2 后回 idle
     static let like2Once: PetAnimation = PetAnimation(
         emotion: .like2Once,
@@ -557,6 +611,17 @@ enum PetAnimations {
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleepy", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
             fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: true
+        )
+    )
+
+    /// 深夜随机插入：`sleepy` 资源播一轮（`PetEmotion.sleep`）
+    static let sleepOnce: PetAnimation = PetAnimation(
+        emotion: .sleep,
+        displayScale: AnimationScale.sleep,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleepy", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            isLoop: false
         )
     )
 }

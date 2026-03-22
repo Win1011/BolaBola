@@ -49,8 +49,19 @@ final class PetViewModel: ObservableObject {
     private var lastSurpriseMilestoneHours: Double = 0
     // 惊喜播放完（surprisedOne/Two 2轮）后，需要排队再播放一次 jumpTwoOnce。
     private var surpriseJumpTwoQueued: Bool = false
+
+    /// 深夜 23:30–次日 03:00 随机插入「睡觉」一轮（`sleepy` 资源）
+    private let sleepNightProbability: Double = 0.2
+    /// 陪伴值 25–80 随机插入 shake 一轮
+    private let shakeMidTierProbability: Double = 0.2
+    /// 陪伴值 >85 随机插入 happy1 一轮
+    private let happy1HighTierProbability: Double = 0.2
+    /// 陪伴值 10–29：不高兴档内 `hurt` 与 `unhappy` 的稳定映射（`(v-10) % stride == 0` → `hurt`，约 35%）
+    private let unhappyTierHurtStride: Int = 3
     /// 点击触发的跳跃/喜欢/生气播完后，回到 idleOne/Two/Three 随机其一（非陪伴值默认池）
     private var tapChainReturnsToRandomIdle: Bool = false
+    /// 仅「普通跳跃 + 陪伴 +1」播完后需要衔接台词与延后跨档句；生气 / 三连喜欢为 false
+    private var shouldPlayTapJumpFollowUp: Bool = false
     /// 正在播放点击插入动画时忽略新点击（避免连跳）
     private var isTapInteractionAnimating: Bool = false
     /// 8 秒窗口内连击次数（用于生气与三连喜欢）
@@ -63,6 +74,13 @@ final class PetViewModel: ObservableObject {
     @Published var dialogueLine: String = ""
     private var dialogueDismissWorkItem: DispatchWorkItem?
     private var dialogueGeneration: UInt = 0
+
+    /// 每次普通点击跳跃 +1 陪伴时刷新，供界面播放「+1」泡泡动效
+    @Published var tapBonusToken: UUID?
+
+    /// 点击跳跃 +1 导致跨档时，跨档台词延后到跳跃结束后再播，避免顶掉跳跃开场白
+    private var pendingTierSpeechAfterTap: String?
+    private var pendingTierDeferredWorkItem: DispatchWorkItem?
 
     private var lastCompanionTierForSpeech: Int = -1
     private var lastGreetingWallClock: TimeInterval = 0
@@ -100,7 +118,7 @@ final class PetViewModel: ObservableObject {
         hydrateTotalTimeAndSurpriseState()
 
         selectDefaultEmotion()
-        currentEmotion = currentDefaultEmotion
+        applyDefaultEmotionDisplay()
         lastCompanionTierForSpeech = BolaDialogueLines.companionTier(for: Int(companionValue.rounded()))
 
         // 启动后台检查：如果在运行过程中跨过 100 小时里程碑，则触发惊喜。
@@ -134,6 +152,11 @@ final class PetViewModel: ObservableObject {
     }
 
     /// 视图出现或需要一次性初始化提醒时调用（由 ContentView `onAppear` 触发）
+    /// +1 泡泡动效播完后由视图调用，清除 token
+    func clearTapBonusBubble() {
+        tapBonusToken = nil
+    }
+
     func onViewAppear() {
         // 冷启动时 `onChange(scenePhase)` 有时不会对初始 `.active` 触发，这里保证「一打开就说一句」
         speakForegroundGreetingIfNeeded()
@@ -246,6 +269,14 @@ final class PetViewModel: ObservableObject {
             return PetAnimations.jumpTwoOnce
         case .jumpTwoTap:
             return PetAnimations.jumpTwoTap
+        case .shakeOnce:
+            return PetAnimations.shakeOnce
+        case .happy1Once:
+            return PetAnimations.happy1Once
+        case .jump1Once:
+            return PetAnimations.jump1Once
+        case .jump1Tap:
+            return PetAnimations.jump1Tap
         case .like2Once:
             return PetAnimations.like2Once
         case .angry2Once:
@@ -257,7 +288,7 @@ final class PetViewModel: ObservableObject {
         case .angry:
             return PetAnimations.happy // 占位，后面改成对应动画
         case .sleep:
-            return PetAnimations.idle  // 占位
+            return PetAnimations.sleepOnce
         case .special:
             return PetAnimations.happy // 占位
         }
@@ -275,9 +306,9 @@ final class PetViewModel: ObservableObject {
                 } else {
                     // 非循环动画播完
                     if surpriseJumpTwoQueued {
-                        // 惊喜分两段：surprisedOne/Two 播完（2轮）后，额外再播一次 jumpTwoOnce。
+                        // 惊喜分两段：surprisedOne/Two 播完（2轮）后，额外再播一次 jump1Once / jumpTwoOnce（随机）。
                         surpriseJumpTwoQueued = false
-                        currentEmotion = .jumpTwoOnce
+                        currentEmotion = Bool.random() ? .jump1Once : .jumpTwoOnce
                         currentFrameIndex = 0
                         return
                     }
@@ -285,21 +316,29 @@ final class PetViewModel: ObservableObject {
                         tapChainReturnsToRandomIdle = false
                         isTapInteractionAnimating = false
                         selectDefaultEmotion()
-                        let idle = randomIdleEmotion()
-                        currentEmotion = idle
-                        currentDefaultEmotion = idle
+                        let next = resolvedEmotionAfterInteractionOrInsert()
+                        currentEmotion = next
+                        currentDefaultEmotion = next
                         currentFrameIndex = 0
+                        if shouldPlayTapJumpFollowUp {
+                            shouldPlayTapJumpFollowUp = false
+                            completeTapChainReturn(defaultEmotion: next)
+                        } else {
+                            lastCompanionTierForSpeech = BolaDialogueLines.companionTier(for: Int(companionValue.rounded()))
+                        }
                         if surprisePending {
                             maybeTriggerSurpriseIfNeeded(forcePending: true)
                         }
                         return
                     }
-                    selectDefaultEmotion()
-                    currentEmotion = currentDefaultEmotion
-                    if surprisePending {
-                        maybeTriggerSurpriseIfNeeded(forcePending: true)
+                    switch currentEmotion {
+                    case .shakeOnce, .happy1Once, .sleep:
+                        finishInsertOnceReturningToRandomIdle()
+                        return
+                    default:
+                        finishNonLoopReturningToDefaultDisplay()
+                        return
                     }
-                    currentFrameIndex = 0
                 }
             } else {
                 currentFrameIndex = next
@@ -313,6 +352,114 @@ final class PetViewModel: ObservableObject {
     /// idleone / idletwo / idlethree 随机其一（用于「待机」与点击结束回 idle）
     private func randomIdleEmotion() -> PetEmotion {
         [.idleOne, .idleTwo, .idleThree].randomElement() ?? .idleOne
+    }
+
+    /// 点击跳跃播完：衔接台词 + 延后播放跨档台词（若有）
+    private func completeTapChainReturn(defaultEmotion: PetEmotion) {
+        let v = Int(companionValue.rounded())
+        let returnLine = BolaDialogueLines.tapJumpReturnLine(v: v, defaultEmotion: defaultEmotion)
+        showDialogue(returnLine, duration: 4)
+
+        pendingTierDeferredWorkItem?.cancel()
+        if let pending = pendingTierSpeechAfterTap {
+            pendingTierSpeechAfterTap = nil
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.showDialogue(pending, duration: 5)
+                self.lastCompanionTierForSpeech = BolaDialogueLines.companionTier(for: Int(self.companionValue.rounded()))
+            }
+            pendingTierDeferredWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.65, execute: work)
+        } else {
+            lastCompanionTierForSpeech = BolaDialogueLines.companionTier(for: v)
+        }
+    }
+
+    /// 普通点击跳跃：+1 陪伴值；跨档台词入队，不立刻 `showDialogue`
+    private func applyCompanionBonusFromTapJump() {
+        pendingTierDeferredWorkItem?.cancel()
+        let vBefore = Int(companionValue.rounded())
+        let tierBefore = BolaDialogueLines.companionTier(for: vBefore)
+        companionValueInternal += 1
+        companionValueInternal = clampCompanionValue(companionValueInternal)
+        companionValue = companionValueInternal.rounded()
+        let vAfter = Int(companionValue.rounded())
+        let tierAfter = BolaDialogueLines.companionTier(for: vAfter)
+        persistCompanionSnapshot(UserDefaults.standard)
+
+        tapBonusToken = UUID()
+
+        if tierBefore != tierAfter, let line = BolaDialogueLines.tierChangedLine(from: tierBefore, to: tierAfter) {
+            pendingTierSpeechAfterTap = line
+        } else {
+            pendingTierSpeechAfterTap = nil
+        }
+    }
+
+    /// 在**已调用** `selectDefaultEmotion()` 之后使用：陪伴值 **<30** 时回到分段默认态（die/sad/unhappy/hurt），避免出现 idle 变体；
+    /// ≥30 时维持原逻辑：随机 idle 变体（与点击/插入结束后的表现一致）。
+    private func resolvedEmotionAfterInteractionOrInsert() -> PetEmotion {
+        let v = Int(companionValue.rounded())
+        if v < 30 {
+            return currentDefaultEmotion
+        }
+        return randomIdleEmotion()
+    }
+
+    /// 本地时间 23:30–次日 03:00（含 03:00 整）
+    private func isInNightSleepWindow(_ date: Date) -> Bool {
+        let c = Calendar.current
+        let h = c.component(.hour, from: date)
+        let m = c.component(.minute, from: date)
+        if h == 23 && m >= 30 { return true }
+        if h >= 0 && h < 3 { return true }
+        if h == 3 && m == 0 { return true }
+        return false
+    }
+
+    /// 在 `selectDefaultEmotion()` 已更新 `currentDefaultEmotion` 后调用：按概率插入 sleep / shake / happy1 一轮，否则展示默认循环态。
+    private func applyDefaultEmotionDisplay(at date: Date = Date()) {
+        let v = Int(companionValue.rounded())
+        guard v > 2 else {
+            currentEmotion = currentDefaultEmotion
+            return
+        }
+        if isInNightSleepWindow(date), Double.random(in: 0...1) < sleepNightProbability {
+            currentEmotion = .sleep
+            showDialogue(BolaDialogueLines.nightSleepyInsertLine(), duration: 4.5)
+            return
+        }
+        if (25...80).contains(v), Double.random(in: 0...1) < shakeMidTierProbability {
+            currentEmotion = .shakeOnce
+            return
+        }
+        if v > 85, Double.random(in: 0...1) < happy1HighTierProbability {
+            currentEmotion = .happy1Once
+            return
+        }
+        currentEmotion = currentDefaultEmotion
+    }
+
+    /// shake / happy1 / sleep 一轮播完：≥30 回到随机 idle；<30 回到当前分段默认态（避免低陪伴误回 idle）。
+    private func finishInsertOnceReturningToRandomIdle() {
+        selectDefaultEmotion()
+        let next = resolvedEmotionAfterInteractionOrInsert()
+        currentEmotion = next
+        currentDefaultEmotion = next
+        currentFrameIndex = 0
+        if surprisePending {
+            maybeTriggerSurpriseIfNeeded(forcePending: true)
+        }
+    }
+
+    /// jump1Once / jumpTwoOnce 等播完：回到「默认展示」（含随机插入判定）。
+    private func finishNonLoopReturningToDefaultDisplay() {
+        selectDefaultEmotion()
+        applyDefaultEmotionDisplay()
+        currentFrameIndex = 0
+        if surprisePending {
+            maybeTriggerSurpriseIfNeeded(forcePending: true)
+        }
     }
 
     func cycleEmotionOnTap() {
@@ -343,6 +490,9 @@ final class PetViewModel: ObservableObject {
         if tapBurstCount > 8 {
             tapBurstCount = 0
             angryTapCooldownUntil = nowTs + 10
+            shouldPlayTapJumpFollowUp = false
+            pendingTierDeferredWorkItem?.cancel()
+            pendingTierSpeechAfterTap = nil
             tapChainReturnsToRandomIdle = true
             isTapInteractionAnimating = true
             currentEmotion = .angry2Once
@@ -354,6 +504,9 @@ final class PetViewModel: ObservableObject {
 
         // 窗口内第 3 次 → 播一轮喜欢（不重置计数，以便继续点到第 9 次生怒）
         if tapBurstCount == 3 {
+            shouldPlayTapJumpFollowUp = false
+            pendingTierDeferredWorkItem?.cancel()
+            pendingTierSpeechAfterTap = nil
             tapChainReturnsToRandomIdle = true
             isTapInteractionAnimating = true
             currentEmotion = .like2Once
@@ -363,19 +516,37 @@ final class PetViewModel: ObservableObject {
             return
         }
 
-        // 普通点击：只跳一轮后回随机 idle
+        // 普通点击：jump1 / jump2 随机播一轮；+1 陪伴值与 +1 泡泡；台词按档与默认态
+        shouldPlayTapJumpFollowUp = true
+        applyCompanionBonusFromTapJump()
+        selectDefaultEmotion()
+        let vNow = Int(companionValue.rounded())
         tapChainReturnsToRandomIdle = true
         isTapInteractionAnimating = true
-        currentEmotion = .jumpTwoTap
+        currentEmotion = Bool.random() ? .jump1Tap : .jumpTwoTap
         currentFrameIndex = 0
-        showDialogue(BolaDialogueLines.tapJumpSample())
-        print("🐾 Tap -> jumpTwoTap")
+        showDialogue(BolaDialogueLines.tapJumpOpening(v: vNow, defaultEmotion: currentDefaultEmotion))
+        print("🐾 Tap -> jump tap", String(describing: currentEmotion))
     }
 
     // MARK: - Companion value time coupling
 
     private func clampCompanionValue(_ v: Double) -> Double {
         min(max(v, 0), 100)
+    }
+
+    /// 调试：手动调节陪伴值（每次 ±2），用于检查动画与状态机。
+    func adjustCompanionValueManual(by delta: Double) {
+        pendingTierDeferredWorkItem?.cancel()
+        pendingTierSpeechAfterTap = nil
+        companionValueInternal += delta
+        companionValueInternal = clampCompanionValue(companionValueInternal)
+        companionValue = companionValueInternal.rounded()
+        trackCompanionTierSpeechIfNeeded()
+        selectDefaultEmotion()
+        applyDefaultEmotionDisplay()
+        currentFrameIndex = 0
+        persistCompanionSnapshot(UserDefaults.standard)
     }
 
     // Timer / 墙钟：每累计 1 小时 +1，不足部分进位（无每日上限）。
@@ -471,7 +642,7 @@ final class PetViewModel: ObservableObject {
             persistCompanionSnapshot(defaults)
             selectDefaultEmotion()
             if currentEmotion == currentDefaultEmotion {
-                currentEmotion = currentDefaultEmotion
+                applyDefaultEmotionDisplay()
                 currentFrameIndex = 0
             }
             showDialogue(BolaDialogueLines.longAbsenceReturn.randomElement() ?? "")
@@ -484,7 +655,7 @@ final class PetViewModel: ObservableObject {
         totalActiveSeconds += delta
         selectDefaultEmotion()
         if currentEmotion == oldDefaultEmotion {
-            currentEmotion = currentDefaultEmotion
+            applyDefaultEmotionDisplay()
             currentFrameIndex = 0
         }
 
@@ -611,10 +782,9 @@ final class PetViewModel: ObservableObject {
             currentDefaultEmotion = .die
         } else if v <= 9 {
             currentDefaultEmotion = (v % 2 == 0) ? .sad2 : .sad1
-        } else if v <= 19 {
-            currentDefaultEmotion = .hurt
         } else if v <= 29 {
-            currentDefaultEmotion = .unhappy
+            // 不高兴档：`unhappy` 为主，按分数稳定混入 `hurt`（避免每次墙钟结算随机抖动）
+            currentDefaultEmotion = ((v - 10) % unhappyTierHurtStride == 0) ? .hurt : .unhappy
         } else if v <= 39 {
             currentDefaultEmotion = randomIdleEmotion()
         } else if v <= 85 {
@@ -629,11 +799,50 @@ final class PetViewModel: ObservableObject {
             switch v % 5 {
             case 0: currentDefaultEmotion = .like1
             case 1: currentDefaultEmotion = .like2
-            case 2: currentDefaultEmotion = .jumpTwo
+            case 2: currentDefaultEmotion = Bool.random() ? .jump1 : .jumpTwo
             case 3: currentDefaultEmotion = .blowbubble1
             default: currentDefaultEmotion = .blowbubble2
             }
         }
+    }
+}
+
+// MARK: - +1 陪伴泡泡（与台词气泡分层）
+
+private struct TapBonusBubbleView: View {
+    let onFinished: () -> Void
+    @State private var popScale: CGFloat = 0.35
+    @State private var opacity: Double = 0
+
+    var body: some View {
+        Text("+1")
+            .font(.system(size: 13, weight: .heavy, design: .rounded))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(.ultraThinMaterial, in: Capsule(style: .continuous))
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(.white.opacity(0.45), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
+            .scaleEffect(popScale)
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.68)) {
+                    popScale = 1.05
+                    opacity = 1
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) {
+                    withAnimation(.easeOut(duration: 0.22)) {
+                        popScale = 1.45
+                        opacity = 0
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                        onFinished()
+                    }
+                }
+            }
     }
 }
 
@@ -673,17 +882,62 @@ struct ContentView: View {
                     .allowsHitTesting(false)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
+
+            if viewModel.tapBonusToken != nil {
+                TapBonusBubbleView {
+                    viewModel.clearTapBonusBubble()
+                }
+                .id(viewModel.tapBonusToken)
+                .offset(y: 28)
+                .zIndex(2)
+                .allowsHitTesting(false)
+                .transition(.scale.combined(with: .opacity))
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .safeAreaInset(edge: .bottom, spacing: 6) {
-            HStack(spacing: 6) {
-                Text("陪伴值")
-                ProgressView(value: viewModel.companionValue / 100.0)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            HStack(alignment: .center, spacing: 3) {
+                Button {
+                    viewModel.adjustCompanionValueManual(by: -2)
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.system(size: 6, weight: .semibold))
+                        .frame(minWidth: 22, minHeight: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .scaleEffect(0.72)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 3) {
+                        Text("陪伴值")
+                        Text("\(Int(viewModel.companionValue.rounded()))")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.system(size: 9)) // 比 caption2 更小
+
+                    ProgressView(value: viewModel.companionValue / 100.0)
+                        .frame(height: 2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button {
+                    viewModel.adjustCompanionValueManual(by: 2)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 6, weight: .semibold))
+                        .frame(minWidth: 22, minHeight: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .scaleEffect(0.72)
             }
-            .font(.footnote)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 4)
-            .padding(.bottom, 2)
+            .padding(.horizontal, 4)
+            .padding(.top, 2)
+            .padding(.bottom, 6)
         }
         .padding(.horizontal, 8)
         .padding(.top, 0)

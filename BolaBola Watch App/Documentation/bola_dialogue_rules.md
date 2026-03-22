@@ -2,6 +2,7 @@
 
 实现：文案池 `BolaDialogueLines`（`BolaDialogueLines.swift`）+ `PetViewModel.showDialogue(_:duration:)` 用 **`ZStack` 叠在宠物上方** 显示圆角气泡（**不占布局高度**），避免台词出现时主区域变矮导致 `scaledToFit` 重算、跳跃像被「突然放大」；陪伴值用 `safeAreaInset(edge: .bottom)`；**不播放语音**。
 
+- **「+1」陪伴泡泡**：与普通跳跃台词**分层**显示——点击跳跃时 `applyCompanionBonusFromTapJump()` 刷新 `tapBonusToken`，界面叠一层胶囊形 **+1** 泡泡（碎裂动效后清除），**不占用** `dialogueLine`。
 - 每次显示新气泡时，`WKInterfaceDevice.current().play(.click)` **轻触反馈**（与「说话」同步）。
 - **新一句会替换**当前气泡内容并重新计时消失。
 - 默认展示约 **5 秒**后淡出（心率提醒等可略长）。
@@ -13,11 +14,14 @@
 | 触发类 | 时机 | 频率 / 节流 | 内容方向 |
 |--------|------|----------------|----------|
 | **冷启动 / 回到前台** | `onViewAppear` + `scenePhase == .active` 均调用 `speakForegroundGreetingIfNeeded()` | **约 12 秒内不重复**（防同一次打开触发两次）；之后每次再进入前台都会问候 | 问候；低陪伴：安慰向；高陪伴：撒娇向 |
-| **陪伴值分段变化** | `companionValue` 四舍五入后，分段档 `tier` 变化时 `trackCompanionTierSpeechIfNeeded()` | 仅在跨档时 1 句 | 与 `companionTier` 0–6 档一致 |
+| **陪伴值分段变化** | `trackCompanionTierSpeechIfNeeded()`（时间结算、手动调节等） | 仅在跨档时 1 句 | 与 `companionTier` 0–6 档一致 |
+| **点击跳跃 +1 导致跨档** | 跨档句**延后**（`pendingTierSpeechAfterTap`），在跳跃播完、衔接句之后约 **0.65s** 再播，避免顶掉跳跃开场白 | 见 `tap_interaction_rules.md` |
+| **普通跳跃（播完）** | `tapJumpReturnLine` | 仅**跳跃**路径；回到当前默认情绪后**第二句**衔接台词 | 与生气 / 三连喜欢区分（`shouldPlayTapJumpFollowUp`） |
 | **主动闲聊** | `Timer` 约 **每 25 分钟** | **仅前台** `isForegroundActive` | 轮换池 `idleChatter` |
 | **长期离线后回来** | `creditOrPenalizeWallClockGapIfNeeded` 走「长期离线」分支 | 每次该分支 1 句 | `longAbsenceReturn` |
 | **惊喜里程碑** | `maybeTriggerSurpriseIfNeeded` 真正触发惊喜动画时 | 每次里程碑 1 句 | `surpriseMilestone` |
-| **点击反馈** | `cycleEmotionOnTap` | 每次有效点击 1 句（生气 / 跳跃 / 三连 like 不同池） | 见 `tap_interaction_rules.md` |
+| **深夜打哈欠插入** | `applyDefaultEmotionDisplay()` 命中 23:30–03:00 且随机到 `sleep` | 每次插入 **1 句**（约 4.5s） | `nightSleepyInsert` / `nightSleepyInsertLine()` |
+| **点击反馈** | `cycleEmotionOnTap` | 跳跃：`tapJumpOpening` + 播完 `tapJumpReturnLine`；生气 / 三连 like 各用独立池 | 见 `tap_interaction_rules.md` |
 | **心率偏快（非医疗）** | `onViewAppear` → `HealthKitManager.elevatedHeartRateDialogueLineIfNeeded` | 进入视图时查最近样本；超阈值才显示 | `heartRateFast(bpm)` |
 | **系统通知文案** | 本地通知 `ReminderScheduler`（与 App 内气泡独立） | 喝水约 **2h**、站立约 **3h** 重复 | `drinkWaterReminder` / `standUpNudge` |
 
@@ -53,7 +57,12 @@
 
 ### 3.2 主动闲聊 `idleChatter`
 
-短句轮换，例如：关心一天、提醒休息眼睛、伸懒腰、**喝水**（与通知互补，非医学判定）。
+短句轮换，例如：关心一天、提醒休息眼睛、伸懒腰、**喝水**（与通知互补，非医学判定）。具体池见 `BolaDialogueLines`（已扩充多句）。
+
+### 3.2b 点击跳跃 `tapJumpOpening` / `tapJumpReturnLine`
+
+- **开场**：按 `companionTier` 与当前 `defaultEmotion`（如 `hurt`）分支。
+- **播完衔接**：按回到的默认情绪（委屈 / 不高兴 / sad / idle 等）短句，避免「跳完立刻安静」。
 
 ### 3.3 惊喜 `surpriseMilestone`
 

@@ -11,11 +11,15 @@
 陪伴值到**默认动画**的映射（与 `ContentView.swift` 中 `selectDefaultEmotion()` 一致；`companionValue` 取四舍五入整数 `v`）：
 - `0...2`：`die`
 - `3...9`：`sad1` / `sad2`（`v % 2` 二选一，稳定）
-- `10...19`：`hurt`
-- `20...29`：`unhappy`
-- `30...39`：`idleOne` / `idleTwo`（轻过渡，`v % 2`）
+- `10...29`：`unhappy` 与 `hurt` 按分数稳定映射（约 35% 为 `hurt`，见 `unhappyTierHurtStride`；避免墙钟反复重算时随机抖动）
+- `30...39`：`idleOne` / `idleTwo` / `idleThree` 随机
 - `40...85`：`idleOne` / `idleTwo` / `idleThree` / `blowbubble1` / `blowbubble2`（`v % 5` 五选一）
-- `86...100`：`like1` / `like2` / `jumpTwo` / `blowbubble1` / `blowbubble2`（`v % 5` 五选一）
+- `86...100`：`like1` / `like2` / `jump1` **或** `jumpTwo`（`v % 5` 的「跳跃」档内随机二选一）/ `blowbubble1` / `blowbubble2`（`v % 5` 五选一）
+
+**展示层随机插入**（在 `applyDefaultEmotionDisplay()` 中，于 `selectDefaultEmotion()` 之后；`v>2` 才参与；概率为代码常量，默认各约 0.2）：
+- **深夜** 本地时间 **23:30–次日 03:00**：可能插入 `sleep`（`sleepy` 资源，**播一轮**）→ 播完 **陪伴值 `<30`** 回到当前分段默认态（die/sad/unhappy/hurt），**≥30** 回到随机 `idleOne/Two/Three`
+- **`25...80`**：可能插入 `shakeOnce`（`shake` 播一轮）→ 同上规则（`<30` 回分段默认，`≥30` 回随机 idle）
+- **`v > 85`（86–100）**：可能插入 `happy1Once`（`happyone` 播一轮）→ 同上（仅 `≥30` 会用到此插入）
 
 **边界说明**：`85` 归入 **40–85** 大段；**86–100** 为开心档（若产品要改边界，只改 `selectDefaultEmotion` 一处即可）。
 
@@ -44,7 +48,7 @@
 - `surprisedTwo`：惊喜2动作循环
 - `sad1`：难过1循环
 - `sad2`：难过2循环
-- `jumpTwo`：跳跃2动作循环
+- `jumpTwo` / `jump1`：跳跃动作循环（高陪伴默认池内随机）
 - `sleepy`：困了循环
 
 ## 2) 触发事件（Event）
@@ -68,16 +72,16 @@
 
 - `0...2`：`die`（持续循环）
 - `3...9`：`sad1` / `sad2`
-- `10...19`：`hurt`
-- `20...29`：`unhappy`
-- `30...39`：`idleOne` / `idleTwo`（轻过渡）
+- `10...29`：`unhappy` / `hurt`（按分数稳定映射，约 1/3 档为 `hurt`）
+- `30...39`：`idleOne` / `idleTwo` / `idleThree` 随机
 - `40...85`：`idleOne` / `idleTwo` / `idleThree` / `blowbubble1` / `blowbubble2`
-- `86...100`：`like1` / `like2` / `jumpTwo` / `blowbubble1` / `blowbubble2`
+- `86...100`：`like1` / `like2` / `jump1` 或 `jumpTwo` / `blowbubble1` / `blowbubble2`
 
 `question*` / `speak*` / `letter` 等可作为**插入态**由其它规则触发，不作为本表默认池。
 
 补充规则：
-- `sleepy` 作为“需要休息”的覆盖态，可由额外条件触发（例如长时间无交互或时段规则）
+- `sleep`（`sleepy` 资源、非循环一轮）与 `shakeOnce`、`happy1Once` 为**展示插入**，见上文「展示层随机插入」
+- `sleepy` 循环态仍保留枚举，可用于其它规则
 - `die` 覆盖态会随着 `companionValue` 升高自动结束，并回到当前陪伴值对应分段主状态（即默认状态）
 
 默认状态的含义（用于“播完回去”）：
@@ -100,7 +104,7 @@
 - `SurpriseReward` 行为链路：
   - 特效提示（建议 1 秒，“宠物周围闪一圈微光”，资源待确认；先用占位也可）
   - 随机选择 `surprisedOne` / `surprisedTwo` 播放 2 轮后进入下一步
-  - 额外播放一次 `jumpTwo`（建议使用“一次性 jumpTwo”播放 2 轮后回默认）
+  - 额外播放一次 `jump1Once` 或 `jumpTwoOnce`（随机），2 轮长度后回默认展示（含插入随机）
 - 幂等保护：触发后保存 `last_surprise_hours = nextSurpriseHours`，下次只在更高档位（例如 200）触发
 
 “播完回默认状态”的通用规则：
