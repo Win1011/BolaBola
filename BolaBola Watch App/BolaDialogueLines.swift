@@ -57,15 +57,7 @@ enum BolaDialogueLines {
 
     /// 0=die, 1=3–9, 2=10–19, 3=20–29, 4=30–39, 5=40–85, 6=86–100
     static func companionTier(for v: Int) -> Int {
-        switch v {
-        case ...2: return 0
-        case 3...9: return 1
-        case 10...19: return 2
-        case 20...29: return 3
-        case 30...39: return 4
-        case 40...85: return 5
-        default: return 6
-        }
+        CompanionTier.value(for: v)
     }
 
     // MARK: 主动闲聊（定时）
@@ -256,9 +248,17 @@ enum BolaDialogueLines {
         "回来就好，我一直在。"
     ]
 
-    // MARK: Health / 系统通知文案
-    static func heartRateFast(_ bpm: Int) -> String {
-        "主人，你现在心跳好快呀，大约 \(bpm) 下每分钟，要不要深呼吸一下？"
+    // MARK: Health / 系统通知文案（非医疗，仅陪伴提醒）
+    static func heartRateFastLine(bpm: Int) -> String {
+        let b = "\(bpm)"
+        let pool = [
+            "主人，你现在心跳好快呀，大约 \(b) 下每分钟，要不要深呼吸一下？",
+            "我感觉你心跳有点快（大约 \(b)）……先慢下来喘口气？",
+            "心率好像偏高哦，大约 \(b)。别急，放松几秒钟。",
+            "咚咚咚……现在大约 \(b) 下每分钟，要不要歇一下？",
+            "身体在说「慢一点」～大约 \(b)，深呼吸试试？"
+        ]
+        return pool.randomElement() ?? "心率大约 \(b)，要不要深呼吸一下？"
     }
 
     static let drinkWaterReminder: [String] = [

@@ -22,7 +22,7 @@
 | **惊喜里程碑** | `maybeTriggerSurpriseIfNeeded` 真正触发惊喜动画时 | 每次里程碑 1 句 | `surpriseMilestone` |
 | **深夜打哈欠插入** | `applyDefaultEmotionDisplay()` 命中 23:30–03:00 且随机到 `sleep` | 每次插入 **1 句**（约 4.5s） | `nightSleepyInsert` / `nightSleepyInsertLine()` |
 | **点击反馈** | `cycleEmotionOnTap` | 跳跃：`tapJumpOpening` + 播完 `tapJumpReturnLine`；生气 / 三连 like 各用独立池 | 见 `tap_interaction_rules.md` |
-| **心率偏快（非医疗）** | `onViewAppear` → `HealthKitManager.elevatedHeartRateDialogueLineIfNeeded` | 进入视图时查最近样本；超阈值才显示 | `heartRateFast(bpm)` |
+| **心率偏快（非医疗）** | `onViewAppear` 授权后首次查询；**前台每约 90s** 轮询（`startHeartRateForegroundMonitoring`）；回到前台约 **2s** 再查一次 | 样本需在 **8 分钟内**且 BPM ≥ 阈值（默认 100）；**8 分钟内不重复**弹同类型句 | `heartRateFastLine(bpm)` |
 | **系统通知文案** | 本地通知 `ReminderScheduler`（与 App 内气泡独立） | 喝水约 **2h**、站立约 **3h** 重复 | `drinkWaterReminder` / `standUpNudge` |
 
 ---
@@ -72,7 +72,7 @@
 
 委屈 / 「等你」向，与扣分数值无强绑定。
 
-### 3.5 Health / 通知 `heartRateFast` / `drinkWaterReminder` / `standUpNudge`
+### 3.5 Health / 通知 `heartRateFastLine` / `drinkWaterReminder` / `standUpNudge`
 
 - 心率：App 内气泡为温馨提醒，**非诊断**。
 - 喝水 / 站立：**系统通知**里的文案；习惯提醒，**非传感器判定身体缺水**。

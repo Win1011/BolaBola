@@ -6,8 +6,37 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		2F55E26B2F667F99001E5A32 /* BolaBola Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 2F55E2532F667F99001E5A32 /* BolaBola Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		2F55E2732F667F99001E5A32 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2F55E2472F667F99001E5A32 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2F55E2522F667F99001E5A32;
+			remoteInfo = "BolaBola Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2F55E26D2F667F99001E5A32 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 16;
+			files = (
+				2F55E26B2F667F99001E5A32 /* BolaBola Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		2F55E2532F667F99001E5A32 /* BolaBola Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BolaBola Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2F55E26A2F667F99001E5A32 /* BolaBola.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BolaBola.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +45,27 @@
 			path = "BolaBola Watch App";
 			sourceTree = "<group>";
 		};
+		2F55E2682F667F99001E5A32 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		2F55E2692F667F99001E5A32 /* BolaBola iOS */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "BolaBola iOS";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		2F55E2502F667F99001E5A32 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2F55E26C2F667F99001E5A32 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +79,8 @@
 			isa = PBXGroup;
 			children = (
 				2F55E2572F667F99001E5A32 /* BolaBola Watch App */,
+				2F55E2682F667F99001E5A32 /* Shared */,
+				2F55E2692F667F99001E5A32 /* BolaBola iOS */,
 				2F55E24E2F667F99001E5A32 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -40,6 +88,7 @@
 		2F55E24E2F667F99001E5A32 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				2F55E26A2F667F99001E5A32 /* BolaBola.app */,
 				2F55E2532F667F99001E5A32 /* BolaBola Watch App.app */,
 			);
 			name = Products;
@@ -62,12 +111,38 @@
 			);
 			fileSystemSynchronizedGroups = (
 				2F55E2572F667F99001E5A32 /* BolaBola Watch App */,
+				2F55E2682F667F99001E5A32 /* Shared */,
 			);
 			name = "BolaBola Watch App";
 			packageProductDependencies = (
 			);
 			productName = "BolaBola Watch App";
 			productReference = 2F55E2532F667F99001E5A32 /* BolaBola Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		2F55E26E2F667F99001E5A32 /* BolaBola */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2F55E26F2F667F99001E5A32 /* Build configuration list for PBXNativeTarget "BolaBola" */;
+			buildPhases = (
+				2F55E2702F667F99001E5A32 /* Sources */,
+				2F55E26C2F667F99001E5A32 /* Frameworks */,
+				2F55E2712F667F99001E5A32 /* Resources */,
+				2F55E26D2F667F99001E5A32 /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2F55E2722F667F99001E5A32 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				2F55E2682F667F99001E5A32 /* Shared */,
+				2F55E2692F667F99001E5A32 /* BolaBola iOS */,
+			);
+			name = BolaBola;
+			packageProductDependencies = (
+			);
+			productName = BolaBola;
+			productReference = 2F55E26A2F667F99001E5A32 /* BolaBola.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -81,6 +156,9 @@
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					2F55E2522F667F99001E5A32 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					2F55E26E2F667F99001E5A32 = {
 						CreatedOnToolsVersion = 26.3;
 					};
 				};
@@ -99,6 +177,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				2F55E26E2F667F99001E5A32 /* BolaBola */,
 				2F55E2522F667F99001E5A32 /* BolaBola Watch App */,
 			);
 		};
@@ -106,6 +185,13 @@
 
 /* Begin PBXResourcesBuildPhase section */
 		2F55E2512F667F99001E5A32 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2F55E2712F667F99001E5A32 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +208,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2F55E2702F667F99001E5A32 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		2F55E2722F667F99001E5A32 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2F55E2522F667F99001E5A32 /* BolaBola Watch App */;
+			targetProxy = 2F55E2732F667F99001E5A32 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		2F55E25E2F667F9B001E5A32 /* Debug */ = {
@@ -254,9 +355,11 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Bola 会读取心率、步数等健康数据，用于非医疗性的界面提示与提醒。";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bola 需要麦克风以识别你对它说的话。";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 把你的语音转成文字，再生成回复。";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 需要发送喝水、活动等本地提醒。";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKWatchOnly = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.gathxr.BolaBola;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -290,9 +393,11 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Bola 会读取心率、步数等健康数据，用于非医疗性的界面提示与提醒。";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bola 需要麦克风以识别你对它说的话。";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 把你的语音转成文字，再生成回复。";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 需要发送喝水、活动等本地提醒。";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKWatchOnly = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.gathxr.BolaBola;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -314,6 +419,77 @@
 			};
 			name = Release;
 		};
+		2F55E2742F667F99001E5A32 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "BolaBola iOS/BolaBola.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MX4C45DA78;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
+				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 在手机上为你管理提醒与陪伴值同步。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		2F55E2752F667F99001E5A32 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "BolaBola iOS/BolaBola.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MX4C45DA78;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
+				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 在手机上为你管理提醒与陪伴值同步。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -331,6 +507,15 @@
 			buildConfigurations = (
 				2F55E2612F667F9B001E5A32 /* Debug */,
 				2F55E2622F667F9B001E5A32 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2F55E26F2F667F99001E5A32 /* Build configuration list for PBXNativeTarget "BolaBola" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2F55E2742F667F99001E5A32 /* Debug */,
+				2F55E2752F667F99001E5A32 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

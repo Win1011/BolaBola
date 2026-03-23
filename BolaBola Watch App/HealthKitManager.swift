@@ -13,8 +13,10 @@ final class HealthKitManager {
 
     private let store = HKHealthStore()
 
-    /// 静息以上视为「偏快」时可提示（非诊断）
+    /// 超过该 BPM 且样本足够「新」时在前台提醒（非诊断、非医疗）
     var heartRateAlertThreshold: Double = 100
+    /// 只信任最近这段时间内的心率样本，避免用几小时前的旧数据误报
+    var heartRateSampleMaxAgeSeconds: TimeInterval = 8 * 60
 
     private init() {}
 
@@ -57,9 +59,18 @@ final class HealthKitManager {
             predicate: nil,
             limit: 1,
             sortDescriptors: [sort]
-        ) { _, samples, error in
+        ) { [weak self] _, samples, error in
+            guard let self else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
             guard error == nil,
                   let sample = samples?.first as? HKQuantitySample else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            let age = Date().timeIntervalSince(sample.endDate)
+            guard age >= 0, age <= self.heartRateSampleMaxAgeSeconds else {
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
@@ -76,7 +87,7 @@ final class HealthKitManager {
                 completion(nil)
                 return
             }
-            completion(BolaDialogueLines.heartRateFast(Int(bpm.rounded())))
+            completion(BolaDialogueLines.heartRateFastLine(bpm: Int(bpm.rounded())))
         }
     }
 }

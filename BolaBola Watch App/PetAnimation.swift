@@ -23,6 +23,8 @@ enum PetEmotion {
     case angry2       // 新增：angry2 动作
     case unhappy      // 新增：不高兴 动作
     case letter       // 新增：信件 动作
+    /// 信件播一轮（每日总结等）
+    case letterOnce
     case hurt         // 新增：委屈 动作
     case question1    // 新增：question1 动作
     case question2    // 新增：question2 动作
@@ -30,6 +32,10 @@ enum PetEmotion {
     case speak1       // 新增：speak1 动作
     case speak2       // 新增：speak2 动作
     case speak3       // 新增：speak3 动作
+    /// 语音回复：各 speak 序列播一轮
+    case speak1Once
+    case speak2Once
+    case speak3Once
     case blowbubble1  // 新增：blowbubble1 动作
     case blowbubble2  // 新增：blowbubble2 动作
     case like1        // 新增：like1 动作
@@ -90,6 +96,7 @@ enum AnimationScale {
     static let angry2: CGFloat = 1.5
     static let unhappy: CGFloat = 1.5
     static let letter: CGFloat = 1.5
+    static let letterOnce: CGFloat = 1.5
     static let hurt: CGFloat = 1.5
 
     static let question1: CGFloat = 1.5
@@ -99,6 +106,9 @@ enum AnimationScale {
     static let speak1: CGFloat = 1.5
     static let speak2: CGFloat = 1.5
     static let speak3: CGFloat = 1.5
+    static let speak1Once: CGFloat = 1.5
+    static let speak2Once: CGFloat = 1.5
+    static let speak3Once: CGFloat = 1.5
 
     static let blowbubble1: CGFloat = 1.5
     static let blowbubble2: CGFloat = 1.5
@@ -341,6 +351,16 @@ enum PetAnimations {
         )
     )
 
+    static let letterOnce: PetAnimation = PetAnimation(
+        emotion: .letterOnce,
+        displayScale: AnimationScale.letterOnce,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "letter", maxFrames: 31, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 31),
+            isLoop: false
+        )
+    )
+
     // 新增 hurt：资源名形如 hurt0, hurt1, ...
     static let hurt: PetAnimation = PetAnimation(
         emotion: .hurt,
@@ -409,6 +429,36 @@ enum PetAnimations {
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "speakthree", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
             fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: true
+        )
+    )
+
+    static let speak1Once: PetAnimation = PetAnimation(
+        emotion: .speak1Once,
+        displayScale: AnimationScale.speak1Once,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speakone", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 36),
+            isLoop: false
+        )
+    )
+
+    static let speak2Once: PetAnimation = PetAnimation(
+        emotion: .speak2Once,
+        displayScale: AnimationScale.speak2Once,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speaktwo", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 36),
+            isLoop: false
+        )
+    )
+
+    static let speak3Once: PetAnimation = PetAnimation(
+        emotion: .speak3Once,
+        displayScale: AnimationScale.speak3Once,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speakthree", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            isLoop: false
         )
     )
 

@@ -16,7 +16,7 @@
 **实现要点**：
 - 持久化 **`lastCompanionWallClock`**：上次把墙钟间隔结算进陪伴分/惊喜累计的时刻。
 - **不**在进后台、睡眠时推进该时间戳；在 **回到前台**、**Timer 每 60 秒**、**冷启动 hydrate** 时，用 **`当前时刻 − lastCompanionWallClock`** 结算。
-- 若间隔 **≤ `longAbsenceWithoutForegroundSeconds`（默认 24 小时）**：整段计入加分（每满 3600 秒 +1，**无每日加分上限**）。
+- 若间隔 **≤ `longAbsenceWithoutForegroundSeconds`（默认 24 小时）**：整段计入加分（每满 `secondsPerCompanionBonus` 秒 +1，**无每日加分上限**；**当前代码为 600 秒 = 10 分钟 +1，便于测试；正式可改回 3600 = 每小时 +1**）。
 - 总分仍受 **0～100** 的 `companionValue` 范围约束。
 
 **时段**：全天 24 小时均可加分。

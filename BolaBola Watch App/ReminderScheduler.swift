@@ -18,38 +18,26 @@ final class ReminderScheduler: NSObject, UNUserNotificationCenterDelegate {
         center.delegate = self
     }
 
-    /// 请求授权并注册默认定时提醒（喝水约 2h、站立约 3h，可后续改为 UserDefaults）
+    /// 请求授权；用共享存储中的提醒卡片 + 每日总结调度通知。
     func scheduleDefaultsIfAuthorized() {
-        center.requestAuthorization(options: [.alert, .sound]) { [weak self] granted, _ in
-            guard granted, let self else { return }
-            DispatchQueue.main.async {
-                self.center.removeAllPendingNotificationRequests()
-                self.scheduleWater(every: 2 * 3600)
-                self.scheduleStandNudge(every: 3 * 3600)
+        let digestCategory = UNNotificationCategory(
+            identifier: "bola_digest",
+            actions: [],
+            intentIdentifiers: [],
+            options: []
+        )
+        center.setNotificationCategories([digestCategory])
+
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            ReminderBootstrap.ensureDefaults()
+            let list = ReminderListStore.load()
+            Task {
+                await BolaReminderUNScheduler.sync(reminders: list)
+                let digest = DailyDigestStore.load()
+                await DailyDigestUNScheduler.sync(config: digest)
             }
         }
-    }
-
-    private func scheduleWater(every interval: TimeInterval) {
-        let content = UNMutableNotificationContent()
-        content.title = "Bola"
-        content.body = BolaDialogueLines.drinkWaterReminder.randomElement() ?? "该喝水啦。"
-        content.sound = .default
-
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(60, interval), repeats: true)
-        let req = UNNotificationRequest(identifier: "bola_water", content: content, trigger: trigger)
-        center.add(req, withCompletionHandler: nil)
-    }
-
-    private func scheduleStandNudge(every interval: TimeInterval) {
-        let content = UNMutableNotificationContent()
-        content.title = "Bola"
-        content.body = BolaDialogueLines.standUpNudge.randomElement() ?? "起来动一动吧。"
-        content.sound = .default
-
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(120, interval), repeats: true)
-        let req = UNNotificationRequest(identifier: "bola_stand", content: content, trigger: trigger)
-        center.add(req, withCompletionHandler: nil)
     }
 
     func userNotificationCenter(
@@ -58,5 +46,17 @@ final class ReminderScheduler: NSObject, UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let id = response.notification.request.identifier
+        if id == "bola_digest_daily" {
+            BolaSharedDefaults.resolved().set(true, forKey: BolaNotificationBridgeKeys.digestTapOpen)
+        }
+        completionHandler()
     }
 }

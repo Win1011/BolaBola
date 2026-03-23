@@ -21,19 +21,10 @@ final class PetViewModel: ObservableObject {
     /// 惊喜里程碑间隔（小时）。与 Debug/Release 一致，避免启动时被「快速惊喜」抢占默认动画。
     private let surpriseMilestoneHours: Double = 100
 
-    private let companionValueKey = "bola_companionValue"
-    /// 上次把「墙钟时间」计入陪伴加分 / 惊喜累计的时刻（Unix 秒）。进后台、睡眠期间不推进，回到前台或冷启动时一次性补算整段间隔。
-    private let lastCompanionWallClockKey = "bola_lastCompanionWallClock"
-    /// 兼容旧版：曾用 lastTickTimestamp 表示打点，迁移时读取。
-    private let lastTickTimestampKey = "bola_lastTickTimestamp"
+    private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
-    // Surprise：累积“活跃时间”的总秒数（会话墙钟：含挂机/睡眠；超长离线见 `longAbsenceWithoutForegroundSeconds`）
-    private let totalActiveSecondsKey = "bola_totalActiveSeconds"
-    private let activeCarrySecondsKey = "bola_activeCarrySeconds"
-    private let lastSurpriseAtHoursKey = "bola_lastSurpriseAtHours"
-
-    /// 加分：每满 3600 秒 +1（无每日上限）
-    private let secondsPerCompanionBonus: TimeInterval = 3600
+    /// 加分：每满该秒数 +1（无每日上限）。**当前 600s = 10 分钟 +1（便于测试）；正式可调回 3600（每小时 +1）。**
+    private let secondsPerCompanionBonus: TimeInterval = 600
     /// 距上次墙钟打点超过此时长（秒），视为「长期未回到 App」，自动按 Gap 扣分且不把这整段当挂机加分（无需用户点按钮）。
     private let longAbsenceWithoutForegroundSeconds: TimeInterval = 24 * 3600
 
@@ -70,6 +61,10 @@ final class PetViewModel: ObservableObject {
     private let tapBurstWindowSeconds: TimeInterval = 8
     private var angryTapCooldownUntil: TimeInterval = 0
 
+    /// 按住说话流程中：屏蔽宠物点击交互
+    @Published private(set) var voiceConversationActive: Bool = false
+    private var voiceReplyPlaying: Bool = false
+
     /// 当前气泡文案（空则隐藏）；新文案会替换上一条并重新计时
     @Published var dialogueLine: String = ""
     private var dialogueDismissWorkItem: DispatchWorkItem?
@@ -87,8 +82,19 @@ final class PetViewModel: ObservableObject {
     /// 每次进入界面/回到前台都想打招呼；仅防 `onAppear` 与 `scenePhase.active` 同一次打开重复播两次（秒）
     private let greetingThrottleSeconds: TimeInterval = 12
     private var proactiveChatCancellable: AnyCancellable?
+    /// 前台周期查心率；仅用户已授权读 HealthKit 时启用
+    private var heartRateMonitorCancellable: AnyCancellable?
+    private var healthKitReadAuthorized = false
+    private var lastHeartRateAlertWallClock: TimeInterval = 0
+    /// 两次「心跳偏快」气泡之间的最短间隔，避免刷屏
+    private let heartRateAlertCooldownSeconds: TimeInterval = 8 * 60
+    /// 前台轮询间隔（秒）；略省电量
+    private let heartRateForegroundPollSeconds: TimeInterval = 90
     /// 仅前台时播放主动闲聊（与计划「仅前台」一致）
     private var isForegroundActive = true
+
+    /// 抽屉面板展示用（最近一次心率 BPM 数字或 "—"）
+    @Published var latestHeartRateText: String = "—"
 
     private var currentDefaultEmotion: PetEmotion = .idle
     private var milestoneTimerCancellable: AnyCancellable?
@@ -114,6 +120,17 @@ final class PetViewModel: ObservableObject {
     ]
 
     init() {
+        BolaSharedDefaults.migrateStandardToGroupIfNeeded()
+        #if os(watchOS)
+        BolaWCSessionCoordinator.shared.onReceiveCompanionValue = { [weak self] v in
+            guard let self else { return }
+            Task { @MainActor in
+                self.applyRemoteCompanionValue(v)
+            }
+        }
+        BolaWCSessionCoordinator.shared.activate()
+        #endif
+
         // 初始化：按「会话墙钟」累计陪伴与惊喜；超长离线由 `longAbsenceWithoutForegroundSeconds` 自动检测并扣分。
         hydrateTotalTimeAndSurpriseState()
 
@@ -125,6 +142,15 @@ final class PetViewModel: ObservableObject {
         startMilestoneTimer()
         startProactiveChatTimer()
         maybeTriggerSurpriseIfNeeded()
+    }
+
+    private func applyRemoteCompanionValue(_ v: Double) {
+        companionValueInternal = clampCompanionValue(v)
+        companionValue = companionValueInternal.rounded()
+        persistCompanionSnapshot(bolaDefaults, pushToPhone: false)
+        selectDefaultEmotion()
+        applyDefaultEmotionDisplay()
+        currentFrameIndex = 0
     }
 
     /// Bola「开口」时轻触手腕（与文字气泡同步）
@@ -160,12 +186,48 @@ final class PetViewModel: ObservableObject {
     func onViewAppear() {
         // 冷启动时 `onChange(scenePhase)` 有时不会对初始 `.active` 触发，这里保证「一打开就说一句」
         speakForegroundGreetingIfNeeded()
+        consumeDigestNotificationIfNeeded()
+        refreshLatestHeartRateForDisplay()
         ReminderScheduler.shared.scheduleDefaultsIfAuthorized()
         HealthKitManager.shared.requestAuthorization { [weak self] ok in
-            guard let self, ok else { return }
-            HealthKitManager.shared.elevatedHeartRateDialogueLineIfNeeded { line in
-                if let line { self.showDialogue(line, duration: 6) }
+            guard let self else { return }
+            self.healthKitReadAuthorized = ok
+            guard ok else { return }
+            HealthKitManager.shared.elevatedHeartRateDialogueLineIfNeeded { [weak self] line in
+                guard let self, let line else { return }
+                self.lastHeartRateAlertWallClock = Date().timeIntervalSince1970
+                self.showDialogue(line, duration: 7)
             }
+            self.startHeartRateForegroundMonitoring()
+        }
+    }
+
+    private func startHeartRateForegroundMonitoring() {
+        heartRateMonitorCancellable?.cancel()
+        guard healthKitReadAuthorized else { return }
+        heartRateMonitorCancellable = Timer
+            .publish(every: heartRateForegroundPollSeconds, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.checkElevatedHeartRateReminderIfNeeded()
+            }
+    }
+
+    private func stopHeartRateForegroundMonitoring() {
+        heartRateMonitorCancellable?.cancel()
+        heartRateMonitorCancellable = nil
+    }
+
+    /// App 打开在前台时周期性调用：心率偏高且样本较新则气泡提醒（带冷却）
+    private func checkElevatedHeartRateReminderIfNeeded() {
+        guard isForegroundActive, healthKitReadAuthorized else { return }
+        let now = Date().timeIntervalSince1970
+        guard now - lastHeartRateAlertWallClock >= heartRateAlertCooldownSeconds else { return }
+
+        HealthKitManager.shared.elevatedHeartRateDialogueLineIfNeeded { [weak self] line in
+            guard let self, let line else { return }
+            self.lastHeartRateAlertWallClock = Date().timeIntervalSince1970
+            self.showDialogue(line, duration: 7)
         }
     }
 
@@ -229,6 +291,8 @@ final class PetViewModel: ObservableObject {
             return PetAnimations.unhappy
         case .letter:
             return PetAnimations.letter
+        case .letterOnce:
+            return PetAnimations.letterOnce
         case .hurt:
             return PetAnimations.hurt
         case .question1:
@@ -243,6 +307,12 @@ final class PetViewModel: ObservableObject {
             return PetAnimations.speak2
         case .speak3:
             return PetAnimations.speak3
+        case .speak1Once:
+            return PetAnimations.speak1Once
+        case .speak2Once:
+            return PetAnimations.speak2Once
+        case .speak3Once:
+            return PetAnimations.speak3Once
         case .blowbubble1:
             return PetAnimations.blowbubble1
         case .blowbubble2:
@@ -332,7 +402,7 @@ final class PetViewModel: ObservableObject {
                         return
                     }
                     switch currentEmotion {
-                    case .shakeOnce, .happy1Once, .sleep:
+                    case .shakeOnce, .happy1Once, .sleep, .letterOnce:
                         finishInsertOnceReturningToRandomIdle()
                         return
                     default:
@@ -385,7 +455,7 @@ final class PetViewModel: ObservableObject {
         companionValue = companionValueInternal.rounded()
         let vAfter = Int(companionValue.rounded())
         let tierAfter = BolaDialogueLines.companionTier(for: vAfter)
-        persistCompanionSnapshot(UserDefaults.standard)
+        persistCompanionSnapshot(bolaDefaults)
 
         tapBonusToken = UUID()
 
@@ -454,6 +524,11 @@ final class PetViewModel: ObservableObject {
 
     /// jump1Once / jumpTwoOnce 等播完：回到「默认展示」（含随机插入判定）。
     private func finishNonLoopReturningToDefaultDisplay() {
+        if voiceReplyPlaying {
+            voiceReplyPlaying = false
+            voiceConversationActive = false
+            isTapInteractionAnimating = false
+        }
         selectDefaultEmotion()
         applyDefaultEmotionDisplay()
         currentFrameIndex = 0
@@ -462,12 +537,73 @@ final class PetViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Voice（按住说话）与每日信件
+
+    func beginVoiceListeningSession() {
+        guard !voiceConversationActive else { return }
+        voiceConversationActive = true
+        isTapInteractionAnimating = true
+        surprisePending = false
+        currentEmotion = [.question1, .question2, .question3].randomElement() ?? .question1
+        currentFrameIndex = 0
+    }
+
+    func setVoiceThinkingEmotion() {
+        currentEmotion = randomIdleEmotion()
+        currentFrameIndex = 0
+    }
+
+    func playVoiceAssistantReply(_ text: String) {
+        voiceReplyPlaying = true
+        showDialogue(text, duration: 10)
+        currentEmotion = [.speak1Once, .speak2Once, .speak3Once].randomElement() ?? .speak1Once
+        currentFrameIndex = 0
+    }
+
+    func cancelVoiceSession() {
+        voiceConversationActive = false
+        voiceReplyPlaying = false
+        isTapInteractionAnimating = false
+        selectDefaultEmotion()
+        applyDefaultEmotionDisplay()
+        currentFrameIndex = 0
+    }
+
+    /// 每日总结：展示正文并播 `letterOnce`
+    func playDailyDigestLetter(body: String) {
+        showDialogue(body, duration: 12)
+        currentEmotion = .letterOnce
+        currentFrameIndex = 0
+    }
+
+    func refreshLatestHeartRateForDisplay() {
+        HealthKitManager.shared.fetchLatestHeartRate { [weak self] bpm in
+            Task { @MainActor in
+                guard let self else { return }
+                self.latestHeartRateText = bpm.map { "\(Int($0.rounded()))" } ?? "—"
+            }
+        }
+    }
+
+    func consumeDigestNotificationIfNeeded() {
+        let d = bolaDefaults
+        guard d.bool(forKey: BolaNotificationBridgeKeys.digestTapOpen) else { return }
+        d.set(false, forKey: BolaNotificationBridgeKeys.digestTapOpen)
+        let body = d.string(forKey: DailyDigestStorageKeys.lastDigestBody) ?? ""
+        guard !body.isEmpty else { return }
+        playDailyDigestLetter(body: body)
+    }
+
     func cycleEmotionOnTap() {
         let nowTs = Date().timeIntervalSince1970
         let v = Int(companionValue.rounded())
 
         // die 段：无反应（强化死亡无交互感）
         if v <= 2 {
+            return
+        }
+
+        if voiceConversationActive {
             return
         }
 
@@ -546,7 +682,7 @@ final class PetViewModel: ObservableObject {
         selectDefaultEmotion()
         applyDefaultEmotionDisplay()
         currentFrameIndex = 0
-        persistCompanionSnapshot(UserDefaults.standard)
+        persistCompanionSnapshot(bolaDefaults)
     }
 
     // Timer / 墙钟：每累计 1 小时 +1，不足部分进位（无每日上限）。
@@ -604,11 +740,16 @@ final class PetViewModel: ObservableObject {
         return max(0, to.timeIntervalSince(from) - noDeduct)
     }
 
-    private func persistCompanionSnapshot(_ defaults: UserDefaults) {
-        defaults.set(companionValueInternal, forKey: companionValueKey)
-        defaults.set(totalActiveSeconds, forKey: totalActiveSecondsKey)
-        defaults.set(activeCarrySeconds, forKey: activeCarrySecondsKey)
-        defaults.set(lastCompanionWallClockTime, forKey: lastCompanionWallClockKey)
+    private func persistCompanionSnapshot(_ defaults: UserDefaults, pushToPhone: Bool = true) {
+        defaults.set(companionValueInternal, forKey: CompanionPersistenceKeys.companionValue)
+        defaults.set(totalActiveSeconds, forKey: CompanionPersistenceKeys.totalActiveSeconds)
+        defaults.set(activeCarrySeconds, forKey: CompanionPersistenceKeys.activeCarrySeconds)
+        defaults.set(lastCompanionWallClockTime, forKey: CompanionPersistenceKeys.lastCompanionWallClock)
+        if pushToPhone {
+            #if os(watchOS)
+            BolaWCSessionCoordinator.shared.pushCompanionValue(companionValueInternal)
+            #endif
+        }
     }
 
     /// 从磁盘恢复 `lastCompanionWallClockTime`；若无新键则从旧版 `lastTickTimestamp` 迁移。
@@ -617,13 +758,13 @@ final class PetViewModel: ObservableObject {
         defaults.removeObject(forKey: "bola_sessionExplicitlyEndedAt")
         defaults.removeObject(forKey: "bola_bonusGainToday")
         defaults.removeObject(forKey: "bola_bonusCalendarDay")
-        if defaults.object(forKey: lastCompanionWallClockKey) != nil {
-            lastCompanionWallClockTime = defaults.double(forKey: lastCompanionWallClockKey)
+        if defaults.object(forKey: CompanionPersistenceKeys.lastCompanionWallClock) != nil {
+            lastCompanionWallClockTime = defaults.double(forKey: CompanionPersistenceKeys.lastCompanionWallClock)
             return
         }
-        if defaults.object(forKey: lastTickTimestampKey) != nil {
-            lastCompanionWallClockTime = defaults.double(forKey: lastTickTimestampKey)
-            defaults.set(lastCompanionWallClockTime, forKey: lastCompanionWallClockKey)
+        if defaults.object(forKey: CompanionPersistenceKeys.lastTickTimestamp) != nil {
+            lastCompanionWallClockTime = defaults.double(forKey: CompanionPersistenceKeys.lastTickTimestamp)
+            defaults.set(lastCompanionWallClockTime, forKey: CompanionPersistenceKeys.lastCompanionWallClock)
             return
         }
         lastCompanionWallClockTime = nowTs
@@ -665,7 +806,7 @@ final class PetViewModel: ObservableObject {
     }
 
     private func applyWallClockCompanionDeltaFromLastCredit() {
-        let defaults = UserDefaults.standard
+        let defaults = bolaDefaults
         let now = Date()
         let nowTs = now.timeIntervalSince1970
         creditOrPenalizeWallClockGapIfNeeded(now: now, nowTs: nowTs, defaults: defaults)
@@ -673,17 +814,32 @@ final class PetViewModel: ObservableObject {
 
     /// watchOS：进后台不推进墙钟，挂机/睡眠在回到前台或 hydrate 时按整段间隔补算。
     func handleScenePhaseChange(_ phase: ScenePhase) {
-        let defaults = UserDefaults.standard
+        let defaults = bolaDefaults
         switch phase {
         case .background:
             isForegroundActive = false
-            defaults.set(lastCompanionWallClockTime, forKey: lastCompanionWallClockKey)
+            stopHeartRateForegroundMonitoring()
+            defaults.set(lastCompanionWallClockTime, forKey: CompanionPersistenceKeys.lastCompanionWallClock)
             persistCompanionSnapshot(defaults)
         case .active:
             isForegroundActive = true
+            #if os(watchOS)
+            BolaWCSessionCoordinator.shared.reapplyLatestReceivedContext()
+            #endif
             applyWallClockCompanionDeltaFromLastCredit()
             speakForegroundGreetingIfNeeded()
             maybeTriggerSurpriseIfNeeded()
+            Task {
+                await DailyDigestRefresh.regenerateIfNeeded(companionValue: Int(companionValue.rounded()))
+            }
+            refreshLatestHeartRateForDisplay()
+            consumeDigestNotificationIfNeeded()
+            if healthKitReadAuthorized {
+                startHeartRateForegroundMonitoring()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                    self?.checkElevatedHeartRateReminderIfNeeded()
+                }
+            }
         case .inactive:
             isForegroundActive = false
         @unknown default:
@@ -694,19 +850,19 @@ final class PetViewModel: ObservableObject {
     // MARK: - Surprise / Default state machine (minimal, testable)
 
     private func hydrateTotalTimeAndSurpriseState() {
-        let defaults = UserDefaults.standard
+        let defaults = bolaDefaults
         let now = Date()
         let nowTs = now.timeIntervalSince1970
 
         // 1) hydration: companionValue / totalActiveSeconds / carry
-        if defaults.object(forKey: companionValueKey) != nil {
-            companionValueInternal = defaults.double(forKey: companionValueKey)
+        if defaults.object(forKey: CompanionPersistenceKeys.companionValue) != nil {
+            companionValueInternal = defaults.double(forKey: CompanionPersistenceKeys.companionValue)
         } else {
             companionValueInternal = 50 // 默认值：避免一开始就太悲伤
         }
 
-        totalActiveSeconds = defaults.double(forKey: totalActiveSecondsKey)
-        activeCarrySeconds = defaults.double(forKey: activeCarrySecondsKey)
+        totalActiveSeconds = defaults.double(forKey: CompanionPersistenceKeys.totalActiveSeconds)
+        activeCarrySeconds = defaults.double(forKey: CompanionPersistenceKeys.activeCarrySeconds)
 
         companionValueInternal = clampCompanionValue(companionValueInternal)
         companionValue = companionValueInternal.rounded()
@@ -719,11 +875,11 @@ final class PetViewModel: ObservableObject {
         companionValueInternal = clampCompanionValue(companionValueInternal)
         companionValue = companionValueInternal.rounded()
 
-        // 3) persist
-        persistCompanionSnapshot(defaults)
+        // 3) persist（冷启动不向手机推，避免无意义往返）
+        persistCompanionSnapshot(defaults, pushToPhone: false)
 
         // 4) surprise idempotency：lastSurpriseMilestoneHours >= 当前应该触发的下一档时则不触发
-        lastSurpriseMilestoneHours = defaults.double(forKey: lastSurpriseAtHoursKey)
+        lastSurpriseMilestoneHours = defaults.double(forKey: CompanionPersistenceKeys.lastSurpriseAtHours)
     }
 
     private func startMilestoneTimer() {
@@ -765,7 +921,7 @@ final class PetViewModel: ObservableObject {
         surpriseJumpTwoQueued = true
 
         lastSurpriseMilestoneHours = nextMilestoneHours
-        UserDefaults.standard.set(nextMilestoneHours, forKey: lastSurpriseAtHoursKey)
+        bolaDefaults.set(nextMilestoneHours, forKey: CompanionPersistenceKeys.lastSurpriseAtHours)
 
         showDialogue(BolaDialogueLines.surpriseMilestone.randomElement() ?? "惊喜！", duration: 5)
 
@@ -851,96 +1007,81 @@ private struct TapBonusBubbleView: View {
 struct ContentView: View {
     @StateObject private var viewModel = PetViewModel()
     @Environment(\.scenePhase) private var scenePhase
+    @State private var showPanelSheet = false
+    @State private var showRemindersSheet = false
+    @State private var showSettingsSheet = false
 
     var body: some View {
-        // 气泡必须叠在宠物上（overlay），不要放进 VStack 占高度，否则一有台词主区域变矮，
-        // scaledToFit 会重算尺寸，跳跃动画会像「突然放大/缩小」。
-        ZStack(alignment: .top) {
-            PetAnimationView(viewModel: viewModel)
-                .id(viewModel.currentEmotion)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-                .highPriorityGesture(
-                    TapGesture().onEnded { viewModel.cycleEmotionOnTap() }
-                )
+        // 气泡必须叠在宠物上（overlay），不要放进与底栏同一层、会随台词改变高度的容器里，
+        // 否则 scaledToFit 会重算尺寸，跳跃动画会像「突然放大/缩小」。
+        // 底栏贴底；面板与「提醒」相同，用全屏 Sheet + NavigationStack + 完成。
+        VStack(spacing: 0) {
+            ZStack(alignment: .top) {
+                PetAnimationView(viewModel: viewModel)
+                    .id(viewModel.currentEmotion)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(
+                        TapGesture().onEnded { viewModel.cycleEmotionOnTap() }
+                    )
 
-            if !viewModel.dialogueLine.isEmpty {
-                Text(viewModel.dialogueLine)
-                    .font(.caption)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.88)
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .frame(maxWidth: .infinity)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .padding(.horizontal, 6)
-                    // 整体上移，更靠表冠/安全区上沿，少挡宠物脸
-                    .offset(y: -12)
-                    .zIndex(1)
-                    .allowsHitTesting(false)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-
-            if viewModel.tapBonusToken != nil {
-                TapBonusBubbleView {
-                    viewModel.clearTapBonusBubble()
+                if !viewModel.dialogueLine.isEmpty {
+                    Text(viewModel.dialogueLine)
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.88)
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .frame(maxWidth: .infinity)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color(red: 229 / 255, green: 1, blue: 0), lineWidth: 0.75)
+                        )
+                        .padding(.horizontal, 6)
+                        .offset(y: -12)
+                        .zIndex(1)
+                        .allowsHitTesting(false)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                .id(viewModel.tapBonusToken)
-                .offset(y: 28)
-                .zIndex(2)
-                .allowsHitTesting(false)
-                .transition(.scale.combined(with: .opacity))
+
+                if viewModel.tapBonusToken != nil {
+                    TapBonusBubbleView {
+                        viewModel.clearTapBonusBubble()
+                    }
+                    .id(viewModel.tapBonusToken)
+                    .offset(y: 28)
+                    .zIndex(2)
+                    .allowsHitTesting(false)
+                    .transition(.scale.combined(with: .opacity))
+                }
             }
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            WatchBottomChromeToolbar(
+                viewModel: viewModel,
+                onOpenPanel: { showPanelSheet = true }
+            )
+            .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            HStack(alignment: .center, spacing: 3) {
-                Button {
-                    viewModel.adjustCompanionValueManual(by: -2)
-                } label: {
-                    Image(systemName: "minus")
-                        .font(.system(size: 6, weight: .semibold))
-                        .frame(minWidth: 22, minHeight: 18)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-                .scaleEffect(0.72)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 3) {
-                        Text("陪伴值")
-                        Text("\(Int(viewModel.companionValue.rounded()))")
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.system(size: 9)) // 比 caption2 更小
-
-                    ProgressView(value: viewModel.companionValue / 100.0)
-                        .frame(height: 2)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Button {
-                    viewModel.adjustCompanionValueManual(by: 2)
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 6, weight: .semibold))
-                        .frame(minWidth: 22, minHeight: 18)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-                .scaleEffect(0.72)
-            }
-            .padding(.horizontal, 4)
-            .padding(.top, 2)
-            .padding(.bottom, 6)
+        .ignoresSafeArea(edges: .bottom)
+        .sheet(isPresented: $showPanelSheet) {
+            WatchPanelSheetView(
+                viewModel: viewModel,
+                showRemindersSheet: $showRemindersSheet,
+                showSettingsSheet: $showSettingsSheet
+            )
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 0)
+        .sheet(isPresented: $showRemindersSheet) {
+            WatchRemindersListView()
+        }
+        .sheet(isPresented: $showSettingsSheet) {
+            WatchSettingsView(viewModel: viewModel)
+        }
         .onAppear {
             viewModel.onViewAppear()
         }
