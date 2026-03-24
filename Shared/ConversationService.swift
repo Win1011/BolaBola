@@ -3,6 +3,9 @@
 //
 
 import Foundation
+import os
+
+private let bolaConversationSyncLog = Logger(subsystem: "com.gathxr.BolaBola.sync", category: "Conversation")
 
 public enum ConversationService {
     public static func bolaSystemPrompt(companionValue: Int) -> String {
@@ -24,8 +27,19 @@ public enum ConversationService {
         }
         messages.append(LLMChatMessage(role: "user", content: utterance))
         let reply = try await client.chatCompletion(messages: messages)
-        ChatHistoryStore.appendUserThenAssistant(user: utterance, assistant: reply, defaults: defaults)
+        let delta = ChatHistoryStore.appendUserThenAssistant(user: utterance, assistant: reply, defaults: defaults)
+        let ids = delta.map(\.id.uuidString).joined(separator: ",")
+        bolaConversationSyncLog.info("replyToUser OK → pushChatDelta ids=[\(ids, privacy: .public)] utteranceLen=\(utterance.count, privacy: .public)")
+        BolaWCSessionCoordinator.shared.pushChatDelta(delta)
         return reply
+    }
+
+    /// 手表录音 → 智谱 ASR 转文字 → 再走 `replyToUser`（需 Base URL 为 `open.bigmodel.cn`）
+    public static func replyToUserFromRecordedAudio(fileURL: URL, companionValue: Int) async throws -> String {
+        let client = try LLMClient.loadFromKeychain()
+        let utterance = try await client.transcribeAudio(fileURL: fileURL)
+        guard !utterance.isEmpty else { throw LLMClientError.badResponse }
+        return try await replyToUser(utterance: utterance, companionValue: companionValue)
     }
 
     public static func templateReply(utterance: String, companionValue: Int) -> String {

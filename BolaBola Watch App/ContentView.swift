@@ -577,7 +577,7 @@ final class PetViewModel: ObservableObject {
     }
 
     func refreshLatestHeartRateForDisplay() {
-        HealthKitManager.shared.fetchLatestHeartRate { [weak self] bpm in
+        HealthKitManager.shared.fetchLatestHeartRateForDisplay { [weak self] bpm in
             Task { @MainActor in
                 guard let self else { return }
                 self.latestHeartRateText = bpm.map { "\(Int($0.rounded()))" } ?? "—"

@@ -7,7 +7,7 @@ import Foundation
 public enum ReminderBootstrap {
     private static let bootKey = "bola_reminders_bootstrapped_v1"
 
-    /// Seeds two template reminders when the store is empty (first install).
+    /// 首次安装时写入两条「墙钟时间」示例提醒（与 interval 倒计时式区分）。
     public static func ensureDefaults(in defaults: UserDefaults = BolaSharedDefaults.resolved()) {
         guard !defaults.bool(forKey: bootKey) else { return }
         var list = ReminderListStore.load(from: defaults)
@@ -16,12 +16,14 @@ public enum ReminderBootstrap {
                 BolaReminder(
                     title: "Bola · 喝水",
                     notificationBody: "该喝水啦，小口慢饮～",
-                    schedule: .interval(2 * 3600)
+                    schedule: .calendar(hour: 10, minute: 0, weekdays: []),
+                    kind: .water
                 ),
                 BolaReminder(
                     title: "Bola · 动一动",
                     notificationBody: "起来伸展一下，眼睛也休息一下。",
-                    schedule: .interval(3 * 3600)
+                    schedule: .calendar(hour: 15, minute: 0, weekdays: []),
+                    kind: .move
                 )
             ]
             ReminderListStore.save(list, to: defaults)

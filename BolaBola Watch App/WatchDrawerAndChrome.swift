@@ -8,28 +8,31 @@ import SwiftUI
 // MARK: - 底部：麦克风 + 横条（点按打开面板，与「提醒」页同为全屏 Sheet）
 
 struct WatchBottomChromeToolbar: View {
-    static let estimatedChromeHeight: CGFloat = 52
+    /// 含麦克风 + 可选录音指示点 + 横条占位
+    static let estimatedChromeHeight: CGFloat = 60
 
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var viewModel: PetViewModel
     var onOpenPanel: () -> Void
 
-    @State private var micEngaged = false
+    @State private var isRecording = false
+    @State private var isAwaitingMicPermission = false
 
     private let controlDiameter: CGFloat = 38
+    /// 录音中指示（#E5FF00）
+    private let recordingIndicatorColor = Color(red: 229 / 255, green: 1, blue: 0)
 
     var body: some View {
         VStack(spacing: 2) {
             HStack {
                 Spacer(minLength: 0)
                 micControl
-                    .frame(width: controlDiameter, height: controlDiameter)
                 Spacer(minLength: 0)
             }
 
             pullHandleBar
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 10)
         .padding(.top, 2)
         .padding(.bottom, 0)
         .frame(maxWidth: .infinity)
@@ -51,74 +54,113 @@ struct WatchBottomChromeToolbar: View {
         .onTapGesture(perform: onOpenPanel)
     }
 
-    /// 与底栏同风格的圆形触控区（类似系统控件上的磨砂凸台）
+    /// Liquid Glass 圆形触控区（watchOS 26+）；与系统底栏控件层次一致
     private func chromeAccessoryCircle<Content: View>(
         @ViewBuilder content: () -> Content
     ) -> some View {
         ZStack {
-            Circle()
-                .fill(.thinMaterial)
-            Circle()
-                .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
             content()
         }
+        .frame(width: controlDiameter, height: controlDiameter)
+        .glassEffect(.regular, in: Circle())
     }
 
     private var micControl: some View {
-        chromeAccessoryCircle {
-            Image(systemName: "mic.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .symbolRenderingMode(.hierarchical)
+        VStack(spacing: 5) {
+            chromeAccessoryCircle {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .contentShape(Circle())
+            .highPriorityGesture(TapGesture().onEnded { toggleMicTap() })
+
+            if isRecording {
+                Circle()
+                    .fill(recordingIndicatorColor)
+                    .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
+            }
         }
-        .scaleEffect(micEngaged ? 0.92 : 1.0)
-        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: micEngaged)
-        .contentShape(Circle())
-        // 高优先级，避免与宠物区域手势抢触控
-        .highPriorityGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    guard !micEngaged else { return }
-                    guard BolaSpeechCapture.isSpeechSupported else {
-                        viewModel.showDialogue("手表系统暂不支持本地语音识别，请用 iPhone 端 Bola 对话（后续可扩展）。", duration: 5)
-                        return
-                    }
-                    micEngaged = true
-                    BolaSpeechCapture.shared.requestSpeechAuthorization { ok in
-                        guard ok else {
-                            micEngaged = false
-                            viewModel.showDialogue("需要语音识别权限哦。", duration: 4)
-                            return
-                        }
-                        viewModel.beginVoiceListeningSession()
-                        BolaSpeechCapture.shared.startListening()
-                    }
-                }
-                .onEnded { _ in
-                    guard micEngaged else { return }
-                    micEngaged = false
-                    BolaSpeechCapture.shared.stopAndFinalize { text in
-                        if text.isEmpty {
-                            viewModel.cancelVoiceSession()
-                            return
-                        }
-                        viewModel.setVoiceThinkingEmotion()
-                        Task {
-                            let v = Int(viewModel.companionValue.rounded())
-                            let reply: String
-                            do {
-                                reply = try await ConversationService.replyToUser(utterance: text, companionValue: v)
-                            } catch {
-                                reply = ConversationService.templateReply(utterance: text, companionValue: v)
-                            }
-                            await MainActor.run {
-                                viewModel.playVoiceAssistantReply(reply)
-                            }
-                        }
-                    }
-                }
-        )
-        .accessibilityLabel("按住说话")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(isRecording ? "录音中，再点一次结束" : "点按开始录音")
         .accessibilityAddTraits(.allowsDirectInteraction)
+    }
+
+    private func toggleMicTap() {
+        guard WatchSpeechRelayCapture.isSupported else { return }
+        if isRecording {
+            isRecording = false
+            guard let url = WatchSpeechRelayRecorder.shared.stopRecording() else {
+                viewModel.cancelVoiceSession()
+                viewModel.showDialogue("录音未成功，请再试。", duration: 4)
+                return
+            }
+            viewModel.setVoiceThinkingEmotion()
+            let v = Int(viewModel.companionValue.rounded())
+            Task {
+                do {
+                    let reply = try await ConversationService.replyToUserFromRecordedAudio(fileURL: url, companionValue: v)
+                    await MainActor.run {
+                        viewModel.playVoiceAssistantReply(reply)
+                    }
+                    try? FileManager.default.removeItem(at: url)
+                } catch {
+                    let err = error
+                    let fallbackOk = await MainActor.run { () -> Bool in
+                        WatchSpeechRelayCapture.shared.transferExistingFileForPhoneTranscription(url: url) { text in
+                            Task { @MainActor in
+                                if text.isEmpty {
+                                    viewModel.cancelVoiceSession()
+                                    let msg = (err as? LocalizedError)?.errorDescription ?? "语音未识别"
+                                    viewModel.showDialogue(msg, duration: 6)
+                                } else {
+                                    viewModel.setVoiceThinkingEmotion()
+                                    Task {
+                                        let reply: String
+                                        do {
+                                            reply = try await ConversationService.replyToUser(utterance: text, companionValue: v)
+                                        } catch {
+                                            reply = ConversationService.templateReply(utterance: text, companionValue: v)
+                                        }
+                                        await MainActor.run {
+                                            viewModel.playVoiceAssistantReply(reply)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if !fallbackOk {
+                        await MainActor.run {
+                            viewModel.cancelVoiceSession()
+                            viewModel.showDialogue(
+                                (err as? LocalizedError)?.errorDescription ?? "语音未识别。可打开 iPhone 上的 Bola 再试。",
+                                duration: 6
+                            )
+                        }
+                        try? FileManager.default.removeItem(at: url)
+                    }
+                }
+            }
+            return
+        }
+        guard !isAwaitingMicPermission else { return }
+        isAwaitingMicPermission = true
+        WatchSpeechRelayRecorder.shared.requestMicPermission { ok in
+            isAwaitingMicPermission = false
+            guard ok else {
+                viewModel.showDialogue("需要麦克风权限哦。", duration: 4)
+                return
+            }
+            do {
+                try WatchSpeechRelayRecorder.shared.startRecording()
+                isRecording = true
+                viewModel.beginVoiceListeningSession()
+            } catch {
+                viewModel.showDialogue("无法开始录音。", duration: 4)
+            }
+        }
     }
 }
 
@@ -137,6 +179,7 @@ struct WatchPanelSheetView: View {
                     Text("调试陪伴值")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
 
                     HStack(alignment: .center, spacing: 3) {
                         Button {
@@ -177,9 +220,10 @@ struct WatchPanelSheetView: View {
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    GlassEffectContainer(spacing: 10) {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         panelCard(title: "心率", subtitle: "\(viewModel.latestHeartRateText) BPM") {
                             viewModel.refreshLatestHeartRateForDisplay()
                         }
@@ -195,9 +239,16 @@ struct WatchPanelSheetView: View {
                                 showSettingsSheet = true
                             }
                         }
+                        NavigationLink {
+                            WatchChatHistoryView()
+                        } label: {
+                            panelCardLabel(title: "对话记录", subtitle: "与 Bola")
+                        }
+                        .buttonStyle(.plain)
+                        }
                     }
                 }
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 10)
                 .padding(.top, 8)
                 .padding(.bottom, 12)
             }
@@ -212,20 +263,25 @@ struct WatchPanelSheetView: View {
 
     private func panelCard(title: String, subtitle: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.caption2.weight(.semibold))
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
-            }
-            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-            .padding(8)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            panelCardLabel(title: title, subtitle: subtitle)
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func panelCardLabel(title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+        }
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+        .padding(8)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 

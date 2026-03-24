@@ -15,8 +15,10 @@ final class HealthKitManager {
 
     /// 超过该 BPM 且样本足够「新」时在前台提醒（非诊断、非医疗）
     var heartRateAlertThreshold: Double = 100
-    /// 只信任最近这段时间内的心率样本，避免用几小时前的旧数据误报
+    /// 偏高提醒：只信任最近这段时间内的心率样本，避免用陈旧数据误报
     var heartRateSampleMaxAgeSeconds: TimeInterval = 8 * 60
+    /// 界面展示：允许更旧的「最近一次心率」（例如久坐后仍能看到上次读数）
+    var heartRateDisplayMaxAgeSeconds: TimeInterval = 24 * 3600
 
     private init() {}
 
@@ -45,8 +47,17 @@ final class HealthKitManager {
         }
     }
 
-    /// 查询最近一次心率样本（手表上多为最近几分钟）
-    func fetchLatestHeartRate(completion: @escaping (Double?) -> Void) {
+    /// 主界面 / 面板数字：接受较旧的最近一条样本
+    func fetchLatestHeartRateForDisplay(completion: @escaping (Double?) -> Void) {
+        fetchLatestHeartRate(maxSampleAge: heartRateDisplayMaxAgeSeconds, completion: completion)
+    }
+
+    /// 偏高提醒：仅使用足够新的样本
+    func fetchLatestHeartRateForAlert(completion: @escaping (Double?) -> Void) {
+        fetchLatestHeartRate(maxSampleAge: heartRateSampleMaxAgeSeconds, completion: completion)
+    }
+
+    private func fetchLatestHeartRate(maxSampleAge: TimeInterval, completion: @escaping (Double?) -> Void) {
         guard isHealthDataAvailable,
               let type = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
             completion(nil)
@@ -59,18 +70,14 @@ final class HealthKitManager {
             predicate: nil,
             limit: 1,
             sortDescriptors: [sort]
-        ) { [weak self] _, samples, error in
-            guard let self else {
-                DispatchQueue.main.async { completion(nil) }
-                return
-            }
+        ) { _, samples, error in
             guard error == nil,
                   let sample = samples?.first as? HKQuantitySample else {
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
             let age = Date().timeIntervalSince(sample.endDate)
-            guard age >= 0, age <= self.heartRateSampleMaxAgeSeconds else {
+            guard age >= 0, age <= maxSampleAge else {
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
@@ -82,7 +89,7 @@ final class HealthKitManager {
 
     /// 若心率高于阈值则返回一句文案（用于界面气泡）；否则 nil
     func elevatedHeartRateDialogueLineIfNeeded(completion: @escaping (String?) -> Void) {
-        fetchLatestHeartRate { [weak self] bpm in
+        fetchLatestHeartRateForAlert { [weak self] bpm in
             guard let self, let bpm, bpm >= self.heartRateAlertThreshold else {
                 completion(nil)
                 return

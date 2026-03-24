@@ -43,4 +43,6 @@ public enum LLMKeychain {
     public static let accountAPIKey = "apiKey"
     public static let accountBaseURL = "baseURL"
     public static let accountModelId = "modelId"
+    /// `"1"` = `Authorization: Bearer <key>`（默认）；`"0"` = 仅传 Key，无 `Bearer ` 前缀（部分中转要求）。
+    public static let accountAuthBearer = "authBearer"
 }

@@ -26,6 +26,7 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = IOSNotificationRouter.shared
+        BolaWCSessionCoordinator.shared.activate()
         return true
     }
 }
