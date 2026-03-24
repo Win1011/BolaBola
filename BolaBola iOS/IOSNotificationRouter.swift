@@ -2,6 +2,7 @@
 //  IOSNotificationRouter.swift
 //
 
+import FirebaseCore
 import UIKit
 import UserNotifications
 
@@ -25,6 +26,7 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        FirebaseApp.configure()
         UNUserNotificationCenter.current().delegate = IOSNotificationRouter.shared
         BolaWCSessionCoordinator.shared.activate()
         return true

@@ -12,6 +12,8 @@ public extension Notification.Name {
     static let bolaChatHistoryDidMerge = Notification.Name("bolaChatHistoryDidMerge")
     /// iPhone：`isWatchAppInstalled` 等变化时发出，供主界面刷新「能否同步到手表」提示。
     static let bolaWatchInstallabilityDidChange = Notification.Name("bolaWatchInstallabilityDidChange")
+    /// iPhone：收到手表经 WC 推送的陪伴游戏状态快照并写入本机 defaults 后发出，用于刷新 UI。
+    static let bolaCompanionStateDidMergeFromWatch = Notification.Name("bolaCompanionStateDidMergeFromWatch")
 }
 
 public struct ChatTurn: Codable, Equatable, Identifiable, Sendable {

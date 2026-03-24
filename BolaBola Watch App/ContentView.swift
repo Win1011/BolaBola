@@ -128,7 +128,7 @@ final class PetViewModel: ObservableObject {
                 self.applyRemoteCompanionValue(v)
             }
         }
-        BolaWCSessionCoordinator.shared.activate()
+        // WCSession 已在 `BolaBolaApp.init()` 中激活；此处不再重复 activate，仅绑定回调。
         #endif
 
         // 初始化：按「会话墙钟」累计陪伴与惊喜；超长离线由 `longAbsenceWithoutForegroundSeconds` 自动检测并扣分。
@@ -748,6 +748,7 @@ final class PetViewModel: ObservableObject {
         if pushToPhone {
             #if os(watchOS)
             BolaWCSessionCoordinator.shared.pushCompanionValue(companionValueInternal)
+            BolaWCSessionCoordinator.shared.schedulePushCompanionGameStateSnapshotToPhoneDebounced()
             #endif
         }
     }

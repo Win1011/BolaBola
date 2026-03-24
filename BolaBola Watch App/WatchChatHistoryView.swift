@@ -1,6 +1,6 @@
 //
 //  WatchChatHistoryView.swift
-//  按自然日分组的对话记录（与 iPhone 试聊共用 App Group 中的 ChatHistoryStore）
+//  按自然日分组的对话记录；与 iPhone 试聊经 WatchConnectivity 合并，并与 App Group 共享 prefs 一致时对齐。
 //
 
 import SwiftUI

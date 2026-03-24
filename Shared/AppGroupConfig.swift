@@ -6,6 +6,6 @@
 import Foundation
 
 public enum AppGroupConfig {
-    /// App Group used for UserDefaults + future extensions; enable in both targets' entitlements.
+    /// Shared `UserDefaults` suite for iOS + watchOS; must match entitlements and Developer portal App Group ID.
     public static let suiteName = "group.com.gathxr.BolaBola"
 }

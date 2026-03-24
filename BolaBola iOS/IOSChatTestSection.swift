@@ -1,6 +1,6 @@
 //
 //  IOSChatTestSection.swift
-//  iPhone：对话测试区（与手表共用 App Group 里的 ChatHistoryStore）。
+//  iPhone：对话测试区；聊天记录与手表靠 WatchConnectivity 合并，并与 App Group 共享 prefs 一致时对齐。
 //
 
 import SwiftUI

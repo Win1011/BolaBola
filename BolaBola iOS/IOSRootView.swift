@@ -93,21 +93,25 @@ struct IOSRootView: View {
         }
         .onAppear {
             consumeDigestNotificationIfNeeded()
-            refreshCompanionFromAppGroup()
+            refreshCompanionFromPersistedDefaults()
             BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             BolaWCSessionCoordinator.shared.reapplyLatestReceivedContext()
             BolaWCSessionCoordinator.shared.pushStoredLLMConfigurationToWatchIfConfigured()
-            refreshCompanionFromAppGroup()
+            refreshCompanionFromPersistedDefaults()
             BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaCompanionStateDidMergeFromWatch)) { _ in
+            refreshCompanionFromPersistedDefaults()
+        }
         .task {
+            // `migrateStandardToGroupIfNeeded`：首次启用 App Group 时将 standard 中的陪伴相关键拷入共享 suite。
             BolaSharedDefaults.migrateStandardToGroupIfNeeded()
             ReminderBootstrap.ensureDefaults()
             reminders = ReminderListStore.load()
-            refreshCompanionFromAppGroup()
+            refreshCompanionFromPersistedDefaults()
             BolaWCSessionCoordinator.shared.onReceiveCompanionValue = { v in
                 Task { @MainActor in
                     companion = v
@@ -123,7 +127,7 @@ struct IOSRootView: View {
         }
     }
 
-    private func refreshCompanionFromAppGroup() {
+    private func refreshCompanionFromPersistedDefaults() {
         if bolaDefaults.object(forKey: CompanionPersistenceKeys.companionValue) != nil {
             companion = bolaDefaults.double(forKey: CompanionPersistenceKeys.companionValue)
         } else {

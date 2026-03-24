@@ -13,12 +13,34 @@ private let bolaWCChatLog = Logger(subsystem: "com.gathxr.BolaBola.sync", catego
 public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
     public static let shared = BolaWCSessionCoordinator()
 
-    /// 主线程：远端较新时写入 App Group 后调用。
+    /// 主线程：远端较新时写入本机 `BolaSharedDefaults.resolved()` 后调用。
     public var onReceiveCompanionValue: ((Double) -> Void)?
 
     private var pendingPayload: [String: Any]?
+    /// `pushChatDelta` 在 session 未激活或对端未就绪时入队，就绪后按 FIFO `transferUserInfo`（与 `pendingPayload` 对称）。
+    private var pendingChatDeltaPayloads: [[String: Any]] = []
+    private let maxPendingChatDeltaPayloads = 32
 
     #if os(watchOS)
+    private static let llmKeychainPullThrottleSeconds: TimeInterval = 45
+    private static let llmKeychainPullDefaultsKey = "bola_last_llm_keychain_pull_request_ts"
+
+    /// 手表未写入 LLM API Key 时，向 iPhone 发 `transferUserInfo` 触发对方 `pushStoredLLMConfigurationToWatchIfConfigured`。
+    private func requestLLMKeychainFromPhoneIfMissing(session: WCSession) {
+        guard session.activationState == .activated, session.isCompanionAppInstalled else { return }
+        let raw = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountAPIKey) ?? ""
+        let hasKey = !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard !hasKey else { return }
+        let now = Date().timeIntervalSince1970
+        let last = UserDefaults.standard.double(forKey: Self.llmKeychainPullDefaultsKey)
+        guard now - last >= Self.llmKeychainPullThrottleSeconds else { return }
+        UserDefaults.standard.set(now, forKey: Self.llmKeychainPullDefaultsKey)
+        session.transferUserInfo([WCSyncPayload.requestSync: WCSyncPayload.requestSyncValueLLMKeychain])
+        bolaWCChatLog.info("requestLLMKeychainFromPhone queued (watch has no API key, transferUserInfo)")
+    }
+
+    /// 无 App Group 时：把手表上的陪伴游戏状态批量同步到 iPhone defaults（防抖，避免每 tick 刷屏）。
+    private var companionGameStateSnapshotDebounceTask: Task<Void, Never>?
     /// 手表 → iPhone 语音中继：等待与 `requestId` 匹配的转写结果
     private var speechRelayPending: (id: String, completion: (String?) -> Void)?
     private var speechRelayTimeoutWorkItem: DispatchWorkItem?
@@ -119,7 +141,7 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         }
     }
 
-    /// 将当前陪伴值写入 App Group 并尽力推到另一端（session 未激活时会排队，激活后发出）。
+    /// 将当前陪伴值写入本机 defaults 并尽力推到另一端（session 未激活时会排队，激活后发出）。
     /// - Parameter forcedForWatch: 仅 iPhone 上「同步手表」为 true，避免手表因晚到的 context 被本地较新的 `companionWCUpdatedAt` 拒绝。
     public func pushCompanionValue(_ value: Double, forcedForWatch: Bool = false) {
         let ts = Date().timeIntervalSince1970
@@ -215,7 +237,10 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
             guard let self else { return }
             let session = WCSession.default
             guard session.activationState == .activated, session.isPaired, session.isWatchAppInstalled else { return }
-            guard let rawKey = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountAPIKey) else { return }
+            guard let rawKey = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountAPIKey) else {
+                bolaWCChatLog.info("pushStoredLLMConfigurationToWatchIfConfigured skip: iPhone Keychain has no API key (在设置里保存并同步)")
+                return
+            }
             let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !key.isEmpty else { return }
             let base = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountBaseURL)?
@@ -233,7 +258,7 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         }
     }
 
-    /// 读取本机 App Group 中的陪伴值并再走 `pushCompanionValue`。
+    /// 读取本机 defaults 中的陪伴值并再走 `pushCompanionValue`。
     /// 解决：用户从未在 iPhone 上点过 +/- 时，从未调用过 `pushCompanionValue`，手表端 `receivedApplicationContext` 一直为空。
     public func pushLocalCompanionTowardWatchFromDefaults() {
         let defaults = BolaSharedDefaults.resolved()
@@ -247,6 +272,25 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         bolaWCChatLog.info("pushLocalCompanionTowardWatchFromDefaults pushed value=\(v)")
     }
     #endif
+
+    private func enqueueChatDeltaPayload(_ payload: [String: Any]) {
+        if pendingChatDeltaPayloads.count >= maxPendingChatDeltaPayloads {
+            pendingChatDeltaPayloads.removeFirst()
+            bolaWCChatLog.warning("pushChatDelta queue full: dropped oldest pending")
+        }
+        pendingChatDeltaPayloads.append(payload)
+        bolaWCChatLog.info("pushChatDelta enqueued pendingCount=\(self.pendingChatDeltaPayloads.count, privacy: .public)")
+    }
+
+    /// 对端就绪且 session 已激活时，按顺序发出队列中的聊天记录包。
+    private func flushPendingChatDeltasIfReady(session: WCSession) {
+        guard session.activationState == .activated, isCounterpartAppReady(session) else { return }
+        while !pendingChatDeltaPayloads.isEmpty {
+            let payload = pendingChatDeltaPayloads.removeFirst()
+            session.transferUserInfo(payload)
+            bolaWCChatLog.info("flushPendingChatDeltas transferUserInfo remaining=\(self.pendingChatDeltaPayloads.count, privacy: .public)")
+        }
+    }
 
     /// 推送本轮新增的两条对话到对端（手表 / iPhone 各有一份本地存储，需 WC 合并）。
     public func pushChatDelta(_ turns: [ChatTurn]) {
@@ -281,8 +325,15 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
             #else
             let detail = "activation=\(state) counterpartReady=\(ready)"
             #endif
-            guard session.activationState == .activated, ready else {
-                bolaWCChatLog.warning("pushChatDelta skip: \(detail)")
+            self.flushPendingChatDeltasIfReady(session: session)
+            guard session.activationState == .activated else {
+                self.enqueueChatDeltaPayload(payload)
+                bolaWCChatLog.warning("pushChatDelta enqueued (session not activated): \(detail)")
+                return
+            }
+            guard ready else {
+                self.enqueueChatDeltaPayload(payload)
+                bolaWCChatLog.warning("pushChatDelta enqueued (counterpart not ready): \(detail)")
                 return
             }
             session.transferUserInfo(payload)
@@ -309,6 +360,109 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         return true
     }
 
+    #if os(watchOS)
+    /// 无 App Group 时：把手表 `UserDefaults` 中的陪伴游戏状态防抖同步到 iPhone（`transferUserInfo`）。
+    public func schedulePushCompanionGameStateSnapshotToPhoneDebounced() {
+        companionGameStateSnapshotDebounceTask?.cancel()
+        companionGameStateSnapshotDebounceTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard let self else { return }
+            guard !Task.isCancelled else { return }
+            self.pushCompanionGameStateSnapshotToPhoneNow()
+        }
+    }
+
+    private func pushCompanionGameStateSnapshotToPhoneNow() {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        // watchOS 无 `isPaired`（仅 iOS）；能发 transferUserInfo 时 companion 已配对即可。
+        guard session.activationState == .activated, session.isCompanionAppInstalled else { return }
+        let defaults = BolaSharedDefaults.resolved()
+        var plist: [String: Any] = [:]
+        for key in CompanionPersistenceKeys.wcGameStateSnapshotKeys {
+            guard let o = defaults.object(forKey: key) else { continue }
+            switch o {
+            case let n as NSNumber:
+                plist[key] = n
+            case let b as Bool:
+                plist[key] = b
+            case let s as String:
+                plist[key] = s
+            case let d as Double:
+                plist[key] = d
+            case let i as Int:
+                plist[key] = i
+            default:
+                break
+            }
+        }
+        guard !plist.isEmpty else { return }
+        guard let data = try? PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0) else {
+            bolaWCChatLog.warning("pushCompanionSnapshot plist encode failed")
+            return
+        }
+        let b64 = data.base64EncodedString()
+        let payload: [String: Any] = [
+            WCSyncPayload.companionSnapshotKind: WCSyncPayload.companionSnapshotKindV1,
+            WCSyncPayload.companionSnapshotB64: b64
+        ]
+        session.transferUserInfo(payload)
+        bolaWCChatLog.info("pushCompanionSnapshotToPhone transferUserInfo plistBytes=\(data.count) entryCount=\(plist.count, privacy: .public)")
+    }
+    #endif
+
+    #if os(iOS)
+    /// 合并手表推送的游戏状态：计数/墙钟等始终采用手表；`companionValue` 若本机 WC 时间戳更新则不回退（避免覆盖手机上刚点的 +/-）。
+    private func ingestCompanionGameStateSnapshotFromWatchIfPresent(_ dict: [String: Any]) -> Bool {
+        guard (dict[WCSyncPayload.companionSnapshotKind] as? String) == WCSyncPayload.companionSnapshotKindV1 else { return false }
+        guard let b64 = dict[WCSyncPayload.companionSnapshotB64] as? String,
+              let raw = Data(base64Encoded: b64) else {
+            bolaWCChatLog.warning("ingestCompanionSnapshot malformed b64")
+            return false
+        }
+        var fmt = PropertyListSerialization.PropertyListFormat.binary
+        guard let plist = try? PropertyListSerialization.propertyList(from: raw, options: [], format: &fmt),
+              let remote = plist as? [String: Any] else {
+            bolaWCChatLog.warning("ingestCompanionSnapshot decode failed")
+            return false
+        }
+
+        let defaults = BolaSharedDefaults.resolved()
+        let localWC = defaults.double(forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
+        let remoteWC = Self.doubleValue(remote[CompanionPersistenceKeys.companionWCUpdatedAt]) ?? 0
+
+        var didApply = false
+        for key in CompanionPersistenceKeys.allCompanionKeys {
+            guard key != CompanionPersistenceKeys.companionValue else { continue }
+            guard let v = remote[key] else { continue }
+            defaults.set(v, forKey: key)
+            didApply = true
+        }
+
+        if let cvRaw = remote[CompanionPersistenceKeys.companionValue], let cv = Self.doubleValue(cvRaw) {
+            if remoteWC >= localWC - 0.000_1 {
+                defaults.set(cv, forKey: CompanionPersistenceKeys.companionValue)
+                if remoteWC > 0 {
+                    defaults.set(remoteWC, forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
+                }
+                didApply = true
+            }
+        } else if remoteWC >= localWC - 0.000_1, remoteWC > 0 {
+            defaults.set(remoteWC, forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
+            didApply = true
+        }
+
+        bolaWCChatLog.info("ingestCompanionSnapshot from watch remoteWC=\(remoteWC, privacy: .public) localWC=\(localWC, privacy: .public) didApply=\(didApply, privacy: .public)")
+        if didApply {
+            NotificationCenter.default.post(name: .bolaCompanionStateDidMergeFromWatch, object: nil)
+            if defaults.object(forKey: CompanionPersistenceKeys.companionValue) != nil {
+                onReceiveCompanionValue?(defaults.double(forKey: CompanionPersistenceKeys.companionValue))
+            }
+        }
+        return true
+    }
+    #endif
+
     /// 若 `userInfo` 为 LLM 同步包则写入本机 Keychain 并返回 `true`。
     private func ingestLLMConfigurationIfPresent(_ dict: [String: Any]) -> Bool {
         guard dict.keys.contains(WCSyncPayload.llmApiKey) else { return false }
@@ -334,6 +488,8 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         if let bearer = dict[WCSyncPayload.llmAuthBearer] as? String {
             KeychainHelper.set(bearer, service: LLMKeychain.service, account: LLMKeychain.accountAuthBearer)
         }
+        let hasKey = !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        bolaWCChatLog.info("ingestLLMConfiguration applied hasApiKey=\(hasKey, privacy: .public) baseLen=\(base.count, privacy: .public) modelLen=\(model.count, privacy: .public)")
         return true
     }
 
@@ -430,6 +586,10 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
             self.pushLocalCompanionTowardWatchFromDefaults()
             self.postWatchInstallabilityChanged()
             #endif
+            self.flushPendingChatDeltasIfReady(session: session)
+            #if os(watchOS)
+            self.requestLLMKeychainFromPhoneIfMissing(session: session)
+            #endif
         }
     }
 
@@ -437,16 +597,24 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
     /// 配对/安装状态变化时系统回调；此前 `isWatchAppInstalled` 可能刚从 false 变 true。
     public func sessionWatchStateDidChange(_ session: WCSession) {
         bolaWCChatLog.info("sessionWatchStateDidChange watchAppInstalled=\(session.isWatchAppInstalled) paired=\(session.isPaired) reachable=\(session.isReachable)")
-        pushStoredLLMConfigurationToWatchIfConfigured()
-        pushLocalCompanionTowardWatchFromDefaults()
-        postWatchInstallabilityChanged()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.flushPendingChatDeltasIfReady(session: session)
+            self.pushStoredLLMConfigurationToWatchIfConfigured()
+            self.pushLocalCompanionTowardWatchFromDefaults()
+            self.postWatchInstallabilityChanged()
+        }
     }
 
     public func sessionReachabilityDidChange(_ session: WCSession) {
         bolaWCChatLog.info("sessionReachabilityDidChange reachable=\(session.isReachable) watchAppInstalled=\(session.isWatchAppInstalled)")
-        guard session.isReachable, session.isWatchAppInstalled else { return }
-        pushStoredLLMConfigurationToWatchIfConfigured()
-        pushLocalCompanionTowardWatchFromDefaults()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.flushPendingChatDeltasIfReady(session: session)
+            guard session.isReachable, session.isWatchAppInstalled else { return }
+            self.pushStoredLLMConfigurationToWatchIfConfigured()
+            self.pushLocalCompanionTowardWatchFromDefaults()
+        }
     }
 
     public func sessionDidBecomeInactive(_ session: WCSession) {}
@@ -459,15 +627,21 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
     public func sessionCompanionStateDidChange(_ session: WCSession) {
         bolaWCChatLog.info("sessionCompanionStateDidChange companionInstalled=\(session.isCompanionAppInstalled) reachable=\(session.isReachable)")
         guard session.isCompanionAppInstalled else { return }
-        let defaults = BolaSharedDefaults.resolved()
-        let v: Double
-        if defaults.object(forKey: CompanionPersistenceKeys.companionValue) != nil {
-            v = defaults.double(forKey: CompanionPersistenceKeys.companionValue)
-        } else {
-            v = 50
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.flushPendingChatDeltasIfReady(session: session)
+            let defaults = BolaSharedDefaults.resolved()
+            let v: Double
+            if defaults.object(forKey: CompanionPersistenceKeys.companionValue) != nil {
+                v = defaults.double(forKey: CompanionPersistenceKeys.companionValue)
+            } else {
+                v = 50
+            }
+            self.pushCompanionValue(v)
+            self.schedulePushCompanionGameStateSnapshotToPhoneDebounced()
+            self.requestLLMKeychainFromPhoneIfMissing(session: session)
+            bolaWCChatLog.info("sessionCompanionStateDidChange pushed companion toward iPhone value=\(v)")
         }
-        pushCompanionValue(v)
-        bolaWCChatLog.info("sessionCompanionStateDidChange pushed companion toward iPhone value=\(v)")
     }
     #endif
 
@@ -482,6 +656,13 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
             guard let self else { return }
             let keys = userInfo.keys.sorted().joined(separator: ",")
             bolaWCChatLog.info("didReceiveUserInfo keys=\(keys, privacy: .public) count=\(userInfo.count, privacy: .public)")
+            #if os(iOS)
+            if (userInfo[WCSyncPayload.requestSync] as? String) == WCSyncPayload.requestSyncValueLLMKeychain {
+                bolaWCChatLog.info("didReceiveUserInfo: watch asked for LLM Keychain → pushStored")
+                self.pushStoredLLMConfigurationToWatchIfConfigured()
+                return
+            }
+            #endif
             #if os(watchOS)
             if self.ingestSpeechRelayReplyIfPresent(userInfo) {
                 bolaWCChatLog.info("didReceiveUserInfo handled as speechRelayReply")
@@ -491,6 +672,11 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
             if self.ingestChatDeltaIfPresent(userInfo) {
                 return
             }
+            #if os(iOS)
+            if self.ingestCompanionGameStateSnapshotFromWatchIfPresent(userInfo) {
+                return
+            }
+            #endif
             if self.ingestLLMConfigurationIfPresent(userInfo) {
                 return
             }

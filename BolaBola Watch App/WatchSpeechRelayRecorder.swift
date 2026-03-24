@@ -5,6 +5,9 @@
 
 import AVFoundation
 import Foundation
+import os
+
+private let watchMicLog = Logger(subsystem: "com.gathxr.BolaBola", category: "WatchVoice")
 
 final class WatchSpeechRelayRecorder {
     static let shared = WatchSpeechRelayRecorder()
@@ -16,6 +19,7 @@ final class WatchSpeechRelayRecorder {
 
     func requestMicPermission(_ done: @escaping (Bool) -> Void) {
         AVAudioApplication.requestRecordPermission { ok in
+            watchMicLog.info("mic permission result=\(ok, privacy: .public)")
             DispatchQueue.main.async {
                 done(ok)
             }
@@ -39,7 +43,8 @@ final class WatchSpeechRelayRecorder {
         try session.setActive(true, options: [])
         recorder = try AVAudioRecorder(url: url, settings: settings)
         recorder?.prepareToRecord()
-        recorder?.record()
+        let started = recorder?.record() ?? false
+        watchMicLog.info("recording start file=\(url.lastPathComponent, privacy: .public) record()=\(started, privacy: .public)")
     }
 
     func stopRecording() -> URL? {
@@ -48,6 +53,12 @@ final class WatchSpeechRelayRecorder {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         let url = fileURL
         fileURL = nil
+        if let url {
+            let n = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map { Int($0) } ?? -1
+            watchMicLog.info("recording stop file=\(url.lastPathComponent, privacy: .public) bytes=\(n, privacy: .public)")
+        } else {
+            watchMicLog.error("recording stop: no file URL")
+        }
         return url
     }
 }

@@ -6,6 +6,7 @@ import Foundation
 import os
 
 private let bolaConversationSyncLog = Logger(subsystem: "com.gathxr.BolaBola.sync", category: "Conversation")
+private let bolaWatchVoiceLog = Logger(subsystem: "com.gathxr.BolaBola", category: "WatchVoice")
 
 public enum ConversationService {
     public static func bolaSystemPrompt(companionValue: Int) -> String {
@@ -36,10 +37,34 @@ public enum ConversationService {
 
     /// 手表录音 → 智谱 ASR 转文字 → 再走 `replyToUser`（需 Base URL 为 `open.bigmodel.cn`）
     public static func replyToUserFromRecordedAudio(fileURL: URL, companionValue: Int) async throws -> String {
-        let client = try LLMClient.loadFromKeychain()
-        let utterance = try await client.transcribeAudio(fileURL: fileURL)
-        guard !utterance.isEmpty else { throw LLMClientError.badResponse }
-        return try await replyToUser(utterance: utterance, companionValue: companionValue)
+        bolaWatchVoiceLog.info("replyFromAudio begin file=\(fileURL.lastPathComponent, privacy: .public) companion=\(companionValue, privacy: .public)")
+        let client: LLMClient
+        do {
+            client = try LLMClient.loadFromKeychain()
+        } catch {
+            bolaWatchVoiceLog.error("replyFromAudio loadFromKeychain failed \(String(describing: error), privacy: .public)")
+            throw error
+        }
+        let utterance: String
+        do {
+            utterance = try await client.transcribeAudio(fileURL: fileURL)
+        } catch {
+            bolaWatchVoiceLog.error("replyFromAudio transcribe failed \(String(describing: error), privacy: .public)")
+            throw error
+        }
+        guard !utterance.isEmpty else {
+            bolaWatchVoiceLog.error("replyFromAudio transcribe returned empty string")
+            throw LLMClientError.badResponse
+        }
+        bolaWatchVoiceLog.info("replyFromAudio ASR text chars=\(utterance.count, privacy: .public)")
+        do {
+            let reply = try await replyToUser(utterance: utterance, companionValue: companionValue)
+            bolaWatchVoiceLog.info("replyFromAudio chat OK replyChars=\(reply.count, privacy: .public)")
+            return reply
+        } catch {
+            bolaWatchVoiceLog.error("replyFromAudio chat failed \(String(describing: error), privacy: .public)")
+            throw error
+        }
     }
 
     public static func templateReply(utterance: String, companionValue: Int) -> String {

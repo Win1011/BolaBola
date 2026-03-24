@@ -4,6 +4,9 @@
 //
 
 import SwiftUI
+import os
+
+private let watchChromeVoiceLog = Logger(subsystem: "com.gathxr.BolaBola", category: "WatchVoice")
 
 // MARK: - 底部：麦克风 + 横条（点按打开面板，与「提醒」页同为全屏 Sheet）
 
@@ -88,10 +91,15 @@ struct WatchBottomChromeToolbar: View {
     }
 
     private func toggleMicTap() {
-        guard WatchSpeechRelayCapture.isSupported else { return }
+        guard WatchSpeechRelayCapture.isSupported else {
+            watchChromeVoiceLog.error("toggleMic: WatchSpeechRelayCapture not supported (unexpected)")
+            return
+        }
         if isRecording {
+            watchChromeVoiceLog.info("toggleMic: stop → upload/ASR pipeline")
             isRecording = false
             guard let url = WatchSpeechRelayRecorder.shared.stopRecording() else {
+                watchChromeVoiceLog.error("toggleMic: stopRecording returned nil")
                 viewModel.cancelVoiceSession()
                 viewModel.showDialogue("录音未成功，请再试。", duration: 4)
                 return
@@ -101,20 +109,25 @@ struct WatchBottomChromeToolbar: View {
             Task {
                 do {
                     let reply = try await ConversationService.replyToUserFromRecordedAudio(fileURL: url, companionValue: v)
+                    watchChromeVoiceLog.info("toggleMic: cloud path OK")
                     await MainActor.run {
                         viewModel.playVoiceAssistantReply(reply)
                     }
                     try? FileManager.default.removeItem(at: url)
                 } catch {
                     let err = error
+                    watchChromeVoiceLog.error("toggleMic: cloud path failed \(String(describing: err), privacy: .public)")
                     let fallbackOk = await MainActor.run { () -> Bool in
-                        WatchSpeechRelayCapture.shared.transferExistingFileForPhoneTranscription(url: url) { text in
+                        watchChromeVoiceLog.info("toggleMic: trying iPhone ASR fallback (transferFile)")
+                        return WatchSpeechRelayCapture.shared.transferExistingFileForPhoneTranscription(url: url) { text in
                             Task { @MainActor in
                                 if text.isEmpty {
+                                    watchChromeVoiceLog.error("toggleMic: iPhone fallback empty transcript")
                                     viewModel.cancelVoiceSession()
                                     let msg = (err as? LocalizedError)?.errorDescription ?? "语音未识别"
                                     viewModel.showDialogue(msg, duration: 6)
                                 } else {
+                                    watchChromeVoiceLog.info("toggleMic: iPhone fallback OK chars=\(text.count, privacy: .public)")
                                     viewModel.setVoiceThinkingEmotion()
                                     Task {
                                         let reply: String
@@ -132,6 +145,7 @@ struct WatchBottomChromeToolbar: View {
                         }
                     }
                     if !fallbackOk {
+                        watchChromeVoiceLog.error("toggleMic: iPhone fallback not available (WC inactive or no companion app)")
                         await MainActor.run {
                             viewModel.cancelVoiceSession()
                             viewModel.showDialogue(
@@ -145,11 +159,16 @@ struct WatchBottomChromeToolbar: View {
             }
             return
         }
-        guard !isAwaitingMicPermission else { return }
+        guard !isAwaitingMicPermission else {
+            watchChromeVoiceLog.info("toggleMic: ignored (still awaiting mic permission)")
+            return
+        }
+        watchChromeVoiceLog.info("toggleMic: request start recording")
         isAwaitingMicPermission = true
         WatchSpeechRelayRecorder.shared.requestMicPermission { ok in
             isAwaitingMicPermission = false
             guard ok else {
+                watchChromeVoiceLog.error("toggleMic: mic permission denied")
                 viewModel.showDialogue("需要麦克风权限哦。", duration: 4)
                 return
             }
@@ -157,7 +176,9 @@ struct WatchBottomChromeToolbar: View {
                 try WatchSpeechRelayRecorder.shared.startRecording()
                 isRecording = true
                 viewModel.beginVoiceListeningSession()
+                watchChromeVoiceLog.info("toggleMic: recording UI active")
             } catch {
+                watchChromeVoiceLog.error("toggleMic: startRecording threw \(error.localizedDescription, privacy: .public)")
                 viewModel.showDialogue("无法开始录音。", duration: 4)
             }
         }

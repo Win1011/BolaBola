@@ -7,7 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		2F55E26B2F667F99001E5A32 /* BolaBola Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 2F55E2532F667F99001E5A32 /* BolaBola Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2F55E26B2F667F99001E5A32 /* BolaBola Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 2F55E2532F667F99001E5A32 /* BolaBola Watch App.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F1A1E0A22F667F99001E5A33 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F1A1E0A12F667F99001E5A33 /* GoogleService-Info.plist */; };
+		F1A1E0A32F667F99001E5A33 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F1A1E0A12F667F99001E5A33 /* GoogleService-Info.plist */; };
+		F1B1E0102F667F99001E5A41 /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = F1B1E0112F667F99001E5A41 /* FirebaseAnalyticsCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -37,6 +40,7 @@
 /* Begin PBXFileReference section */
 		2F55E2532F667F99001E5A32 /* BolaBola Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BolaBola Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2F55E26A2F667F99001E5A32 /* BolaBola.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BolaBola.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F1A1E0A12F667F99001E5A33 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -69,6 +73,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F1B1E0102F667F99001E5A41 /* FirebaseAnalyticsCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +83,7 @@
 		2F55E2462F667F99001E5A32 = {
 			isa = PBXGroup;
 			children = (
+				F1A1E0A12F667F99001E5A33 /* GoogleService-Info.plist */,
 				2F55E2572F667F99001E5A32 /* BolaBola Watch App */,
 				2F55E2682F667F99001E5A32 /* Shared */,
 				2F55E2692F667F99001E5A32 /* BolaBola iOS */,
@@ -140,6 +146,7 @@
 			);
 			name = BolaBola;
 			packageProductDependencies = (
+				F1B1E0112F667F99001E5A41 /* FirebaseAnalyticsCore */,
 			);
 			productName = BolaBola;
 			productReference = 2F55E26A2F667F99001E5A32 /* BolaBola.app */;
@@ -172,6 +179,9 @@
 			);
 			mainGroup = 2F55E2462F667F99001E5A32;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F1B1E0122F667F99001E5A41 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2F55E24E2F667F99001E5A32 /* Products */;
 			projectDirPath = "";
@@ -188,6 +198,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F1A1E0A22F667F99001E5A33 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -195,6 +206,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F1A1E0A32F667F99001E5A33 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -376,7 +388,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 26.2;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Debug;
 		};
@@ -415,7 +427,7 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
 				VALIDATE_PRODUCT = YES;
-				WATCHOS_DEPLOYMENT_TARGET = 26.2;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Release;
 		};
@@ -444,6 +456,10 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -482,6 +498,10 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -527,6 +547,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F1B1E0122F667F99001E5A41 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F1B1E0112F667F99001E5A41 /* FirebaseAnalyticsCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F1B1E0122F667F99001E5A41 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalyticsCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 2F55E2472F667F99001E5A32 /* Project object */;
 }

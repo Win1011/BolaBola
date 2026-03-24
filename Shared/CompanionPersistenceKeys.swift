@@ -27,4 +27,9 @@ public enum CompanionPersistenceKeys {
             lastSurpriseAtHours
         ]
     }
+
+    /// 无 App Group 时经 WatchConnectivity 由手表推到 iPhone 的键集合（与 `allCompanionKeys` + WC 时间戳一致）。
+    public static var wcGameStateSnapshotKeys: [String] {
+        allCompanionKeys + [companionWCUpdatedAt]
+    }
 }

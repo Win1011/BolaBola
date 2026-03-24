@@ -3,6 +3,9 @@
 //
 
 import Foundation
+import os
+
+private let bolaWatchVoiceLog = Logger(subsystem: "com.gathxr.BolaBola", category: "WatchVoice")
 
 public enum LLMClientError: Error {
     case missingConfiguration
@@ -16,7 +19,7 @@ extension LLMClientError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .missingConfiguration:
-            return "未配置 API Key"
+            return "未配置 API Key。可在 iPhone 设置里保存，或在 Shared/LocalLLMDevSecrets.swift 里填写 apiKey。"
         case .badResponse:
             return "响应格式异常"
         case .unsupportedAudioTranscription:
@@ -63,17 +66,51 @@ public struct LLMClient: Sendable {
         self.useBearerAuth = useBearerAuth
     }
 
+    /// 优先 Keychain（含 iPhone 同步）；若无有效 Key，再读 `LocalLLMDevSecrets.swift` 里的手填项。
     public static func loadFromKeychain() throws -> LLMClient {
-        guard let key = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountAPIKey),
-              !key.isEmpty else {
-            throw LLMClientError.missingConfiguration
+        if let raw = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountAPIKey) {
+            let key = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !key.isEmpty {
+                let storedBase = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountBaseURL)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let baseStr = storedBase.isEmpty ? Self.defaultBaseURLString : storedBase
+                guard let url = URL(string: baseStr) else {
+                    bolaWatchVoiceLog.error("loadFromKeychain: invalid base URL string (length=\(baseStr.count))")
+                    throw LLMClientError.missingConfiguration
+                }
+                let storedModel = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountModelId)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let modelStr = storedModel.isEmpty ? "gpt-4o-mini" : storedModel
+                let useBearer = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountAuthBearer) != "0"
+                let zhipu = Self.hostIsZhipuOpenPlatform(url)
+                bolaWatchVoiceLog.info("loadFromKeychain OK host=\(url.host ?? "?", privacy: .public) zhipuHost=\(zhipu, privacy: .public) chatModel=\(modelStr, privacy: .public) bearer=\(useBearer, privacy: .public)")
+                return LLMClient(baseURL: url, apiKey: key, model: modelStr, useBearerAuth: useBearer)
+            }
         }
-        let base = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountBaseURL)
-            ?? Self.defaultBaseURLString
-        guard let url = URL(string: base) else { throw LLMClientError.missingConfiguration }
-        let model = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountModelId) ?? "gpt-4o-mini"
-        let useBearer = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountAuthBearer) != "0"
-        return LLMClient(baseURL: url, apiKey: key, model: model, useBearerAuth: useBearer)
+
+        let devKey = LocalLLMDevSecrets.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !devKey.isEmpty {
+            let baseRaw = LocalLLMDevSecrets.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            let baseStr = baseRaw.isEmpty ? Self.defaultBaseURLString : baseRaw
+            guard let url = URL(string: baseStr) else {
+                bolaWatchVoiceLog.error("loadFromKeychain: LocalLLMDevSecrets.baseURL invalid")
+                throw LLMClientError.missingConfiguration
+            }
+            let modelRaw = LocalLLMDevSecrets.modelId.trimmingCharacters(in: .whitespacesAndNewlines)
+            let modelStr = modelRaw.isEmpty ? "gpt-4o-mini" : modelRaw
+            let client = LLMClient(
+                baseURL: url,
+                apiKey: devKey,
+                model: modelStr,
+                useBearerAuth: LocalLLMDevSecrets.useBearerAuth
+            )
+            let zhipu = Self.hostIsZhipuOpenPlatform(client.baseURL)
+            bolaWatchVoiceLog.info("loadFromKeychain: using LocalLLMDevSecrets.swift host=\(client.baseURL.host ?? "?", privacy: .public) zhipuHost=\(zhipu, privacy: .public) chatModel=\(client.model, privacy: .public)")
+            return client
+        }
+
+        bolaWatchVoiceLog.error("loadFromKeychain: Keychain empty and LocalLLMDevSecrets.apiKey empty")
+        throw LLMClientError.missingConfiguration
     }
 
     /// 智谱开放平台：`POST .../audio/transcriptions`（multipart，与官方「语音转文本」一致）
@@ -87,12 +124,17 @@ public struct LLMClient: Sendable {
     /// 将本地音频转为文字（当前仅支持智谱 `open.bigmodel.cn` + `glm-asr-*`）。
     public func transcribeAudio(fileURL: URL, asrModel: String = LLMClient.zhipuDefaultASRModelId) async throws -> String {
         guard Self.hostIsZhipuOpenPlatform(baseURL) else {
+            bolaWatchVoiceLog.error("transcribeAudio: unsupported host (need open.bigmodel.cn) host=\(self.baseURL.host ?? "nil", privacy: .public)")
             throw LLMClientError.unsupportedAudioTranscription
         }
         let fileData = try Data(contentsOf: fileURL)
-        guard !fileData.isEmpty else { throw LLMClientError.badResponse }
+        guard !fileData.isEmpty else {
+            bolaWatchVoiceLog.error("transcribeAudio: empty file \(fileURL.lastPathComponent, privacy: .public)")
+            throw LLMClientError.badResponse
+        }
 
         let endpoint = baseURL.appendingPathComponent("audio/transcriptions")
+        bolaWatchVoiceLog.info("transcribeAudio POST file=\(fileURL.lastPathComponent, privacy: .public) bytes=\(fileData.count, privacy: .public) asrModel=\(asrModel, privacy: .public) path=/audio/transcriptions")
         var req = URLRequest(url: endpoint)
         req.httpMethod = "POST"
         applyAuthorization(to: &req)
@@ -120,24 +162,45 @@ public struct LLMClient: Sendable {
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
         req.httpBody = body
 
-        let (data, res) = try await URLSession.shared.data(for: req)
-        guard let http = res as? HTTPURLResponse else { throw LLMClientError.badResponse }
+        let data: Data
+        let res: URLResponse
+        do {
+            (data, res) = try await URLSession.shared.data(for: req)
+        } catch {
+            bolaWatchVoiceLog.error("transcribeAudio URLSession error \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+        guard let http = res as? HTTPURLResponse else {
+            bolaWatchVoiceLog.error("transcribeAudio: no HTTPURLResponse")
+            throw LLMClientError.badResponse
+        }
         guard (200 ... 299).contains(http.statusCode) else {
             let snippet = String(data: data, encoding: .utf8).map { String($0.prefix(2000)).trimmingCharacters(in: .whitespacesAndNewlines) }
+            bolaWatchVoiceLog.error("transcribeAudio HTTP \(http.statusCode, privacy: .public) bodyPrefix=\(snippet ?? "", privacy: .public)")
             throw LLMClientError.httpStatus(http.statusCode, snippet)
         }
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             if let t = json["text"] as? String, !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return t.trimmingCharacters(in: .whitespacesAndNewlines)
+                let out = t.trimmingCharacters(in: .whitespacesAndNewlines)
+                bolaWatchVoiceLog.info("transcribeAudio OK via key=text chars=\(out.count, privacy: .public)")
+                return out
             }
             if let t = json["result"] as? String, !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return t.trimmingCharacters(in: .whitespacesAndNewlines)
+                let out = t.trimmingCharacters(in: .whitespacesAndNewlines)
+                bolaWatchVoiceLog.info("transcribeAudio OK via key=result chars=\(out.count, privacy: .public)")
+                return out
             }
             if let dataObj = json["data"] as? [String: Any],
                let t = dataObj["text"] as? String,
                !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return t.trimmingCharacters(in: .whitespacesAndNewlines)
+                let out = t.trimmingCharacters(in: .whitespacesAndNewlines)
+                bolaWatchVoiceLog.info("transcribeAudio OK via data.text chars=\(out.count, privacy: .public)")
+                return out
             }
+            let keys = json.keys.sorted().joined(separator: ",")
+            bolaWatchVoiceLog.error("transcribeAudio: 2xx JSON but no text field keys=[\(keys, privacy: .public)]")
+        } else {
+            bolaWatchVoiceLog.error("transcribeAudio: 2xx non-JSON body len=\(data.count, privacy: .public)")
         }
         throw LLMClientError.badResponse
     }
