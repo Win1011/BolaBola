@@ -15,7 +15,7 @@ final class WatchSpeechRelayRecorder {
     private init() {}
 
     func requestMicPermission(_ done: @escaping (Bool) -> Void) {
-        AVAudioSession.sharedInstance().requestRecordPermission { ok in
+        AVAudioApplication.requestRecordPermission { ok in
             DispatchQueue.main.async {
                 done(ok)
             }

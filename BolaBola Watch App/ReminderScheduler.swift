@@ -30,9 +30,9 @@ final class ReminderScheduler: NSObject, UNUserNotificationCenterDelegate {
 
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { return }
-            ReminderBootstrap.ensureDefaults()
-            let list = ReminderListStore.load()
-            Task {
+            Task { @MainActor in
+                ReminderBootstrap.ensureDefaults()
+                let list = ReminderListStore.load()
                 await BolaReminderUNScheduler.sync(reminders: list)
                 let digest = DailyDigestStore.load()
                 await DailyDigestUNScheduler.sync(config: digest)

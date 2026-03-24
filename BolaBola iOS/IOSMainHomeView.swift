@@ -8,6 +8,7 @@ import SwiftUI
 struct IOSMainHomeView: View {
     @Binding var companion: Double
     @State private var isWatchSyncing = false
+    @State private var showWatchAppMissingHint = false
 
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
@@ -15,7 +16,7 @@ struct IOSMainHomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: BolaTheme.spacingSection) {
                 WatchS10MockupView(companion: companion, maxHeight: 240)
-                syncWatchButton
+                syncWatchSection
                 companionCard
             }
             .padding(.horizontal, BolaTheme.paddingHorizontal)
@@ -23,31 +24,47 @@ struct IOSMainHomeView: View {
             .padding(.bottom, 24)
         }
         .background(Color(uiColor: .systemGroupedBackground))
+        .onAppear { refreshWatchInstallHint() }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaWatchInstallabilityDidChange)) { _ in
+            refreshWatchInstallHint()
+        }
     }
 
-    private var syncWatchButton: some View {
-        HStack {
-            Spacer(minLength: 0)
-            Button {
-                Task { await performWatchSync() }
-            } label: {
-                HStack(spacing: 8) {
-                    if isWatchSyncing {
-                        ProgressView()
-                            .tint(BolaTheme.onAccentForeground)
+    private var syncWatchSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Spacer(minLength: 0)
+                Button {
+                    Task { await performWatchSync() }
+                } label: {
+                    HStack(spacing: 8) {
+                        if isWatchSyncing {
+                            ProgressView()
+                                .tint(BolaTheme.onAccentForeground)
+                        }
+                        Text("同步手表")
+                            .font(.subheadline.weight(.semibold))
                     }
-                    Text("同步手表")
-                        .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(BolaTheme.accent))
+                    .foregroundStyle(BolaTheme.onAccentForeground)
                 }
-                .padding(.horizontal, 22)
-                .padding(.vertical, 12)
-                .background(Capsule().fill(BolaTheme.accent))
-                .foregroundStyle(BolaTheme.onAccentForeground)
+                .buttonStyle(.plain)
+                .disabled(isWatchSyncing)
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
-            .disabled(isWatchSyncing)
-            Spacer(minLength: 0)
+            if showWatchAppMissingHint {
+                Text("系统显示手表端尚未安装 BolaBola（watchAppInstalled=false），手机无法下发数据。请在 iPhone 的「Watch」App →「我的手表」→ 向下找到 BolaBola 并安装；或用 Xcode 选择含 Watch 的 Scheme 运行到真机手表。安装后在手表上打开一次本应用。")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+    }
+
+    private func refreshWatchInstallHint() {
+        showWatchAppMissingHint = BolaWCSessionCoordinator.shared.shouldShowWatchAppMissingHint()
     }
 
     private var companionCard: some View {
@@ -77,9 +94,13 @@ struct IOSMainHomeView: View {
                 }
                 .buttonStyle(.borderless)
             }
-            Text("修改后会通过 WatchConnectivity 推送到已配对的 Apple Watch。")
+            Text(
+                showWatchAppMissingHint
+                    ? "当前无法推送到手表：系统显示表端尚未安装 BolaBola，数值只保存在本机。请在「Watch」App 中安装并在手表上打开一次。"
+                    : "修改后会通过 WatchConnectivity 推送到已配对的 Apple Watch。"
+            )
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(showWatchAppMissingHint ? .orange : .secondary)
         }
         .padding(BolaTheme.spacingItem)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -102,6 +123,7 @@ struct IOSMainHomeView: View {
         BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
         BolaWCSessionCoordinator.shared.pushStoredLLMConfigurationToWatchIfConfigured()
         try? await Task.sleep(nanoseconds: 800_000_000)
+        refreshWatchInstallHint()
         if bolaDefaults.object(forKey: CompanionPersistenceKeys.companionValue) != nil {
             companion = bolaDefaults.double(forKey: CompanionPersistenceKeys.companionValue)
         }

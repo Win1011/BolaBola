@@ -10,6 +10,8 @@ private let bolaChatStoreLog = Logger(subsystem: "com.gathxr.BolaBola.sync", cat
 public extension Notification.Name {
     /// 通过 WatchConnectivity 合并远端聊天记录后发出，供 iOS / watchOS 列表刷新。
     static let bolaChatHistoryDidMerge = Notification.Name("bolaChatHistoryDidMerge")
+    /// iPhone：`isWatchAppInstalled` 等变化时发出，供主界面刷新「能否同步到手表」提示。
+    static let bolaWatchInstallabilityDidChange = Notification.Name("bolaWatchInstallabilityDidChange")
 }
 
 public struct ChatTurn: Codable, Equatable, Identifiable, Sendable {

@@ -77,7 +77,7 @@ public struct LLMClient: Sendable {
     }
 
     /// 智谱开放平台：`POST .../audio/transcriptions`（multipart，与官方「语音转文本」一致）
-    public static let zhipuDefaultASRModelId = "glm-asr-2512"
+    public nonisolated static let zhipuDefaultASRModelId = "glm-asr-2512"
 
     private static func hostIsZhipuOpenPlatform(_ url: URL) -> Bool {
         guard let host = url.host?.lowercased() else { return false }

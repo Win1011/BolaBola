@@ -120,12 +120,18 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
     }
 
     /// 将当前陪伴值写入 App Group 并尽力推到另一端（session 未激活时会排队，激活后发出）。
-    public func pushCompanionValue(_ value: Double) {
+    /// - Parameter forcedForWatch: 仅 iPhone 上「同步手表」为 true，避免手表因晚到的 context 被本地较新的 `companionWCUpdatedAt` 拒绝。
+    public func pushCompanionValue(_ value: Double, forcedForWatch: Bool = false) {
         let ts = Date().timeIntervalSince1970
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             WCSyncPayload.companionValue: value,
             WCSyncPayload.companionValueUpdatedAt: ts
         ]
+        #if os(iOS)
+        if forcedForWatch {
+            payload[WCSyncPayload.companionSyncForcedFromPhone] = true
+        }
+        #endif
         let defaults = BolaSharedDefaults.resolved()
         defaults.set(value, forKey: CompanionPersistenceKeys.companionValue)
         defaults.set(ts, forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
@@ -138,6 +144,17 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
                 self.pendingPayload = nil
             } else if session.activationState == .activated {
                 // 对端 App 未装好时先排队，安装配对后会再激活并发送
+                #if os(iOS)
+                if !session.isWatchAppInstalled {
+                    bolaWCChatLog.warning("pushCompanionValue 未发往手表：isWatchAppInstalled=false（系统认定表端未安装 BolaBola）。请在 iPhone「Watch」App 安装表端，或用主 App Scheme 部署到手表后打开一次。")
+                } else if !session.isPaired {
+                    bolaWCChatLog.warning("pushCompanionValue 未发往手表：当前未配对 Apple Watch")
+                }
+                #elseif os(watchOS)
+                if !session.isCompanionAppInstalled {
+                    bolaWCChatLog.warning("pushCompanionValue 未发往 iPhone：isCompanionAppInstalled=false")
+                }
+                #endif
                 self.pendingPayload = payload
             } else {
                 self.pendingPayload = payload
@@ -155,8 +172,12 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         do {
             try session.updateApplicationContext(payload)
         } catch {
-            session.transferUserInfo(payload)
+            bolaWCChatLog.warning("updateApplicationContext failed, companion will rely on transferUserInfo: \(String(describing: error), privacy: .public)")
         }
+        // 与 application context 并行排队：部分环境下表端 `receivedApplicationContext` 长期为空，仍可通过 `didReceiveUserInfo` 合并陪伴值。
+        session.transferUserInfo(payload)
+        let keys = payload.keys.sorted().joined(separator: ",")
+        bolaWCChatLog.info("sendPayload companion queued transferUserInfo keys=\(keys, privacy: .public)")
     }
 
     #if os(iOS)
@@ -172,6 +193,18 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
             WCSyncPayload.llmAuthBearer: useBearerAuth ? "1" : "0"
         ]
         session.transferUserInfo(payload)
+    }
+
+    /// 系统是否认为「已配对的 Apple Watch 上已安装本 App」。为 false 时 `updateApplicationContext` 不会送达表端。
+    public func shouldShowWatchAppMissingHint() -> Bool {
+        guard WCSession.isSupported() else { return false }
+        let s = WCSession.default
+        guard s.activationState == .activated, s.isPaired else { return false }
+        return !s.isWatchAppInstalled
+    }
+
+    private func postWatchInstallabilityChanged() {
+        NotificationCenter.default.post(name: .bolaWatchInstallabilityDidChange, object: nil)
     }
 
     /// 若本机 Keychain 已有 LLM 配置，则在「手表 App 已安装且 WC 已激活」时推给手表。
@@ -210,7 +243,7 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         } else {
             v = 50
         }
-        pushCompanionValue(v)
+        pushCompanionValue(v, forcedForWatch: true)
         bolaWCChatLog.info("pushLocalCompanionTowardWatchFromDefaults pushed value=\(v)")
     }
     #endif
@@ -307,22 +340,27 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
     /// 仅当远端时间戳更新时才写入并回调，避免旧包覆盖新本地编辑。
     private func ingest(_ dict: [String: Any]) {
         guard let (v, tsRaw) = Self.parsePayload(dict) else { return }
+        let forcedFromPhone = Self.boolFlag(dict[WCSyncPayload.companionSyncForcedFromPhone])
         let defaults = BolaSharedDefaults.resolved()
         let localTs = defaults.double(forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
 
         let remoteTs: TimeInterval
         if tsRaw > 0 {
             remoteTs = tsRaw
-        } else if localTs == 0 {
+        } else if localTs == 0 || forcedFromPhone {
             remoteTs = Date().timeIntervalSince1970
         } else {
             return
         }
 
-        guard remoteTs > localTs else { return }
+        if !forcedFromPhone {
+            guard remoteTs > localTs else { return }
+        }
 
         defaults.set(v, forKey: CompanionPersistenceKeys.companionValue)
-        defaults.set(remoteTs, forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
+        // 强制同步时用「当下」时间戳，避免手表刚写入的旧 remoteTs 在后续往返中输给仍带旧戳的延迟包。
+        let storedTs = forcedFromPhone ? Date().timeIntervalSince1970 : remoteTs
+        defaults.set(storedTs, forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
         onReceiveCompanionValue?(v)
     }
 
@@ -339,6 +377,15 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         case let n as NSNumber: return n.doubleValue
         case let i as Int: return Double(i)
         default: return nil
+        }
+    }
+
+    private static func boolFlag(_ any: Any?) -> Bool {
+        switch any {
+        case let b as Bool: return b
+        case let n as NSNumber: return n.boolValue
+        case let s as NSString: return s.boolValue
+        default: return false
         }
     }
 
@@ -381,6 +428,7 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
             #if os(iOS)
             self.pushStoredLLMConfigurationToWatchIfConfigured()
             self.pushLocalCompanionTowardWatchFromDefaults()
+            self.postWatchInstallabilityChanged()
             #endif
         }
     }
@@ -389,6 +437,14 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
     /// 配对/安装状态变化时系统回调；此前 `isWatchAppInstalled` 可能刚从 false 变 true。
     public func sessionWatchStateDidChange(_ session: WCSession) {
         bolaWCChatLog.info("sessionWatchStateDidChange watchAppInstalled=\(session.isWatchAppInstalled) paired=\(session.isPaired) reachable=\(session.isReachable)")
+        pushStoredLLMConfigurationToWatchIfConfigured()
+        pushLocalCompanionTowardWatchFromDefaults()
+        postWatchInstallabilityChanged()
+    }
+
+    public func sessionReachabilityDidChange(_ session: WCSession) {
+        bolaWCChatLog.info("sessionReachabilityDidChange reachable=\(session.isReachable) watchAppInstalled=\(session.isWatchAppInstalled)")
+        guard session.isReachable, session.isWatchAppInstalled else { return }
         pushStoredLLMConfigurationToWatchIfConfigured()
         pushLocalCompanionTowardWatchFromDefaults()
     }

@@ -8,6 +8,8 @@ import Foundation
 public enum WCSyncPayload {
     public static let companionValue = "companionValue"
     public static let companionValueUpdatedAt = "companionValueUpdatedAt"
+    /// iPhone 点「同步手表」时为 true：手表端应应用数值，勿因本地 WC 时间戳较新而丢弃（context 可能晚到）。
+    public static let companionSyncForcedFromPhone = "companionSyncForcedFromPhone"
     public static let requestSync = "requestSync"
 
     /// `transferUserInfo` 专用：同步 LLM 配置到手表 Keychain（勿记入日志）。
