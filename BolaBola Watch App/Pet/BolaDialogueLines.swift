@@ -29,6 +29,18 @@ enum BolaDialogueLines {
         "我在呢，随时叫我。",
         "看到你我就放松多了。"
     ]
+    /// 陪伴值到达或维持在 **100** 时的开心话（配合高段动画，避免「干播」）
+    static let companionValue100Lines: [String] = [
+        "一百啦！我们满分耶！",
+        "陪伴值到顶了……我现在超超超开心！",
+        "一百分！最喜欢和你在一起的每一天！",
+        "满格啦！谢谢你一直陪着我！",
+        "一百一百一百！今天也要贴贴！",
+        "到顶了耶……我会更乖更黏你的！",
+        "满分陪伴！我骄傲！",
+        "一百啦，今天也一起加油吧！"
+    ]
+
     static let greetingsHigh: [String] = [
         "主人！你终于来啦！",
         "最喜欢和你在一起了！",
@@ -170,7 +182,7 @@ enum BolaDialogueLines {
                 "跳完了，你要负责哄我哦。",
                 "我在这呢，没跑。"
             ].randomElement() ?? "……"
-        case .unhappy:
+        case .unhappy, .unhappyTwo:
             return [
                 "哼，我回来了。",
                 "还在不高兴……但你在就好。",
@@ -190,7 +202,7 @@ enum BolaDialogueLines {
                 "还在吗……",
                 "别走……"
             ].randomElement() ?? "……"
-        case .idleOne, .idleTwo, .idleThree:
+        case .idleOne, .idleTwo, .idleThree, .idleFour, .idleFive, .idleSix, .happyIdle:
             return [
                 "好啦，我待着啦。",
                 "安静陪你一会儿。",

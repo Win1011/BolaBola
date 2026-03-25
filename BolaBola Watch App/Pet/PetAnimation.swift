@@ -18,6 +18,17 @@ enum PetEmotion {
     case idleOne      // 新增：idleone 动作
     case idleTwo      // 新增：idletwo 动作
     case idleThree    // 新增：idlethree 动作
+    /// Assets：`idlefour0`…（idle4 文件夹）
+    case idleFour
+    case idleFive
+    case idleSix
+    /// 不开心2（`unhappytwo0`…）
+    case unhappyTwo
+    /// 开心晃悠（`happyidle0`…）
+    case happyIdle
+    /// 思考1 / 思考2（仅语音流程：用户说完后、Bola 回复前），资源 `thinkone` / `thinktwo`
+    case thinkOne
+    case thinkTwo
     case scale        // 新增：scale 动作
     case die          // 新增：DIE 动作
     case angry2       // 新增：angry2 动作
@@ -86,9 +97,16 @@ struct PetAnimation {
 // MARK: - 动画大小配置（每个动作单独 `scaleEffect`，按需改数字即可）
 enum AnimationScale {
     static let idle: CGFloat = 1.5
-    static let idleOne: CGFloat = 1.5
+    static let idleOne: CGFloat = 1.9
     static let idleTwo: CGFloat = 1.5
     static let idleThree: CGFloat = 1.5
+    static let idleFour: CGFloat = 1.5
+    static let idleFive: CGFloat = 1.5
+    static let idleSix: CGFloat = 1.5
+    static let unhappyTwo: CGFloat = 1.5
+    static let happyIdle: CGFloat = 1.5
+    static let thinkOne: CGFloat = 1.5
+    static let thinkTwo: CGFloat = 1.5
     static let scale: CGFloat = 1.5
 
     static let die: CGFloat = 1.5
@@ -277,6 +295,76 @@ enum PetAnimations {
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "idlethree", maxFrames: 31, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
             fps: effectiveFPS(baseFPS: 7, maxFrames: 31),
+            isLoop: true
+        )
+    )
+
+    static let idleFour: PetAnimation = PetAnimation(
+        emotion: .idleFour,
+        displayScale: AnimationScale.idleFour,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idlefour", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            isLoop: true
+        )
+    )
+
+    static let idleFive: PetAnimation = PetAnimation(
+        emotion: .idleFive,
+        displayScale: AnimationScale.idleFive,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idlefive", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            isLoop: true
+        )
+    )
+
+    static let idleSix: PetAnimation = PetAnimation(
+        emotion: .idleSix,
+        displayScale: AnimationScale.idleSix,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idlesix", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 7, maxFrames: 36),
+            isLoop: true
+        )
+    )
+
+    static let unhappyTwo: PetAnimation = PetAnimation(
+        emotion: .unhappyTwo,
+        displayScale: AnimationScale.unhappyTwo,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "unhappytwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            isLoop: true
+        )
+    )
+
+    static let happyIdle: PetAnimation = PetAnimation(
+        emotion: .happyIdle,
+        displayScale: AnimationScale.happyIdle,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "happyidle", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 7, maxFrames: 36),
+            isLoop: true
+        )
+    )
+
+    static let thinkOne: PetAnimation = PetAnimation(
+        emotion: .thinkOne,
+        displayScale: AnimationScale.thinkOne,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "thinkone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            isLoop: true
+        )
+    )
+
+    static let thinkTwo: PetAnimation = PetAnimation(
+        emotion: .thinkTwo,
+        displayScale: AnimationScale.thinkTwo,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "thinktwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
             isLoop: true
         )
     )

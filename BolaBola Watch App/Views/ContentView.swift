@@ -47,9 +47,11 @@ final class PetViewModel: ObservableObject {
     private let shakeMidTierProbability: Double = 0.2
     /// 陪伴值 >85 随机插入 happy1 一轮
     private let happy1HighTierProbability: Double = 0.2
-    /// 陪伴值 10–29：不高兴档内 `hurt` 与 `unhappy` 的稳定映射（`(v-10) % stride == 0` → `hurt`，约 35%）
-    private let unhappyTierHurtStride: Int = 3
-    /// 点击触发的跳跃/喜欢/生气播完后，回到 idleOne/Two/Three 随机其一（非陪伴值默认池）
+    /// 陪伴值 ≥86 时，`happyIdle` 进入默认态的概率（与 like/跳/泡泡 并存）
+    private let happyIdleVeryHighTierProbability: Double = 1.0 / 6.0
+    /// 维持在 100 时，偶尔补一句开心话（与「首次冲到 100」分开节流）
+    private let companion100AmbientCooldownSeconds: TimeInterval = 8 * 60
+    /// 点击触发的跳跃/喜欢/生气播完后，回到 idle 变体等（非陪伴值默认池）
     private var tapChainReturnsToRandomIdle: Bool = false
     /// 仅「普通跳跃 + 陪伴 +1」播完后需要衔接台词与延后跨档句；生气 / 三连喜欢为 false
     private var shouldPlayTapJumpFollowUp: Bool = false
@@ -78,6 +80,9 @@ final class PetViewModel: ObservableObject {
     private var pendingTierDeferredWorkItem: DispatchWorkItem?
 
     private var lastCompanionTierForSpeech: Int = -1
+    /// 用于检测「第一次从 &lt;100 升到 100」以播庆祝台词（需在 `init` 里与磁盘值对齐）
+    private var previousCompanionRoundedForHundredSpeech: Int = -1
+    private var lastCompanion100AmbientWallClock: TimeInterval = 0
     private var lastGreetingWallClock: TimeInterval = 0
     /// 每次进入界面/回到前台都想打招呼；仅防 `onAppear` 与 `scenePhase.active` 同一次打开重复播两次（秒）
     private let greetingThrottleSeconds: TimeInterval = 12
@@ -103,7 +108,10 @@ final class PetViewModel: ObservableObject {
 
     /// 点击宠物时轮换的动作列表（你后续加动作只要往这里补）
     private let tapCycleEmotions: [PetEmotion] = [
-        .idle, .idleOne, .idleTwo, .idleThree, .scale,
+        .idle, .idleOne, .idleTwo, .idleThree,
+        .idleFour, .idleFive, .idleSix,
+        .unhappyTwo, .happyIdle,
+        .scale,
         .die,
         .angry2,
         .unhappy, .letter, .hurt,
@@ -134,9 +142,11 @@ final class PetViewModel: ObservableObject {
         // 初始化：按「会话墙钟」累计陪伴与惊喜；超长离线由 `longAbsenceWithoutForegroundSeconds` 自动检测并扣分。
         hydrateTotalTimeAndSurpriseState()
 
+        previousCompanionRoundedForHundredSpeech = Int(companionValue.rounded())
         selectDefaultEmotion()
         applyDefaultEmotionDisplay()
-        lastCompanionTierForSpeech = BolaDialogueLines.companionTier(for: Int(companionValue.rounded()))
+        let v0 = Int(companionValue.rounded())
+        lastCompanionTierForSpeech = BolaDialogueLines.companionTier(for: v0)
 
         // 启动后台检查：如果在运行过程中跨过 100 小时里程碑，则触发惊喜。
         startMilestoneTimer()
@@ -151,6 +161,7 @@ final class PetViewModel: ObservableObject {
         selectDefaultEmotion()
         applyDefaultEmotionDisplay()
         currentFrameIndex = 0
+        trackCompanionTierSpeechIfNeeded()
     }
 
     /// Bola「开口」时轻触手腕（与文字气泡同步）
@@ -262,12 +273,32 @@ final class PetViewModel: ObservableObject {
 
     private func trackCompanionTierSpeechIfNeeded() {
         let v = Int(companionValue.rounded())
+        if previousCompanionRoundedForHundredSpeech < 100 && v == 100 {
+            showDialogue(
+                BolaDialogueLines.companionValue100Lines.randomElement() ?? "一百啦！",
+                duration: 8
+            )
+            lastCompanion100AmbientWallClock = Date().timeIntervalSince1970
+        }
+        previousCompanionRoundedForHundredSpeech = v
+
         let tier = BolaDialogueLines.companionTier(for: v)
         if lastCompanionTierForSpeech >= 0, lastCompanionTierForSpeech != tier,
            let line = BolaDialogueLines.tierChangedLine(from: lastCompanionTierForSpeech, to: tier) {
             showDialogue(line)
         }
         lastCompanionTierForSpeech = tier
+    }
+
+    /// 长期维持 100 时，在展示默认高段动画时偶尔补一句（避免与刚播的庆祝叠太近）
+    private func maybeShowCompanion100AmbientLine() {
+        let now = Date().timeIntervalSince1970
+        guard now - lastCompanion100AmbientWallClock >= companion100AmbientCooldownSeconds else { return }
+        lastCompanion100AmbientWallClock = now
+        showDialogue(
+            BolaDialogueLines.companionValue100Lines.randomElement() ?? "好开心！",
+            duration: 6
+        )
     }
 
     /// 当前情绪对应的动画配置
@@ -281,6 +312,20 @@ final class PetViewModel: ObservableObject {
             return PetAnimations.idleTwo
         case .idleThree:
             return PetAnimations.idleThree
+        case .idleFour:
+            return PetAnimations.idleFour
+        case .idleFive:
+            return PetAnimations.idleFive
+        case .idleSix:
+            return PetAnimations.idleSix
+        case .unhappyTwo:
+            return PetAnimations.unhappyTwo
+        case .happyIdle:
+            return PetAnimations.happyIdle
+        case .thinkOne:
+            return PetAnimations.thinkOne
+        case .thinkTwo:
+            return PetAnimations.thinkTwo
         case .scale:
             return PetAnimations.scale
         case .die:
@@ -419,9 +464,12 @@ final class PetViewModel: ObservableObject {
         }
     }
 
-    /// idleone / idletwo / idlethree 随机其一（用于「待机」与点击结束回 idle）
+    /// 待机 idle 变体（30–85 段随机用）。`happyIdle` 仅在陪伴 ≥86 时由 `selectDefaultEmotion()` 单独随机。
     private func randomIdleEmotion() -> PetEmotion {
-        [.idleOne, .idleTwo, .idleThree].randomElement() ?? .idleOne
+        [
+            .idleOne, .idleTwo, .idleThree,
+            .idleFour, .idleFive, .idleSix
+        ].randomElement() ?? .idleOne
     }
 
     /// 点击跳跃播完：衔接台词 + 延后播放跨档台词（若有）
@@ -508,6 +556,9 @@ final class PetViewModel: ObservableObject {
             return
         }
         currentEmotion = currentDefaultEmotion
+        if v == 100, currentEmotion == currentDefaultEmotion {
+            maybeShowCompanion100AmbientLine()
+        }
     }
 
     /// shake / happy1 / sleep 一轮播完：≥30 回到随机 idle；<30 回到当前分段默认态（避免低陪伴误回 idle）。
@@ -539,6 +590,7 @@ final class PetViewModel: ObservableObject {
 
     // MARK: - Voice（按住说话）与每日信件
 
+    /// 语音：点麦克风后 → 随机 question 系列（用户在说）
     func beginVoiceListeningSession() {
         guard !voiceConversationActive else { return }
         voiceConversationActive = true
@@ -548,11 +600,13 @@ final class PetViewModel: ObservableObject {
         currentFrameIndex = 0
     }
 
+    /// 语音：用户说完、等待/生成回复时 → 随机 think 系列（thinking）
     func setVoiceThinkingEmotion() {
-        currentEmotion = randomIdleEmotion()
+        currentEmotion = [.thinkOne, .thinkTwo].randomElement() ?? .thinkOne
         currentFrameIndex = 0
     }
 
+    /// 语音：Bola 开口回复时 → 随机 speakOnce 系列
     func playVoiceAssistantReply(_ text: String) {
         voiceReplyPlaying = true
         showDialogue(text, duration: 10)
@@ -654,6 +708,7 @@ final class PetViewModel: ObservableObject {
 
         // 普通点击：jump1 / jump2 随机播一轮；+1 陪伴值与 +1 泡泡；台词按档与默认态
         shouldPlayTapJumpFollowUp = true
+        let vBeforeTap = Int(companionValue.rounded())
         applyCompanionBonusFromTapJump()
         selectDefaultEmotion()
         let vNow = Int(companionValue.rounded())
@@ -661,7 +716,16 @@ final class PetViewModel: ObservableObject {
         isTapInteractionAnimating = true
         currentEmotion = Bool.random() ? .jump1Tap : .jumpTwoTap
         currentFrameIndex = 0
-        showDialogue(BolaDialogueLines.tapJumpOpening(v: vNow, defaultEmotion: currentDefaultEmotion))
+        if vBeforeTap == 99 && vNow == 100 {
+            previousCompanionRoundedForHundredSpeech = 100
+            lastCompanion100AmbientWallClock = Date().timeIntervalSince1970
+            showDialogue(
+                BolaDialogueLines.companionValue100Lines.randomElement() ?? "一百啦！",
+                duration: 8
+            )
+        } else {
+            showDialogue(BolaDialogueLines.tapJumpOpening(v: vNow, defaultEmotion: currentDefaultEmotion))
+        }
         print("🐾 Tap -> jump tap", String(describing: currentEmotion))
     }
 
@@ -898,6 +962,20 @@ final class PetViewModel: ObservableObject {
         maybeTriggerSurpriseIfNeeded()
     }
 
+    /// 86～100 段默认态：`v%5==0` 为 `like1`，但 **90、95** 不再给 `like1`（改为其它高段动作随机）
+    private func defaultEmotionForHighTier86To100(v: Int) -> PetEmotion {
+        if v == 90 || v == 95 {
+            return [.like2, .blowbubble1, .blowbubble2, Bool.random() ? .jump1 : .jumpTwo].randomElement() ?? .like2
+        }
+        switch v % 5 {
+        case 0: return .like1
+        case 1: return .like2
+        case 2: return Bool.random() ? .jump1 : .jumpTwo
+        case 3: return .blowbubble1
+        default: return .blowbubble2
+        }
+    }
+
     private func maybeTriggerSurpriseIfNeeded(forcePending: Bool = false) {
         let totalHours = totalActiveSeconds / 3600.0
 
@@ -940,8 +1018,12 @@ final class PetViewModel: ObservableObject {
         } else if v <= 9 {
             currentDefaultEmotion = (v % 2 == 0) ? .sad2 : .sad1
         } else if v <= 29 {
-            // 不高兴档：`unhappy` 为主，按分数稳定混入 `hurt`（避免每次墙钟结算随机抖动）
-            currentDefaultEmotion = ((v - 10) % unhappyTierHurtStride == 0) ? .hurt : .unhappy
+            // 不高兴档：`hurt` / `unhappy` / `unhappyTwo`（不开心2）按分数轮换
+            switch (v - 10) % 3 {
+            case 0: currentDefaultEmotion = .hurt
+            case 1: currentDefaultEmotion = .unhappy
+            default: currentDefaultEmotion = .unhappyTwo
+            }
         } else if v <= 39 {
             currentDefaultEmotion = randomIdleEmotion()
         } else if v <= 85 {
@@ -952,13 +1034,11 @@ final class PetViewModel: ObservableObject {
             default: currentDefaultEmotion = .blowbubble2
             }
         } else {
-            // 86~100
-            switch v % 5 {
-            case 0: currentDefaultEmotion = .like1
-            case 1: currentDefaultEmotion = .like2
-            case 2: currentDefaultEmotion = Bool.random() ? .jump1 : .jumpTwo
-            case 3: currentDefaultEmotion = .blowbubble1
-            default: currentDefaultEmotion = .blowbubble2
+            // 86~100：`happyIdle` 仅在此段随机；其余按 v%5，但 **90、95 不再用 like1**（原 v%5==0）
+            if Double.random(in: 0...1) < happyIdleVeryHighTierProbability {
+                currentDefaultEmotion = .happyIdle
+            } else {
+                currentDefaultEmotion = defaultEmotionForHighTier86To100(v: v)
             }
         }
     }

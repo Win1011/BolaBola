@@ -32,11 +32,13 @@ struct WatchBottomChromeToolbar: View {
                 micControl
                 Spacer(minLength: 0)
             }
+            .offset(y: -6)
 
             pullHandleBar
+                .padding(.top, 6)
         }
         .padding(.horizontal, 10)
-        .padding(.top, 2)
+        .padding(.top, 0)
         .padding(.bottom, 0)
         .frame(maxWidth: .infinity)
     }
@@ -70,6 +72,13 @@ struct WatchBottomChromeToolbar: View {
 
     private var micControl: some View {
         VStack(spacing: 5) {
+            if isRecording {
+                Circle()
+                    .fill(recordingIndicatorColor)
+                    .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
+            }
+
             chromeAccessoryCircle {
                 Image(systemName: "mic.fill")
                     .font(.system(size: 16, weight: .semibold))
@@ -77,13 +86,6 @@ struct WatchBottomChromeToolbar: View {
             }
             .contentShape(Circle())
             .highPriorityGesture(TapGesture().onEnded { toggleMicTap() })
-
-            if isRecording {
-                Circle()
-                    .fill(recordingIndicatorColor)
-                    .frame(width: 7, height: 7)
-                    .accessibilityHidden(true)
-            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(isRecording ? "录音中，再点一次结束" : "点按开始录音")
@@ -243,8 +245,7 @@ struct WatchPanelSheetView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-                    GlassEffectContainer(spacing: 10) {
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         panelCard(title: "心率", subtitle: "\(viewModel.latestHeartRateText) BPM") {
                             viewModel.refreshLatestHeartRateForDisplay()
                         }
@@ -266,7 +267,6 @@ struct WatchPanelSheetView: View {
                             panelCardLabel(title: "对话记录", subtitle: "与 Bola")
                         }
                         .buttonStyle(.plain)
-                        }
                     }
                 }
                 .padding(.horizontal, 10)
@@ -302,7 +302,7 @@ struct WatchPanelSheetView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
         .padding(8)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -381,10 +381,13 @@ struct WatchSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("每日总结") {
+                Section {
                     Toggle("启用", isOn: $digestEnabled)
+                        .font(.caption2)
                     Stepper("小时 \(digestHour)", value: $digestHour, in: 0 ... 23)
+                        .font(.caption2)
                     Stepper("分钟 \(digestMinute)", value: $digestMinute, in: 0 ... 59, step: 5)
+                        .font(.caption2)
                     Button("保存并刷新通知") {
                         let c = DailyDigestConfig(
                             isEnabled: digestEnabled,
@@ -398,6 +401,11 @@ struct WatchSettingsView: View {
                             await MainActor.run { dismiss() }
                         }
                     }
+                    .font(.caption2)
+                } header: {
+                    Text("每日总结")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("设置")
