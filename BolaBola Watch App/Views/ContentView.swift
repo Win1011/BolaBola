@@ -8,6 +8,7 @@
 import SwiftUI
 import Combine
 import WatchKit
+import WidgetKit
 
 // MARK: - ViewModel（简单状态机雏形）
 
@@ -809,12 +810,13 @@ final class PetViewModel: ObservableObject {
         defaults.set(totalActiveSeconds, forKey: CompanionPersistenceKeys.totalActiveSeconds)
         defaults.set(activeCarrySeconds, forKey: CompanionPersistenceKeys.activeCarrySeconds)
         defaults.set(lastCompanionWallClockTime, forKey: CompanionPersistenceKeys.lastCompanionWallClock)
+        #if os(watchOS)
+        WidgetCenter.shared.reloadAllTimelines()
         if pushToPhone {
-            #if os(watchOS)
             BolaWCSessionCoordinator.shared.pushCompanionValue(companionValueInternal)
             BolaWCSessionCoordinator.shared.schedulePushCompanionGameStateSnapshotToPhoneDebounced()
-            #endif
         }
+        #endif
     }
 
     /// 从磁盘恢复 `lastCompanionWallClockTime`；若无新键则从旧版 `lastTickTimestamp` 迁移。

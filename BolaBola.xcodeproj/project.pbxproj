@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		2F55E26B2F667F99001E5A32 /* BolaBola Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 2F55E2532F667F99001E5A32 /* BolaBola Watch App.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A05C53932F7D18FE0042AB26 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A05C53922F7D18FE0042AB26 /* WidgetKit.framework */; };
+		A05C53952F7D18FE0042AB26 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A05C53942F7D18FE0042AB26 /* SwiftUI.framework */; };
+		A05C53A22F7D19000042AB26 /* BolaBola Watch WidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A05C53902F7D18FE0042AB26 /* BolaBola Watch WidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F1A1E0A22F667F99001E5A33 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F1A1E0A12F667F99001E5A33 /* GoogleService-Info.plist */; };
 		F1A1E0A32F667F99001E5A33 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F1A1E0A12F667F99001E5A33 /* GoogleService-Info.plist */; };
 		F1B1E0102F667F99001E5A41 /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = F1B1E0112F667F99001E5A41 /* FirebaseAnalyticsCore */; };
@@ -20,6 +23,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 2F55E2522F667F99001E5A32;
 			remoteInfo = "BolaBola Watch App";
+		};
+		A05C53A02F7D19000042AB26 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2F55E2472F667F99001E5A32 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A05C538F2F7D18FE0042AB26;
+			remoteInfo = "BolaBola Watch WidgetExtension";
 		};
 /* End PBXContainerItemProxy section */
 
@@ -35,13 +45,38 @@
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A05C53A32F7D19000042AB26 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A05C53A22F7D19000042AB26 /* BolaBola Watch WidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		2F55E2532F667F99001E5A32 /* BolaBola Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BolaBola Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2F55E26A2F667F99001E5A32 /* BolaBola.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BolaBola.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A05C53902F7D18FE0042AB26 /* BolaBola Watch WidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "BolaBola Watch WidgetExtension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A05C53922F7D18FE0042AB26 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		A05C53942F7D18FE0042AB26 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		A05C53B02F7D19E30042AB26 /* BolaBola Watch WidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "BolaBola Watch WidgetExtension.entitlements"; sourceTree = "<group>"; };
 		F1A1E0A12F667F99001E5A33 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A05C53A62F7D19000042AB26 /* Exceptions for "BolaBola Watch Widget" folder in "BolaBola Watch WidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A05C538F2F7D18FE0042AB26 /* BolaBola Watch WidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		2F55E2572F667F99001E5A32 /* BolaBola Watch App */ = {
@@ -57,6 +92,14 @@
 		2F55E2692F667F99001E5A32 /* BolaBola iOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "BolaBola iOS";
+			sourceTree = "<group>";
+		};
+		A05C53962F7D18FE0042AB26 /* BolaBola Watch Widget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A05C53A62F7D19000042AB26 /* Exceptions for "BolaBola Watch Widget" folder in "BolaBola Watch WidgetExtension" target */,
+			);
+			path = "BolaBola Watch Widget";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -77,17 +120,30 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A05C538D2F7D18FE0042AB26 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A05C53952F7D18FE0042AB26 /* SwiftUI.framework in Frameworks */,
+				A05C53932F7D18FE0042AB26 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		2F55E2462F667F99001E5A32 = {
 			isa = PBXGroup;
 			children = (
+				A05C53B02F7D19E30042AB26 /* BolaBola Watch WidgetExtension.entitlements */,
 				F1A1E0A12F667F99001E5A33 /* GoogleService-Info.plist */,
 				2F55E2572F667F99001E5A32 /* BolaBola Watch App */,
 				2F55E2682F667F99001E5A32 /* Shared */,
 				2F55E2692F667F99001E5A32 /* BolaBola iOS */,
+				A05C53962F7D18FE0042AB26 /* BolaBola Watch Widget */,
+				A05C53912F7D18FE0042AB26 /* Frameworks */,
 				2F55E24E2F667F99001E5A32 /* Products */,
+				A05C57362F7D1C740042AB26 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -96,8 +152,25 @@
 			children = (
 				2F55E26A2F667F99001E5A32 /* BolaBola.app */,
 				2F55E2532F667F99001E5A32 /* BolaBola Watch App.app */,
+				A05C53902F7D18FE0042AB26 /* BolaBola Watch WidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A05C53912F7D18FE0042AB26 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A05C53922F7D18FE0042AB26 /* WidgetKit.framework */,
+				A05C53942F7D18FE0042AB26 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		A05C57362F7D1C740042AB26 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -110,10 +183,12 @@
 				2F55E24F2F667F99001E5A32 /* Sources */,
 				2F55E2502F667F99001E5A32 /* Frameworks */,
 				2F55E2512F667F99001E5A32 /* Resources */,
+				A05C53A32F7D19000042AB26 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A05C53A12F7D19000042AB26 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				2F55E2572F667F99001E5A32 /* BolaBola Watch App */,
@@ -152,6 +227,28 @@
 			productReference = 2F55E26A2F667F99001E5A32 /* BolaBola.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A05C538F2F7D18FE0042AB26 /* BolaBola Watch WidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A05C53A72F7D19000042AB26 /* Build configuration list for PBXNativeTarget "BolaBola Watch WidgetExtension" */;
+			buildPhases = (
+				A05C538C2F7D18FE0042AB26 /* Sources */,
+				A05C538D2F7D18FE0042AB26 /* Frameworks */,
+				A05C538E2F7D18FE0042AB26 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A05C53962F7D18FE0042AB26 /* BolaBola Watch Widget */,
+			);
+			name = "BolaBola Watch WidgetExtension";
+			packageProductDependencies = (
+			);
+			productName = "BolaBola Watch WidgetExtension";
+			productReference = A05C53902F7D18FE0042AB26 /* BolaBola Watch WidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -159,7 +256,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2630;
+				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					2F55E2522F667F99001E5A32 = {
@@ -167,6 +264,9 @@
 					};
 					2F55E26E2F667F99001E5A32 = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					A05C538F2F7D18FE0042AB26 = {
+						CreatedOnToolsVersion = 26.2;
 					};
 				};
 			};
@@ -189,6 +289,7 @@
 			targets = (
 				2F55E26E2F667F99001E5A32 /* BolaBola */,
 				2F55E2522F667F99001E5A32 /* BolaBola Watch App */,
+				A05C538F2F7D18FE0042AB26 /* BolaBola Watch WidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -210,6 +311,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A05C538E2F7D18FE0042AB26 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -227,6 +335,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A05C538C2F7D18FE0042AB26 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -234,6 +349,11 @@
 			isa = PBXTargetDependency;
 			target = 2F55E2522F667F99001E5A32 /* BolaBola Watch App */;
 			targetProxy = 2F55E2732F667F99001E5A32 /* PBXContainerItemProxy */;
+		};
+		A05C53A12F7D19000042AB26 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A05C538F2F7D18FE0042AB26 /* BolaBola Watch WidgetExtension */;
+			targetProxy = A05C53A02F7D19000042AB26 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -362,7 +482,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch App/BolaBola Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MX4C45DA78;
+				DEVELOPMENT_TEAM = MJ852SN88S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
@@ -371,13 +491,13 @@
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 把你的语音转成文字，再生成回复。";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 需要发送喝水、活动等本地提醒。";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.gathxr.BolaBola;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.GathXRTeam.BolaBola;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola.Watch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -400,7 +520,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch App/BolaBola Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MX4C45DA78;
+				DEVELOPMENT_TEAM = MJ852SN88S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
@@ -409,13 +529,13 @@
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 把你的语音转成文字，再生成回复。";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 需要发送喝水、活动等本地提醒。";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.gathxr.BolaBola;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.GathXRTeam.BolaBola;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola.Watch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -439,7 +559,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola iOS/BolaBola.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MX4C45DA78;
+				DEVELOPMENT_TEAM = MJ852SN88S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
@@ -460,7 +580,7 @@
 					"$(inherited)",
 					"-ObjC",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -481,7 +601,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola iOS/BolaBola.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MX4C45DA78;
+				DEVELOPMENT_TEAM = MJ852SN88S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
@@ -502,7 +622,7 @@
 					"$(inherited)",
 					"-ObjC",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -513,6 +633,75 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A05C53A42F7D19000042AB26 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch WidgetExtension.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MJ852SN88S;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "BolaBola Watch Widget/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "BolaBola Watch Widget";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.GathXRTeam.BolaBola.Watch.BolaBola-Watch-Widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		A05C53A52F7D19000042AB26 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch WidgetExtension.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MJ852SN88S;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "BolaBola Watch Widget/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "BolaBola Watch Widget";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.GathXRTeam.BolaBola.Watch.BolaBola-Watch-Widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Release;
 		};
@@ -542,6 +731,15 @@
 			buildConfigurations = (
 				2F55E2742F667F99001E5A32 /* Debug */,
 				2F55E2752F667F99001E5A32 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A05C53A72F7D19000042AB26 /* Build configuration list for PBXNativeTarget "BolaBola Watch WidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A05C53A42F7D19000042AB26 /* Debug */,
+				A05C53A52F7D19000042AB26 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
