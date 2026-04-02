@@ -120,7 +120,7 @@ struct IOSLifeContainerView: View {
         }
     }
 
-    /// 生活页主列：区块间距（节奏条与「正在关心」、提醒与「今日生活记录」等）刻意略大于普通列表。
+    /// 生活页主列：Section1（今日看到+节奏条）/ Section2（正在关心）/ Section3（生活记录）之间 **等距**。
     private var lifePageMainSectionSpacing: CGFloat {
         bubbleMode ? 40 : 36
     }
@@ -227,10 +227,10 @@ struct IOSLifeContainerView: View {
                             .foregroundStyle(BolaTheme.figmaSubtleCaption)
                             .multilineTextAlignment(.center)
                             .frame(width: LifeIdleOneAvatarView.displayWidth)
-                            .offset(y: -18)
+                            .offset(y: -22)
                     }
                     .frame(width: LifeIdleOneAvatarView.displayWidth, alignment: .center)
-                    .offset(x: -6)
+                    .offset(x: -6, y: -13)
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text(speechLine)
@@ -247,6 +247,7 @@ struct IOSLifeContainerView: View {
 
                         figmaBulletGrid
                     }
+                    .offset(x: -12)
                 }
                 .padding(bubbleMode ? 12 : 0)
                 .background {
@@ -258,6 +259,8 @@ struct IOSLifeContainerView: View {
                 }
 
                 IOSRhythmBarSection(model: rhythm, bubbleMode: bubbleMode)
+                    .offset(y: -26)
+                    .padding(.bottom, -26)
             }
         }
     }

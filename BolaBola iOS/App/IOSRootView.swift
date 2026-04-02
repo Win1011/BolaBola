@@ -128,6 +128,7 @@ struct IOSRootView: View {
             }
         }
         .onAppear {
+            BolaRootTabBarTitleStyle.applyLabelColorToTabTitles()
             consumeDigestNotificationIfNeeded()
             refreshCompanionFromPersistedDefaults()
             BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
@@ -216,6 +217,31 @@ struct IOSRootView: View {
         if !digestBody.isEmpty {
             showDigestSheet = true
         }
+    }
+}
+
+// MARK: - 底栏标签字色（与 `.tint(accent)` 解耦：图标仍用主题色，标题保持 `label`）
+
+private enum BolaRootTabBarTitleStyle {
+    /// `TabView` 的 `.tint` 会作用于选中项标题；用 `UITabBarAppearance` 把标题固定为系统主文字色（浅模式即黑）。
+    static func applyLabelColorToTabTitles() {
+        let item = UITabBarItemAppearance()
+        let titleColor = UIColor.label
+        let attrs: [NSAttributedString.Key: Any] = [.foregroundColor: titleColor]
+        item.normal.titleTextAttributes = attrs
+        item.selected.titleTextAttributes = attrs
+        item.focused.titleTextAttributes = attrs
+        item.disabled.titleTextAttributes = attrs
+
+        let appearance = UITabBarAppearance()
+        appearance.configureWithDefaultBackground()
+        appearance.stackedLayoutAppearance = item
+        appearance.inlineLayoutAppearance = item
+        appearance.compactInlineLayoutAppearance = item
+
+        let tabBar = UITabBar.appearance()
+        tabBar.standardAppearance = appearance
+        tabBar.scrollEdgeAppearance = appearance
     }
 }
 
