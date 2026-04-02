@@ -44,6 +44,7 @@ final class IOSHealthHabitAnalysisModel: ObservableObject {
         var s = Set<HKObjectType>()
         if let t = HKQuantityType.quantityType(forIdentifier: .stepCount) { s.insert(t) }
         if let t = HKQuantityType.quantityType(forIdentifier: .heartRate) { s.insert(t) }
+        if let t = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) { s.insert(t) }
         if let t = HKQuantityType.quantityType(forIdentifier: .appleStandTime) { s.insert(t) }
         if let t = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) { s.insert(t) }
         return s

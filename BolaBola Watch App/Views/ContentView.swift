@@ -1055,7 +1055,7 @@ private struct TapBonusBubbleView: View {
 
     var body: some View {
         Text("+1")
-            .font(.system(size: 13, weight: .heavy, design: .rounded))
+            .font(.system(size: 13, weight: .heavy))
             .foregroundStyle(.primary)
             .padding(.horizontal, 9)
             .padding(.vertical, 5)

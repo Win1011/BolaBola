@@ -17,34 +17,32 @@ struct IOSChatTestSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("和 Bola 聊天")
-                    .font(.headline)
-                Spacer()
-                Button("清空") {
+            HStack(alignment: .center, spacing: 12) {
+                Text("多轮对话会保存在本机并与手表同步；API 请在「设置 → 对话 API」中配置。")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button {
                     ChatHistoryStore.clear(defaults: bolaDefaults)
                     turns = []
                     errorText = nil
+                } label: {
+                    Label("清空", systemImage: "trash")
+                        .font(.subheadline.weight(.semibold))
                 }
-                .font(.caption)
+                .buttonStyle(.bordered)
+                .tint(.secondary)
+                .controlSize(.regular)
                 .disabled(isLoading)
             }
-            .padding(.bottom, 8)
-
-            Text("多轮对话会保存在本机并与手表同步；API 请在「设置 → 对话 API」中配置。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 8)
+            .padding(.bottom, 10)
 
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
                         if turns.isEmpty && !isLoading {
-                            Text("发一条消息开始测试。")
-                                .font(.subheadline)
-                                .foregroundStyle(.tertiary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 24)
+                            guidedIntro
                         }
                         ForEach(turns) { turn in
                             chatBubble(turn)
@@ -64,8 +62,8 @@ struct IOSChatTestSection: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 8)
                 }
-                .frame(minHeight: 220, maxHeight: 360)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: BolaTheme.cornerCompact, style: .continuous))
                 .onChange(of: turns.count) { _, _ in
                     if let last = turns.last?.id {
                         withAnimation { proxy.scrollTo(last, anchor: .bottom) }
@@ -85,14 +83,14 @@ struct IOSChatTestSection: View {
                     .padding(.top, 6)
             }
 
-            HStack(alignment: .center, spacing: 12) {
+            HStack(alignment: .bottom, spacing: 10) {
                 TextField("输入消息…", text: $input, axis: .vertical)
-                    .lineLimit(1 ... 5)
+                    .lineLimit(1 ... 3)
                     .font(.body)
                     .textFieldStyle(.plain)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .frame(minHeight: 44, alignment: .topLeading)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .frame(minHeight: 38, alignment: .topLeading)
                     .background(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .fill(Color(uiColor: .tertiarySystemBackground))
@@ -103,25 +101,80 @@ struct IOSChatTestSection: View {
                     )
 
                 Button {
-                    Task { await send() }
+                    Task { await sendMessage(usingInputField: true) }
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 30))
+                        .font(.system(size: 26))
                         .foregroundStyle(BolaTheme.accent)
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(width: 40, height: 40)
                 }
                 .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
                 .buttonStyle(.borderless)
             }
-            .padding(.top, 10)
+            .padding(.top, 8)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear {
             reloadFromStore()
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaChatHistoryDidMerge)) { _ in
             reloadFromStore()
         }
+    }
+
+    private var guidedIntro: some View {
+        VStack(spacing: 18) {
+            Spacer(minLength: 4)
+            ZStack {
+                Circle()
+                    .fill(Color(red: 0.88, green: 0.94, blue: 0.78))
+                    .frame(width: 76, height: 76)
+                Image(systemName: "cpu")
+                    .font(.system(size: 34, weight: .medium))
+                    .foregroundStyle(Color(red: 0.12, green: 0.38, blue: 0.22))
+            }
+
+            Text("认识 Bola，你的健康 AI")
+                .font(.title3.weight(.bold))
+                .multilineTextAlignment(.center)
+
+            Text("可以询问睡眠、营养或今天如何完成活动目标。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
+                .padding(.horizontal, 12)
+
+            VStack(spacing: 10) {
+                guidedPromptButton("我昨晚睡得怎么样？")
+                guidedPromptButton("分析我的心率趋势")
+                guidedPromptButton("帮我安排今天的运动")
+            }
+            .padding(.top, 4)
+            Spacer(minLength: 4)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+    }
+
+    private func guidedPromptButton(_ title: String) -> some View {
+        Button {
+            Task { await sendMessage(preset: title) }
+        } label: {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color(uiColor: .tertiarySystemFill))
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
     }
 
     @ViewBuilder
@@ -153,13 +206,22 @@ struct IOSChatTestSection: View {
         turns = ChatHistoryStore.load(from: bolaDefaults)
     }
 
-    private func send() async {
-        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// - Parameter usingInputField: 为 true 时读取并清空输入框；否则使用 `preset` 文案。
+    private func sendMessage(usingInputField: Bool = false, preset: String? = nil) async {
+        let text: String = {
+            if let preset {
+                return preset.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return input.trimmingCharacters(in: .whitespacesAndNewlines)
+        }()
         guard !text.isEmpty else { return }
+
         await MainActor.run {
             errorText = nil
             isLoading = true
-            input = ""
+            if usingInputField {
+                input = ""
+            }
         }
         let v = Int(companion.rounded())
         do {

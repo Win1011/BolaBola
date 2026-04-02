@@ -35,7 +35,7 @@
 
 | 组件 | 行为 |
 |------|------|
-| 胶囊 Tab | 三项：**分析**、**对话**、**设置**；选中填充主色或主色描边 |
+| 主 Tab（iPhone） | 图库（Lowe's/LTK）式 **一行**：**`ZStack`** 换页 + **`safeAreaInset`** 内 **`HStack`**（**`IOSCapsuleTabBar`** + 对话 **`Button`**）。**不用** `TabView` + **`tabViewBottomAccessory`**：附件在常规 Tab 高度下在栏 **上方**，易呈「上下两条」。对话钮 iOS 26+ **[`ButtonStyle.glass`](https://developer.apple.com/documentation/swiftui/primitivebuttonstyle/glass)**；胶囊用 `glassEffect` 见 [Applying Liquid Glass to custom views](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views)。**`.tint(BolaTheme.accent)`** 作用于选中态。 |
 | 主按钮 | 主色底 + 深色字；`borderedProminent` 需与 AccentColor 一致 |
 | 列表行 | `List` + `NavigationLink`，分组 Section |
 | 空状态 | 简短说明 + 可选主按钮，语气轻松 |
@@ -43,6 +43,23 @@
 ## 动效
 
 轻量、与交互反馈一致；手表端宠物动画以 Watch 工程为准，iOS 避免抢戏。
+
+### iOS：液态玻璃与底栏（实现备忘，与代码一致）
+
+以下为实现「底栏液态玻璃」与「内容区贴底滚动时的柔和边缘」的**当前约定**（以 iOS 26+ 系统能力为准；低版本无对应 API 时自动回退）。
+
+1. **底栏：一行 + Liquid Glass**  
+   - [新设计图库](https://developer.apple.com/cn/design/new-design-gallery/) 展示的系统 App **视觉**（标签栏 + 侧旁圆形操作）在 SwiftUI 若用 **`tabViewBottomAccessory`**，见 [Discussion](https://developer.apple.com/documentation/swiftui/view/tabviewbottomaccessory(isenabled:content:))：常规 Tab 高度下附件在栏 **上方**，易呈 **两行**。要 **静止态即一行**，用 **`safeAreaInset` + `HStack`**（[`IOSCapsuleTabBar`](../BolaBola%20iOS/Features/Home/IOSCapsuleTabBar.swift) + **`ButtonStyle.glass`**），根视图为 **`ZStack`**（无系统 `TabView` 底栏）。  
+   - [Landmarks](https://developer.apple.com/documentation/swiftui/landmarks-building-an-app-with-liquid-glass) / [Adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass) 中的 **`glassEffect`**、**`ButtonStyle.glass`** 仍适用于自定义胶囊与对话钮。  
+   - **代码位置**：[`IOSRootView.swift`](../BolaBola%20iOS/App/IOSRootView.swift)。
+
+2. **主 Tab 内容滚动：滚动边缘液态口袋（与底栏衔接）**  
+   - **iOS 26+**：根级或主列 **`ScrollView`** 使用 **`scrollEdgeEffectStyle`**（[`bolaRootTabScrollEdgeStyles()`](../BolaBola%20iOS/Design/IOSGlassChrome.swift)），与 **浮动自定义底栏** + 安全区配套。  
+   - **参考**：[`scrollEdgeEffectStyle(_:for:)`](https://developer.apple.com/documentation/swiftui/view/scrolledgeeffectstyle(_:for:))。  
+   - **代码位置**：[`IOSGlassChrome.swift`](../BolaBola%20iOS/Design/IOSGlassChrome.swift) 内 **`bolaScrollEdgeLiquidGlassMainContent()`**。
+
+3. **历史**  
+   - 曾用 **`TabView` + `tabViewBottomAccessory`**；附件与 Tab **两行**叠放，改回 **单行 `safeAreaInset` + `IOSCapsuleTabBar`**。
 
 ## 提醒：调度语义（产品/工程对齐）
 

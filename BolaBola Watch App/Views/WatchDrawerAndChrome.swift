@@ -35,7 +35,7 @@ struct WatchBottomChromeToolbar: View {
             .offset(y: -6)
 
             pullHandleBar
-                .padding(.top, 6)
+                .padding(.top, 8)
         }
         .padding(.horizontal, 10)
         .padding(.top, 0)

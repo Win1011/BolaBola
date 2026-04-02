@@ -563,7 +563,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Bola 读取步数、站立时间、心率与睡眠等数据，用于分析页图表展示，非医疗诊断。";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Bola 读取步数、站立时间、心率、心率变异性（HRV）与睡眠等数据，用于状态页图表与生活页节奏条展示，非医疗诊断。";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Bola 使用你的大致位置以显示当地天气（生活页天气卡片）。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bola 需要麦克风以转写从手表发来的语音。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 在 iPhone 上将语音转为文字，再与手表同步。";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 在手机上为你管理提醒与陪伴值同步。";
@@ -605,7 +606,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Bola 读取步数、站立时间、心率与睡眠等数据，用于分析页图表展示，非医疗诊断。";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Bola 读取步数、站立时间、心率、心率变异性（HRV）与睡眠等数据，用于状态页图表与生活页节奏条展示，非医疗诊断。";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Bola 使用你的大致位置以显示当地天气（生活页天气卡片）。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bola 需要麦克风以转写从手表发来的语音。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 在 iPhone 上将语音转为文字，再与手表同步。";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 在手机上为你管理提醒与陪伴值同步。";

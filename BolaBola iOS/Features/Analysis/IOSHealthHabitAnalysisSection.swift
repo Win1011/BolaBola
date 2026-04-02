@@ -5,43 +5,102 @@
 
 import SwiftUI
 
-/// 健康入口：正方形卡片（2 列网格），图标 + 标题 + 摘要。
-struct IOSHealthHubSquareCard: View {
-    let icon: String
+/// 健康入口：正方形卡片（2 列网格），标题行 + 轻量可视化 + 摘要文案。
+struct IOSHealthHubRichCard: View {
+    enum Kind {
+        case summary
+        case activity
+        case heart
+        case sleep
+    }
+
+    let kind: Kind
+    @ObservedObject var model: IOSHealthHabitAnalysisModel
     let title: String
     let subtitle: String
 
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(Color(uiColor: .tertiaryLabel))
-                .frame(height: 26)
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.88)
+        VStack(alignment: .leading, spacing: 10) {
+            // 与「提醒」行一致：大号 SF Symbol + tertiary，不用独立色块/阴影，避免和列表图标两套语言
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: iconName)
+                    .font(.title2)
+                    .foregroundStyle(BolaTheme.listRowIcon)
+                    .symbolRenderingMode(.monochrome)
+                    .frame(width: 36, height: 36, alignment: .center)
+
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.88)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            visualization
+                .frame(maxWidth: .infinity)
+
             Text(subtitle)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
+                .foregroundStyle(.tertiary)
+                .lineLimit(3)
                 .minimumScaleFactor(0.78)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .aspectRatio(1, contentMode: .fit)
-        .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
                 .fill(BolaTheme.surfaceCard)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
                 .stroke(Color(uiColor: .separator).opacity(0.4), lineWidth: 0.5)
         )
         .contentShape(Rectangle())
+    }
+
+    private var iconName: String {
+        switch kind {
+        case .summary: return "chart.pie.fill"
+        case .activity: return "figure.walk"
+        case .heart: return "heart.fill"
+        case .sleep: return "moon.zzz.fill"
+        }
+    }
+
+    @ViewBuilder
+    private var visualization: some View {
+        switch kind {
+        case .summary:
+            IOSHealthHubSummaryVisual(model: model)
+        case .activity:
+            IOSHealthHubActivityBarsVisual(values: IOSHealthHabitSnapshot.weekStepValuesForBars(model))
+        case .heart:
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    if let bpm = IOSHealthHabitSnapshot.todayHeartRateValue(model) {
+                        Text("\(Int(bpm.rounded()))")
+                            .font(.title.weight(.bold))
+                            .foregroundStyle(.primary)
+                        Text("次/分")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("—")
+                            .font(.title.weight(.bold))
+                            .foregroundStyle(.secondary)
+                        Text("次/分")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                IOSHealthHubHeartSparklineVisual(values: IOSHealthHabitSnapshot.weekHeartValuesForSparkline(model))
+            }
+        case .sleep:
+            IOSHealthHubSleepVisual(hours: IOSHealthHabitSnapshot.todaySleepHoursValue(model))
+        }
     }
 }
 
@@ -115,8 +174,9 @@ struct IOSHealthHabitAnalysisSection: View {
                 NavigationLink {
                     IOSHealthSummaryDetailView(model: model)
                 } label: {
-                    IOSHealthHubSquareCard(
-                        icon: "circle.hexagongrid.fill",
+                    IOSHealthHubRichCard(
+                        kind: .summary,
+                        model: model,
                         title: "今日摘要",
                         subtitle: IOSHealthHabitSnapshot.summarySubtitle(model)
                     )
@@ -126,8 +186,9 @@ struct IOSHealthHabitAnalysisSection: View {
                 NavigationLink {
                     IOSHealthActivityDetailView(model: model)
                 } label: {
-                    IOSHealthHubSquareCard(
-                        icon: "figure.walk",
+                    IOSHealthHubRichCard(
+                        kind: .activity,
+                        model: model,
                         title: "活动与站立",
                         subtitle: IOSHealthHabitSnapshot.activitySubtitle(model)
                     )
@@ -137,8 +198,9 @@ struct IOSHealthHabitAnalysisSection: View {
                 NavigationLink {
                     IOSHealthHeartDetailView(model: model)
                 } label: {
-                    IOSHealthHubSquareCard(
-                        icon: "heart.fill",
+                    IOSHealthHubRichCard(
+                        kind: .heart,
+                        model: model,
                         title: "心率",
                         subtitle: IOSHealthHabitSnapshot.heartSubtitle(model)
                     )
@@ -148,8 +210,9 @@ struct IOSHealthHabitAnalysisSection: View {
                 NavigationLink {
                     IOSHealthSleepDetailView(model: model)
                 } label: {
-                    IOSHealthHubSquareCard(
-                        icon: "moon.zzz.fill",
+                    IOSHealthHubRichCard(
+                        kind: .sleep,
+                        model: model,
                         title: "睡眠节奏",
                         subtitle: IOSHealthHabitSnapshot.sleepSubtitle(model)
                     )

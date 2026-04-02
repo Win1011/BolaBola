@@ -71,6 +71,62 @@ enum IOSHealthHabitSnapshot {
         return model.sleepHoursWeek.first(where: { cal.isDateInToday($0.date) })?.value
             ?? model.sleepHoursWeek.last(where: { $0.value > 0 })?.value ?? 0
     }
+
+    // MARK: - 分析页网格卡片可视化（0…1 进度等）
+
+    static func todayStepsValue(_ model: IOSHealthHabitAnalysisModel) -> Double {
+        let cal = Calendar.current
+        return model.stepsWeek.first(where: { cal.isDateInToday($0.date) })?.value
+            ?? model.stepsWeek.last?.value ?? 0
+    }
+
+    static func todayStandMinutesValue(_ model: IOSHealthHabitAnalysisModel) -> Double {
+        let cal = Calendar.current
+        return model.standMinutesWeek.first(where: { cal.isDateInToday($0.date) })?.value
+            ?? model.standMinutesWeek.last?.value ?? 0
+    }
+
+    static func todaySleepHoursValue(_ model: IOSHealthHabitAnalysisModel) -> Double {
+        let cal = Calendar.current
+        return model.sleepHoursWeek.first(where: { cal.isDateInToday($0.date) })?.value
+            ?? model.sleepHoursWeek.last(where: { $0.value > 0 })?.value ?? 0
+    }
+
+    static func todayHeartRateValue(_ model: IOSHealthHabitAnalysisModel) -> Double? {
+        let cal = Calendar.current
+        let v = model.heartRateWeek.first(where: { cal.isDateInToday($0.date) })?.value
+            ?? model.heartRateWeek.last(where: { $0.value > 0 })?.value
+        guard let v, v > 0 else { return nil }
+        return v
+    }
+
+    static func stepsGoalProgress(_ model: IOSHealthHabitAnalysisModel) -> Double {
+        min(1, max(0, todayStepsValue(model) / IOSHealthRingGoals.stepsPerDay))
+    }
+
+    static func standGoalProgress(_ model: IOSHealthHabitAnalysisModel) -> Double {
+        min(1, max(0, todayStandMinutesValue(model) / IOSHealthRingGoals.standMinutesPerDay))
+    }
+
+    static func sleepGoalProgress(_ model: IOSHealthHabitAnalysisModel) -> Double {
+        min(1, max(0, todaySleepHoursValue(model) / IOSHealthRingGoals.sleepHoursTarget))
+    }
+
+    /// 三项进度的简单平均，用作「今日摘要」中心百分比（仅展示用）。
+    static func combinedScoreProgress(_ model: IOSHealthHabitAnalysisModel) -> Double {
+        let a = stepsGoalProgress(model)
+        let b = standGoalProgress(model)
+        let c = sleepGoalProgress(model)
+        return min(1, max(0, (a + b + c) / 3))
+    }
+
+    static func weekStepValuesForBars(_ model: IOSHealthHabitAnalysisModel) -> [Double] {
+        model.stepsWeek.map(\.value)
+    }
+
+    static func weekHeartValuesForSparkline(_ model: IOSHealthHabitAnalysisModel) -> [Double] {
+        model.heartRateWeek.map(\.value)
+    }
 }
 
 // MARK: - 图表刻度
@@ -227,7 +283,7 @@ struct IOSHealthSummaryDetailView: View {
             }
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(value)
-                    .font(.system(size: 21, weight: .semibold, design: .rounded))
+                    .font(.system(size: 21, weight: .semibold))
                     .monospacedDigit()
                 if !unit.isEmpty, value != "—" {
                     Text(unit).font(.caption).foregroundStyle(.secondary)

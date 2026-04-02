@@ -1,14 +1,18 @@
 //
 //  IOSRootView.swift
-//  iPhone：单一导航栈 + 右上设置；底部三项 Tab（分析 | 主界面 | 对话），选中为圆形高亮。
+//  系统 **`TabView`**：前三项为主内容，第四项为 **对话**；圆形样式依赖 **`TabRole.search`**（尚无对话专用 role，见 `IOSRootTab.chat` 注释与 [TabRole](https://developer.apple.com/documentation/swiftui/tabrole)）。
 //
 
 import SwiftUI
+import UIKit
 import UserNotifications
 
 struct IOSRootView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @State private var selectedTab: IOSMainTab = .home
+    @State private var selectedTab: IOSRootTab = .life
+    @State private var lifeSegment: IOSLifeSubPage = .dailyLife
+    @AppStorage("bola_life_bubble_mode_v1") private var lifeBubbleMode = false
+
     @State private var companion: Double = 50
     @State private var reminders: [BolaReminder] = ReminderListStore.load()
     @State private var showDigestSheet = false
@@ -17,59 +21,91 @@ struct IOSRootView: View {
 
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
-    private var navigationTitle: String {
-        switch selectedTab {
-        case .home: return "主界面"
-        case .analysis: return "分析"
-        case .chat: return "对话"
+    private var lifeTabRoot: some View {
+        NavigationStack {
+            IOSLifeContainerView(
+                lifeSegment: $lifeSegment,
+                bubbleMode: $lifeBubbleMode,
+                reminders: $reminders,
+                onRequestChat: { selectedTab = .chat }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { lifeToolbarContent }
         }
+        .tint(Color(UIColor.label))
+    }
+
+    private var statusTabRoot: some View {
+        NavigationStack {
+            IOSStatusView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .navigationTitle("状态")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { settingsOnlyToolbar }
+        }
+        .tint(Color(UIColor.label))
+    }
+
+    private var mineTabRoot: some View {
+        NavigationStack {
+            IOSMainHomeView(companion: $companion)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .navigationTitle("主界面")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { settingsOnlyToolbar }
+        }
+        .tint(Color(UIColor.label))
+    }
+
+    /// 对话即根页；圆形底栏项仍用 `TabRole.search`（系统仅此 role 提供该圆形 affordance）。
+    private var chatTabRoot: some View {
+        NavigationStack {
+            IOSChatTestSection(companion: companion)
+                .padding(.horizontal, BolaTheme.paddingHorizontal)
+                .padding(.top, 0)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(BolaTheme.backgroundGrouped)
+                .navigationTitle("对话")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { settingsOnlyToolbar }
+        }
+        .tint(Color(UIColor.label))
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch selectedTab {
-                case .home:
-                    IOSMainHomeView(companion: $companion)
-                case .analysis:
-                    IOSAnalysisView(reminders: $reminders)
-                case .chat:
-                    IOSChatTestSection(companion: companion)
-                        .padding(.horizontal, BolaTheme.paddingHorizontal)
-                        .padding(.top, 0)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        .background(Color(uiColor: .systemGroupedBackground))
+        TabView(selection: $selectedTab) {
+            /// `TabSection` 与独立「对话」Tab 之间系统会多留一点间距（相对四个平铺 Tab）。
+            TabSection {
+                Tab(value: IOSRootTab.life) {
+                    lifeTabRoot
+                } label: {
+                    Label("生活", systemImage: "diamond.fill")
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                ZStack(alignment: .bottom) {
-                    tabBarBottomFade
-                        .frame(height: 78)
-                        .frame(maxWidth: .infinity)
-                        .allowsHitTesting(false)
 
-                    IOSCapsuleTabBar(selection: $selectedTab)
-                        .padding(.horizontal, BolaTheme.paddingHorizontal)
-                        .padding(.top, 2)
-                        .padding(.bottom, 6)
+                Tab(value: IOSRootTab.status) {
+                    statusTabRoot
+                } label: {
+                    Label("状态", systemImage: "circle.fill")
+                }
+
+                Tab(value: IOSRootTab.mine) {
+                    mineTabRoot
+                } label: {
+                    Label("主界面", systemImage: "triangle.fill")
                 }
             }
-            .navigationTitle(navigationTitle)
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showSettingsSheet = true
-                    } label: {
-                        Image(systemName: "gearshape.fill")
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(.primary)
-                    }
-                    .accessibilityLabel("设置")
-                }
+
+            Tab(value: IOSRootTab.chat, role: .search) {
+                chatTabRoot
+            } label: {
+                Label("对话", systemImage: "bubble.left.and.bubble.right.fill")
             }
         }
+        .tint(BolaTheme.accent)
+        .bolaIOS26TabBarMinimizeOnScroll()
+        .bolaRootTabScrollEdgeStyles()
         .ignoresSafeArea(.keyboard)
         .sheet(isPresented: $showSettingsSheet) {
             NavigationStack {
@@ -107,7 +143,6 @@ struct IOSRootView: View {
             refreshCompanionFromPersistedDefaults()
         }
         .task {
-            // `migrateStandardToGroupIfNeeded`：首次启用 App Group 时将 standard 中的陪伴相关键拷入共享 suite。
             BolaSharedDefaults.migrateStandardToGroupIfNeeded()
             ReminderBootstrap.ensureDefaults()
             reminders = ReminderListStore.load()
@@ -127,25 +162,50 @@ struct IOSRootView: View {
         }
     }
 
+    @ToolbarContentBuilder
+    private var lifeToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            IOSNavigationGlassIconButton(
+                systemName: "arrow.left.arrow.right",
+                font: .system(size: 17, weight: .semibold),
+                accessibilityLabel: "生活泡泡"
+            ) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                    lifeBubbleMode.toggle()
+                }
+            }
+        }
+        ToolbarItem(placement: .principal) {
+            IOSLifeSegmentLarge(lifeSegment: $lifeSegment)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            settingsButton
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var settingsOnlyToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            settingsButton
+        }
+    }
+
+    private var settingsButton: some View {
+        IOSNavigationGlassIconButton(
+            systemName: "gearshape.fill",
+            font: .system(size: 18, weight: .medium),
+            accessibilityLabel: "设置"
+        ) {
+            showSettingsSheet = true
+        }
+    }
+
     private func refreshCompanionFromPersistedDefaults() {
         if bolaDefaults.object(forKey: CompanionPersistenceKeys.companionValue) != nil {
             companion = bolaDefaults.double(forKey: CompanionPersistenceKeys.companionValue)
         } else {
             companion = 50
         }
-    }
-
-    /// 底部渐变遮罩（替代不透明的 material 条）。
-    private var tabBarBottomFade: some View {
-        LinearGradient(
-            stops: [
-                .init(color: Color(uiColor: .systemGroupedBackground).opacity(0), location: 0),
-                .init(color: Color(uiColor: .systemGroupedBackground).opacity(0.35), location: 0.45),
-                .init(color: Color(uiColor: .systemGroupedBackground).opacity(0.72), location: 1)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
     }
 
     private func consumeDigestNotificationIfNeeded() {
@@ -157,4 +217,21 @@ struct IOSRootView: View {
             showDigestSheet = true
         }
     }
+}
+
+// MARK: - iOS 26 标签栏随滚动收起（[Adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass)）
+
+private extension View {
+    @ViewBuilder
+    func bolaIOS26TabBarMinimizeOnScroll() -> some View {
+        if #available(iOS 26.0, *) {
+            self.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            self
+        }
+    }
+}
+
+#Preview("Bola 主界面") {
+    IOSRootView()
 }

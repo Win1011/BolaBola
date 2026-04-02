@@ -8,18 +8,7 @@ import HealthKit
 
 enum IOSHealthKitWeekQueries {
 
-    /// HealthKit 回调常在后台队列；continuation 必须在主线程 resume，否则 `@MainActor` + SwiftUI 可能不刷新界面。
-    private static func resumeOnMain<T, E: Error>(_ cont: CheckedContinuation<T, E>, returning value: T) {
-        DispatchQueue.main.async {
-            cont.resume(returning: value)
-        }
-    }
-
-    private static func resumeOnMain<T, E: Error>(_ cont: CheckedContinuation<T, E>, throwing error: E) {
-        DispatchQueue.main.async {
-            cont.resume(throwing: error)
-        }
-    }
+    /// HealthKit 回调可能在非主队列；`continuation` 统一 `DispatchQueue.main.async` 再 resume，避免 SwiftUI 不刷新。
 
     struct DayValue: Identifiable, Equatable, Sendable {
         let date: Date
@@ -57,11 +46,15 @@ enum IOSHealthKitWeekQueries {
             )
             q.initialResultsHandler = { _, collection, error in
                 if let error {
-                    resumeOnMain(cont, throwing: error)
+                    DispatchQueue.main.async {
+                        cont.resume(throwing: error)
+                    }
                     return
                 }
                 guard let collection else {
-                    resumeOnMain(cont, returning: [])
+                    DispatchQueue.main.async {
+                        cont.resume(returning: [])
+                    }
                     return
                 }
                 var rows: [DayValue] = []
@@ -70,7 +63,9 @@ enum IOSHealthKitWeekQueries {
                         rows.append(DayValue(date: stats.startDate, value: sum.doubleValue(for: unit)))
                     }
                 }
-                resumeOnMain(cont, returning: rows)
+                DispatchQueue.main.async {
+                    cont.resume(returning: rows)
+                }
             }
             store.execute(q)
         }
@@ -97,11 +92,15 @@ enum IOSHealthKitWeekQueries {
             )
             q.initialResultsHandler = { _, collection, error in
                 if let error {
-                    resumeOnMain(cont, throwing: error)
+                    DispatchQueue.main.async {
+                        cont.resume(throwing: error)
+                    }
                     return
                 }
                 guard let collection else {
-                    resumeOnMain(cont, returning: [])
+                    DispatchQueue.main.async {
+                        cont.resume(returning: [])
+                    }
                     return
                 }
                 var rows: [DayValue] = []
@@ -110,7 +109,9 @@ enum IOSHealthKitWeekQueries {
                         rows.append(DayValue(date: stats.startDate, value: avg.doubleValue(for: unit)))
                     }
                 }
-                resumeOnMain(cont, returning: rows)
+                DispatchQueue.main.async {
+                    cont.resume(returning: rows)
+                }
             }
             store.execute(q)
         }
@@ -135,10 +136,15 @@ enum IOSHealthKitWeekQueries {
                 sortDescriptors: [sort]
             ) { _, results, error in
                 if let error {
-                    resumeOnMain(cont, throwing: error)
+                    DispatchQueue.main.async {
+                        cont.resume(throwing: error)
+                    }
                     return
                 }
-                resumeOnMain(cont, returning: (results as? [HKCategorySample]) ?? [])
+                let typed = (results as? [HKCategorySample]) ?? []
+                DispatchQueue.main.async {
+                    cont.resume(returning: typed)
+                }
             }
             store.execute(q)
         }
