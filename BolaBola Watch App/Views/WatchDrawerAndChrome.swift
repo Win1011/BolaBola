@@ -8,6 +8,21 @@ import os
 
 private let watchChromeVoiceLog = Logger(subsystem: "com.gathxr.BolaBola", category: "WatchVoice")
 
+/// watchOS 26+ → Liquid Glass；低版本 → ultraThinMaterial 圆角矩形
+private struct WatchGlassRoundedRect12: ViewModifier {
+    private let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+
+    func body(content: Content) -> some View {
+        if #available(watchOS 26.0, *) {
+            content.glassEffect(.regular, in: shape)
+        } else {
+            content
+                .background { shape.fill(.ultraThinMaterial) }
+                .clipShape(shape)
+        }
+    }
+}
+
 // MARK: - 底部：麦克风 + 横条（点按打开面板，与「提醒」页同为全屏 Sheet）
 
 struct WatchBottomChromeToolbar: View {
@@ -59,15 +74,24 @@ struct WatchBottomChromeToolbar: View {
         .onTapGesture(perform: onOpenPanel)
     }
 
-    /// Liquid Glass 圆形触控区（watchOS 26+）；与系统底栏控件层次一致
+    /// Liquid Glass 圆形触控区（watchOS 26+）；低版本回退磨砂圆
+    @ViewBuilder
     private func chromeAccessoryCircle<Content: View>(
         @ViewBuilder content: () -> Content
     ) -> some View {
-        ZStack {
+        let core = ZStack {
             content()
         }
         .frame(width: controlDiameter, height: controlDiameter)
-        .glassEffect(.regular, in: Circle())
+
+        if #available(watchOS 26.0, *) {
+            core.glassEffect(.regular, in: Circle())
+        } else {
+            core.background {
+                Circle().fill(.ultraThinMaterial)
+            }
+            .clipShape(Circle())
+        }
     }
 
     private var micControl: some View {
@@ -243,7 +267,22 @@ struct WatchPanelSheetView: View {
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .modifier(WatchGlassRoundedRect12())
+
+                    Button {
+                        viewModel.enterEatingState()
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Image(systemName: "fork.knife")
+                                .font(.caption2)
+                            Text("调试吃东西")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 32)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         panelCard(title: "心率", subtitle: "\(viewModel.latestHeartRateText) BPM") {
@@ -302,7 +341,7 @@ struct WatchPanelSheetView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
         .padding(8)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .modifier(WatchGlassRoundedRect12())
     }
 }
 
@@ -332,10 +371,13 @@ struct WatchRemindersListView: View {
                             Text(r.notificationBody).font(.caption2).foregroundStyle(.secondary)
                         }
                         .swipeActions {
-                            Button(role: .destructive) {
+                            Button {
                                 reminders.removeAll { $0.id == r.id }
                                 saveAndSync()
+                            } label: {
+                                Label("删除", systemImage: "trash")
                             }
+                            .tint(.red)
                         }
                     }
                 }

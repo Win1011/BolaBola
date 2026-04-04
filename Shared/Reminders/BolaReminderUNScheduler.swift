@@ -57,6 +57,14 @@ public enum BolaReminderUNScheduler {
                     _ = try? await center.add(req)
                 }
             }
+
+        case .once(let date):
+            let interval = date.timeIntervalSinceNow
+            guard interval > 0 else { return }
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, interval), repeats: false)
+            content.sound = UNNotificationSound.defaultCritical
+            let req = UNNotificationRequest(identifier: "\(idPrefix)\(rem.id.uuidString)_once", content: content, trigger: trigger)
+            _ = try? await center.add(req)
         }
     }
 }

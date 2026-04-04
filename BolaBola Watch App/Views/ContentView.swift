@@ -68,6 +68,9 @@ final class PetViewModel: ObservableObject {
     @Published private(set) var voiceConversationActive: Bool = false
     private var voiceReplyPlaying: Bool = false
 
+    /// 吃东西状态机：waiting → eating → finished
+    private(set) var isInEatingState: Bool = false
+
     /// 当前气泡文案（空则隐藏）；新文案会替换上一条并重新计时
     @Published var dialogueLine: String = ""
     private var dialogueDismissWorkItem: DispatchWorkItem?
@@ -125,7 +128,8 @@ final class PetViewModel: ObservableObject {
         .sad1, .sad2,
         .jumpTwo,
         .happy1, .jump1,
-        .sleepy
+        .sleepy,
+        .eatingWait
     ]
 
     init() {
@@ -399,6 +403,14 @@ final class PetViewModel: ObservableObject {
             return PetAnimations.angry2Once
         case .sleepy:
             return PetAnimations.sleepy
+        case .happyIdleOnce:
+            return PetAnimations.happyIdleOnce
+        case .like1Once:
+            return PetAnimations.like1Once
+        case .eatingWait:
+            return PetAnimations.eatingWait
+        case .eatingOnce:
+            return PetAnimations.eatingOnce
         case .happy:
             return PetAnimations.happy
         case .angry:
@@ -426,6 +438,14 @@ final class PetViewModel: ObservableObject {
                         surpriseJumpTwoQueued = false
                         currentEmotion = Bool.random() ? .jump1Once : .jumpTwoOnce
                         currentFrameIndex = 0
+                        return
+                    }
+                    if currentEmotion == .eatingOnce {
+                        finishEatingAnimation()
+                        return
+                    }
+                    if isInEatingState && (currentEmotion == .happyIdleOnce || currentEmotion == .like1Once || currentEmotion == .like2Once) {
+                        finishEatingHappyAnimation()
                         return
                     }
                     if tapChainReturnsToRandomIdle {
@@ -631,6 +651,42 @@ final class PetViewModel: ObservableObject {
         currentFrameIndex = 0
     }
 
+    // MARK: - 吃东西
+
+    /// 进入吃东西等待状态：循环 idleapple + 饿了台词
+    func enterEatingState() {
+        isInEatingState = true
+        isTapInteractionAnimating = true
+        currentEmotion = .eatingWait
+        currentFrameIndex = 0
+        showDialogue("有点饿，想吃东西啦", duration: 120)
+    }
+
+    /// 吃东西等待中被点击：播一轮 eatapple
+    private func handleEatingTap() {
+        currentEmotion = .eatingOnce
+        currentFrameIndex = 0
+        dialogueDismissWorkItem?.cancel()
+        dialogueLine = ""
+    }
+
+    /// eatapple 播完：随机播 happyIdleOnce / like1Once / like2Once + 台词
+    private func finishEatingAnimation() {
+        let happyEmotion: PetEmotion = [.happyIdleOnce, .like1Once, .like2Once].randomElement() ?? .happyIdleOnce
+        currentEmotion = happyEmotion
+        currentFrameIndex = 0
+        showDialogue("好吃好吃，你也吃点东西吧!", duration: 5)
+    }
+
+    /// 吃完开心动画播完：回到默认状态
+    private func finishEatingHappyAnimation() {
+        isInEatingState = false
+        isTapInteractionAnimating = false
+        selectDefaultEmotion()
+        applyDefaultEmotionDisplay()
+        currentFrameIndex = 0
+    }
+
     func refreshLatestHeartRateForDisplay() {
         HealthKitManager.shared.fetchLatestHeartRateForDisplay { [weak self] bpm in
             Task { @MainActor in
@@ -650,6 +706,12 @@ final class PetViewModel: ObservableObject {
     }
 
     func cycleEmotionOnTap() {
+        // 吃东西等待中：点击触发吃东西动画
+        if isInEatingState && currentEmotion == .eatingWait {
+            handleEatingTap()
+            return
+        }
+
         let nowTs = Date().timeIntervalSince1970
         let v = Int(companionValue.rounded())
 

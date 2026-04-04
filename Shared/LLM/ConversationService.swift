@@ -14,6 +14,11 @@ public enum ConversationService {
         return """
         你是手表宠物 Bola，简短可爱，每次回复不超过 80 字，不用 Markdown。
         用户陪伴值整数为 \(companionValue)，档位约 \(tier)（越高越亲密）。不要给出医疗诊断；心率等信息仅供参考。
+
+        如果用户要求设闹钟、定时器或计时提醒，在回复末尾加上标签（用户看不到标签）：
+        - 倒计时 N 分钟：<<ALARM:{"minutes":N}>>
+        - 指定时间：<<ALARM:{"hour":H,"minute":M}>>（24 小时制）
+        只加一个标签，不要解释标签格式。用可爱语气确认闹钟已设好。
         """
     }
 
@@ -27,7 +32,29 @@ public enum ConversationService {
             messages.append(LLMChatMessage(role: turn.role, content: turn.content))
         }
         messages.append(LLMChatMessage(role: "user", content: utterance))
-        let reply = try await client.chatCompletion(messages: messages)
+        let rawReply = try await client.chatCompletion(messages: messages)
+
+        // Check for alarm intent tag in the LLM response
+        let reply: String
+        if let parsed = AlarmIntentParser.parse(fromLLMReply: rawReply) {
+            reply = parsed.cleanedReply
+            let alarm = BolaReminder(
+                title: "Bola 闹钟",
+                notificationBody: "时间到啦～",
+                schedule: .once(parsed.intent.fireDate),
+                kind: .custom
+            )
+            var reminders = ReminderListStore.load(from: defaults)
+            reminders.append(alarm)
+            ReminderListStore.save(reminders, to: defaults)
+            #if canImport(UserNotifications)
+            await BolaReminderUNScheduler.sync(reminders: reminders)
+            #endif
+            bolaConversationSyncLog.info("replyToUser: alarm scheduled at \(parsed.intent.fireDate, privacy: .public)")
+        } else {
+            reply = rawReply
+        }
+
         let delta = ChatHistoryStore.appendUserThenAssistant(user: utterance, assistant: reply, defaults: defaults)
         let ids = delta.map(\.id.uuidString).joined(separator: ",")
         bolaConversationSyncLog.info("replyToUser OK → pushChatDelta ids=[\(ids, privacy: .public)] utteranceLen=\(utterance.count, privacy: .public)")

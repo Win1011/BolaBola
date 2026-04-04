@@ -32,6 +32,8 @@ public struct BolaReminder: Identifiable, Codable, Equatable, Sendable {
         case interval(TimeInterval)
         /// Hour 0–23, minute 0–59, weekdays 1...7 (Calendar weekday) empty = every day.
         case calendar(hour: Int, minute: Int, weekdays: [Int])
+        /// Fires once at the specified date, non-repeating.
+        case once(Date)
     }
 
     public var id: UUID
@@ -88,6 +90,11 @@ public extension BolaReminder {
                 return symbols[wd - 1]
             }
             return "\(names.joined(separator: "、")) \(t)"
+        case .once(let date):
+            let fmt = DateFormatter()
+            fmt.dateStyle = .none
+            fmt.timeStyle = .short
+            return "\(fmt.string(from: date)) 一次性闹钟"
         }
     }
 }

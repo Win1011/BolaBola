@@ -64,6 +64,9 @@ struct IOSReminderEditorSheet: View {
                     initialRepeat = .customWeekdays
                     initialWeekdays = Set(wd)
                 }
+            case .once(let d):
+                baseTime = d
+                initialRepeat = .daily
             }
         case .edit(let r):
             initialTitle = r.title
@@ -83,6 +86,9 @@ struct IOSReminderEditorSheet: View {
                     initialRepeat = .customWeekdays
                     initialWeekdays = Set(wd)
                 }
+            case .once(let d):
+                baseTime = d
+                initialRepeat = .daily
             }
         }
 

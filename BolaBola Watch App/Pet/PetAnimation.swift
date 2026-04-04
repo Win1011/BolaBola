@@ -75,6 +75,14 @@ enum PetEmotion {
     case like2Once
     /// 点击：暴怒，播一轮后回 idle
     case angry2Once
+    /// happyIdle 播一轮
+    case happyIdleOnce
+    /// like1 播一轮
+    case like1Once
+    /// 吃东西等待：循环 idleapple（饿了）
+    case eatingWait
+    /// 吃东西：播一轮 eatapple
+    case eatingOnce
     case sleepy       // 新增：sleepy 动作
     case happy
     case angry
@@ -140,6 +148,10 @@ enum AnimationScale {
     static let happy1: CGFloat = 1.5
     static let jump1: CGFloat = 1.5
     static let shakeOnce: CGFloat = 1.5
+    static let happyIdleOnce: CGFloat = 1.5
+    static let like1Once: CGFloat = 1.5
+    static let eatingWait: CGFloat = 1.5
+    static let eatingOnce: CGFloat = 1.5
     static let sleepy: CGFloat = 1.5
     static let sleep: CGFloat = 1.5
 }
@@ -737,6 +749,50 @@ enum PetAnimations {
         displayScale: AnimationScale.angry2,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "angrytwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            isLoop: false
+        )
+    )
+
+    /// happyIdle 播一轮
+    static let happyIdleOnce: PetAnimation = PetAnimation(
+        emotion: .happyIdleOnce,
+        displayScale: AnimationScale.happyIdleOnce,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "happyidle", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 7, maxFrames: 36),
+            isLoop: false
+        )
+    )
+
+    /// like1 播一轮
+    static let like1Once: PetAnimation = PetAnimation(
+        emotion: .like1Once,
+        displayScale: AnimationScale.like1Once,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "likeone", maxFrames: 36, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 36),
+            isLoop: false
+        )
+    )
+
+    /// 吃东西等待：循环 idleapple
+    static let eatingWait: PetAnimation = PetAnimation(
+        emotion: .eatingWait,
+        displayScale: AnimationScale.eatingWait,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idleapple", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            isLoop: true
+        )
+    )
+
+    /// 吃东西：播一轮 eatapple
+    static let eatingOnce: PetAnimation = PetAnimation(
+        emotion: .eatingOnce,
+        displayScale: AnimationScale.eatingOnce,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "eatapple", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
             fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: false
         )

@@ -8,7 +8,7 @@ import Foundation
 
 public enum LocalLLMDevSecrets {
     /// 在智谱开放平台控制台复制的 **API Key**（一长串字母数字），不要填文档网页链接。
-    public static let apiKey: String = ""
+    public static let apiKey: String = "01777f9fbd4e4719b3204a6d4f599ac1.WTURLLnkKM65DpNy"
 
     public static let baseURL: String = "https://open.bigmodel.cn/api/paas/v4"
 
