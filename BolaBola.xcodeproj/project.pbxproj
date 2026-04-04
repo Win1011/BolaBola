@@ -13,7 +13,7 @@
 		A05C53A22F7D19000042AB26 /* BolaBola Watch WidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A05C53902F7D18FE0042AB26 /* BolaBola Watch WidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F1A1E0A22F667F99001E5A33 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F1A1E0A12F667F99001E5A33 /* GoogleService-Info.plist */; };
 		F1A1E0A32F667F99001E5A33 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F1A1E0A12F667F99001E5A33 /* GoogleService-Info.plist */; };
-		F1B1E0102F667F99001E5A41 /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = F1B1E0112F667F99001E5A41 /* FirebaseAnalyticsCore */; };
+		F1B1E0162F667F99001E5A41 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = F1B1E0182F667F99001E5A41 /* FirebaseAnalytics */; };
 		F1C1E0212F8A01000042AB26 /* WeatherKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F1C1E0202F8A01000042AB26 /* WeatherKit.framework */; };
 /* End PBXBuildFile section */
 
@@ -120,7 +120,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F1C1E0212F8A01000042AB26 /* WeatherKit.framework in Frameworks */,
-				F1B1E0102F667F99001E5A41 /* FirebaseAnalyticsCore in Frameworks */,
+				F1B1E0162F667F99001E5A41 /* FirebaseAnalytics in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -235,7 +235,7 @@
 			);
 			name = BolaBola;
 			packageProductDependencies = (
-				F1B1E0112F667F99001E5A41 /* FirebaseAnalyticsCore */,
+				F1B1E0182F667F99001E5A41 /* FirebaseAnalytics */,
 			);
 			productName = BolaBola;
 			productReference = 2F55E26A2F667F99001E5A32 /* BolaBola.app */;
@@ -769,17 +769,17 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 12.0.0;
+				kind = exactVersion;
+				version = 12.11.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		F1B1E0112F667F99001E5A41 /* FirebaseAnalyticsCore */ = {
+		F1B1E0182F667F99001E5A41 /* FirebaseAnalytics */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F1B1E0122F667F99001E5A41 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseAnalyticsCore;
+			productName = FirebaseAnalytics;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

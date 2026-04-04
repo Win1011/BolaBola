@@ -153,6 +153,7 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         if forcedForWatch {
             payload[WCSyncPayload.companionSyncForcedFromPhone] = true
         }
+        Self.appendWatchHomeScreenPayload(&payload)
         #endif
         let defaults = BolaSharedDefaults.resolved()
         defaults.set(value, forKey: CompanionPersistenceKeys.companionValue)
@@ -270,6 +271,17 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         }
         pushCompanionValue(v, forcedForWatch: true)
         bolaWCChatLog.info("pushLocalCompanionTowardWatchFromDefaults pushed value=\(v)")
+    }
+
+    private static func appendWatchHomeScreenPayload(_ payload: inout [String: Any]) {
+        let slots = WatchFaceSlotsStore.load()
+        if let data = try? JSONEncoder().encode(slots) {
+            payload[WCSyncPayload.watchFaceSlotsB64] = data.base64EncodedString()
+        }
+        let title = BolaTitleSelectionStore.clamped(BolaTitleSelectionStore.load())
+        if let data = try? JSONEncoder().encode(title) {
+            payload[WCSyncPayload.titleSelectionB64] = data.base64EncodedString()
+        }
     }
     #endif
 
@@ -493,8 +505,33 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         return true
     }
 
+    #if os(watchOS)
+    /// 从 iPhone 的 `applicationContext` / `userInfo` 合并表盘槽与称号（不依赖陪伴值是否存在）。
+    private static func ingestWatchHomeScreenPayloadIfPresent(_ dict: [String: Any]) {
+        var changed = false
+        if let b64 = dict[WCSyncPayload.watchFaceSlotsB64] as? String,
+           let data = Data(base64Encoded: b64),
+           let cfg = try? JSONDecoder().decode(WatchFaceSlotsConfiguration.self, from: data) {
+            WatchFaceSlotsStore.save(cfg)
+            changed = true
+        }
+        if let b64 = dict[WCSyncPayload.titleSelectionB64] as? String,
+           let data = Data(base64Encoded: b64),
+           let sel = try? JSONDecoder().decode(BolaTitleSelection.self, from: data) {
+            BolaTitleSelectionStore.save(BolaTitleSelectionStore.clamped(sel))
+            changed = true
+        }
+        if changed {
+            NotificationCenter.default.post(name: .bolaWatchHomeScreenPayloadDidUpdate, object: nil)
+        }
+    }
+    #endif
+
     /// 仅当远端时间戳更新时才写入并回调，避免旧包覆盖新本地编辑。
     private func ingest(_ dict: [String: Any]) {
+        #if os(watchOS)
+        Self.ingestWatchHomeScreenPayloadIfPresent(dict)
+        #endif
         guard let (v, tsRaw) = Self.parsePayload(dict) else { return }
         let forcedFromPhone = Self.boolFlag(dict[WCSyncPayload.companionSyncForcedFromPhone])
         let defaults = BolaSharedDefaults.resolved()

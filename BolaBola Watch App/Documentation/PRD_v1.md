@@ -1,5 +1,10 @@
 ## BolaBola Watch AI 宠物 v1.0 PRD（精简版）
 
+**文档范围**：本文档仅描述 **watchOS** 端 v1 范围。  
+**iPhone 伴侣 App** 的产品信息架构（三板块、四格底栏、等级值与陪伴值等）见仓库内 [`Documentation/PRD_iPhone_三板块_2026-04.md`](../../Documentation/PRD_iPhone_三板块_2026-04.md)。
+
+---
+
 ### 1. 产品定位
 - **目标**：在 Apple Watch 上提供一个「陪伴型 AI 宠物」，通过轻量互动和健康提醒增加陪伴感。
 - **平台**：仅 watchOS 独立 App，后续再扩展 iPhone 端。

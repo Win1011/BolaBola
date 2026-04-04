@@ -1170,6 +1170,9 @@ struct ContentView: View {
                         TapGesture().onEnded { viewModel.cycleEmotionOnTap() }
                     )
 
+                WatchFaceComplicationsOverlay(viewModel: viewModel)
+                    .allowsHitTesting(false)
+
                 if !viewModel.dialogueLine.isEmpty {
                     Text(viewModel.dialogueLine)
                         .font(.caption)

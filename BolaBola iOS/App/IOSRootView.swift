@@ -9,11 +9,14 @@ import UserNotifications
 
 struct IOSRootView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @State private var selectedTab: IOSRootTab = .life
+    @State private var selectedTab: IOSRootTab = .mine
     @State private var lifeSegment: IOSLifeSubPage = .dailyLife
     @AppStorage("bola_life_bubble_mode_v1") private var lifeBubbleMode = false
 
     @State private var companion: Double = 50
+    /// 主界面左上角刷新：递增触发 `IOSMainHomeView` 内同步与健康/天气刷新。
+    @State private var mineRefreshSignal: Int = 0
+    @State private var isMineHomeSyncing: Bool = false
     @State private var reminders: [BolaReminder] = ReminderListStore.load()
     @State private var showDigestSheet = false
     @State private var digestBody = ""
@@ -41,7 +44,7 @@ struct IOSRootView: View {
         NavigationStack {
             IOSStatusView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .navigationTitle("状态")
+                .navigationTitle("成长")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { settingsOnlyToolbar }
         }
@@ -50,11 +53,15 @@ struct IOSRootView: View {
 
     private var mineTabRoot: some View {
         NavigationStack {
-            IOSMainHomeView(companion: $companion)
+            IOSMainHomeView(
+                companion: $companion,
+                refreshSignal: $mineRefreshSignal,
+                isSyncing: $isMineHomeSyncing
+            )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .navigationTitle("主界面")
+                .navigationTitle("Bola的空间")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { settingsOnlyToolbar }
+                .toolbar { mineToolbarContent }
         }
         .tint(Color(UIColor.label))
     }
@@ -78,22 +85,22 @@ struct IOSRootView: View {
         TabView(selection: $selectedTab) {
             /// `TabSection` 与独立「对话」Tab 之间间距与三格胶囊宽度由系统绘制，无公开微调 API。
             TabSection {
-                Tab(value: IOSRootTab.life) {
-                    lifeTabRoot
+                Tab(value: IOSRootTab.mine) {
+                    mineTabRoot
                 } label: {
-                    Label("生活", systemImage: "diamond.fill")
+                    Label("主界面", systemImage: "triangle.fill")
                 }
 
                 Tab(value: IOSRootTab.status) {
                     statusTabRoot
                 } label: {
-                    Label("状态", systemImage: "circle.fill")
+                    Label("成长", systemImage: "circle.fill")
                 }
 
-                Tab(value: IOSRootTab.mine) {
-                    mineTabRoot
+                Tab(value: IOSRootTab.life) {
+                    lifeTabRoot
                 } label: {
-                    Label("主界面", systemImage: "triangle.fill")
+                    Label("生活", systemImage: "diamond.fill")
                 }
             }
 
@@ -178,6 +185,28 @@ struct IOSRootView: View {
         }
         ToolbarItem(placement: .principal) {
             IOSLifeSegmentLarge(lifeSegment: $lifeSegment)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            settingsButton
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var mineToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Group {
+                if isMineHomeSyncing {
+                    ProgressView()
+                } else {
+                    IOSNavigationGlassIconButton(
+                        systemName: "arrow.clockwise",
+                        font: .system(size: 17, weight: .semibold),
+                        accessibilityLabel: "同步与刷新"
+                    ) {
+                        mineRefreshSignal += 1
+                    }
+                }
+            }
         }
         ToolbarItem(placement: .topBarTrailing) {
             settingsButton

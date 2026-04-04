@@ -34,4 +34,9 @@ public enum WCSyncPayload {
     public static let companionSnapshotKind = "companionSnapshotKind"
     public static let companionSnapshotB64 = "companionSnapshotB64"
     public static let companionSnapshotKindV1 = "csV1"
+
+    /// iPhone → Watch：`WatchFaceSlotsConfiguration` JSON 的 Base64（与陪伴值同批 `applicationContext`）。
+    public static let watchFaceSlotsB64 = "watchFaceSlotsB64"
+    /// iPhone → Watch：`BolaTitleSelection` JSON 的 Base64。
+    public static let titleSelectionB64 = "titleSelectionB64"
 }

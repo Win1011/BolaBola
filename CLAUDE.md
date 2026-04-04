@@ -84,6 +84,7 @@ The `Documentation/` and `BolaBola Watch App/Documentation/` folders contain the
 
 - `Documentation/项目状态与后续工作_2026-03.md` — Current project status, known issues, and priority roadmap
 - `Documentation/design_core.md` — Design tokens (colors, spacing, typography)
+- `Documentation/watch_s10_preview_geometry.md` — iPhone `WatchS10Full` preview: optical center and slot layout anchor (`WatchS10PreviewGeometry`)
 - `BolaBola Watch App/Documentation/companion_value_rules.md` — Scoring rules (±1 per interaction, penalties)
 - `BolaBola Watch App/Documentation/state_machine_list.md` — Pet emotion states and their default animations
 - `BolaBola Watch App/Documentation/bola_dialogue_rules.md` — Dialogue pool triggers and throttling rules
