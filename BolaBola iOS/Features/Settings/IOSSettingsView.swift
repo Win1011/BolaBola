@@ -13,6 +13,7 @@ struct IOSSettingsListView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
+    @State private var confirmResetLifeRecords = false
 
     var body: some View {
         List {
@@ -54,6 +55,16 @@ struct IOSSettingsListView: View {
             }
 
             Section {
+                Button("恢复默认生活卡片…", role: .destructive) {
+                    confirmResetLifeRecords = true
+                }
+            } header: {
+                Text("生活记录")
+            } footer: {
+                Text("删除除「天气」外的所有生活卡片，用于清理测试数据；操作后无法撤销。")
+            }
+
+            Section {
                 HStack {
                     Text("应用名称")
                     Spacer()
@@ -89,6 +100,16 @@ struct IOSSettingsListView: View {
         }
         .onAppear {
             Task { await refreshNotificationStatus() }
+        }
+        .confirmationDialog(
+            "将删除除「天气」外的所有生活卡片，且无法撤销。",
+            isPresented: $confirmResetLifeRecords,
+            titleVisibility: .visible
+        ) {
+            Button("恢复默认", role: .destructive) {
+                LifeRecordListStore.resetToDefaultDeck()
+            }
+            Button("取消", role: .cancel) {}
         }
     }
 

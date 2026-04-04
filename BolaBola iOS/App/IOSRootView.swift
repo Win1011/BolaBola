@@ -76,7 +76,7 @@ struct IOSRootView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            /// `TabSection` 与独立「对话」Tab 之间系统会多留一点间距（相对四个平铺 Tab）。
+            /// `TabSection` 与独立「对话」Tab 之间间距与三格胶囊宽度由系统绘制，无公开微调 API。
             TabSection {
                 Tab(value: IOSRootTab.life) {
                     lifeTabRoot

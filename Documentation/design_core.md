@@ -61,6 +61,18 @@
 3. **历史**  
    - 曾用 **`TabView` + `tabViewBottomAccessory`**；附件与 Tab **两行**叠放，改回 **单行 `safeAreaInset` + `IOSCapsuleTabBar`**。
 
+### iOS：生活 Tab 全屏底与顶栏分段（页面原则，必守）
+
+适用于根级仍为系统 **`TabView`** + 液态玻璃底栏时的 **生活页内壳**（[`IOSLifeContainerView`](../BolaBola%20iOS/Features/Life/IOSLifeContainerView.swift)）。违反时易在 **系统底栏上方** 多出一条 **模糊带 / 假安全区**，看起来像「bar 下面还有一层」。
+
+| 原则 | 做法 |
+|------|------|
+| **全屏铺底** | 生活页背景层（分组灰 + 顶渐变 + 呼吸球）使用 **`ignoresSafeArea(edges: [.top, .bottom])`**，与页面视觉一致，顶底连续。 |
+| **「生活 / 时光」分段与横滑** | **不要**内层 **`TabView` + `.page`**，**不要** **`UIPageViewController`** 桥接（易叠安全区）。横滑用 **横向 `ScrollView` + `scrollTargetBehavior(.paging)` + `scrollPosition(id:)`**（`containerRelativeFrame` 两页），与 [`IOSLifeSegmentLarge`](../BolaBola%20iOS/Features/Life/IOSLifeToolbarCenter.swift) 同绑 `lifeSegment`。竖向列表 **`scrollIndicators(.hidden)`**，横向分页 **`showsIndicators: false`**。 |
+| **底球位置** | 底部氛围球 overlay 使用 **`offset(y: 200 − safeAreaInsets.bottom)`**（与 GitHub `main` 一致），勿随意叠 `scaleEffect` 与过大 `offset`。 |
+
+横滑与顶栏标题共用 `lifeSegment` / `horizontalPageID` 同步。
+
 ## 提醒：调度语义（产品/工程对齐）
 
 - **日历重复**（`UNCalendarNotificationTrigger`）：在指定 **钟点**（及可选星期）触发，例如「每天 9:00」。

@@ -63,4 +63,42 @@ enum WeatherCodeMapper {
         default: return "cloud.fill"
         }
     }
+
+    /// WMO `weather_code` → emoji（分段与 `systemImageName` 一致）。
+    static func emoji(code: Int) -> String {
+        switch code {
+        case 0: return "☀️"
+        case 1: return "🌤️"
+        case 2: return "⛅️"
+        case 3: return "☁️"
+        case 45, 48: return "🌫️"
+        case 51 ... 55: return "🌦️"
+        case 56, 57: return "🌨️"
+        case 61 ... 65: return "🌧️"
+        case 66, 67: return "🌨️"
+        case 71 ... 77: return "❄️"
+        case 80 ... 82: return "🌧️"
+        case 95 ... 99: return "⛈️"
+        default: return "☁️"
+        }
+    }
+
+    /// WMO `weather_code` → 中文短句（与 `emoji` 分段一致）。
+    static func chineseShortSummary(code: Int) -> String {
+        switch code {
+        case 0: return "晴朗"
+        case 1: return "少云"
+        case 2: return "多云"
+        case 3: return "阴"
+        case 45, 48: return "雾"
+        case 51 ... 55: return "毛毛雨"
+        case 56, 57: return "冻毛毛雨"
+        case 61 ... 65: return "雨"
+        case 66, 67: return "冻雨"
+        case 71 ... 77: return "雪"
+        case 80 ... 82: return "阵雨"
+        case 95 ... 99: return "雷暴"
+        default: return "多云"
+        }
+    }
 }

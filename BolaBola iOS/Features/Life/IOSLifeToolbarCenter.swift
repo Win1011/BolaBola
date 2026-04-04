@@ -18,17 +18,17 @@ struct IOSLifeSegmentLarge: View {
         colorScheme == .dark ? Color.white : Color.black
     }
 
-    /// 导航栏 principal 宽度有限；需在可读性与避免「…」之间折中。
-    private var titleSize: CGFloat { 22 }
+    /// 导航栏 principal 宽度有限；略小于 22pt 可为两侧按钮多留一点空间。
+    private var titleSize: CGFloat { 20 }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Button {
                 lifeSegment = .dailyLife
             } label: {
                 Text("生活")
                     .font(.system(size: titleSize, weight: lifeSegment == .dailyLife ? .bold : .semibold))
-                    .foregroundStyle(lifeSegment == .dailyLife ? selectedTitleColor : inactiveMoments)
+                    .foregroundStyle(lifeSegment == .dailyLife ? selectedTitleColor : inactiveMoments.opacity(0.62))
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
                     .layoutPriority(1)
@@ -40,7 +40,7 @@ struct IOSLifeSegmentLarge: View {
             } label: {
                 Text("时光")
                     .font(.system(size: titleSize, weight: lifeSegment == .timeMoments ? .bold : .semibold))
-                    .foregroundStyle(lifeSegment == .timeMoments ? selectedTitleColor : inactiveMoments)
+                    .foregroundStyle(lifeSegment == .timeMoments ? selectedTitleColor : inactiveMoments.opacity(0.62))
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
                     .layoutPriority(1)

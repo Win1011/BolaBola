@@ -69,12 +69,12 @@ struct LifeAccentChromePlusIcon: View {
 
 /// Apple 的 **`scrollEdgeEffectStyle`** 只作用于**子树里的 `ScrollView`** 在滚动到顶/底时的边缘（见 [scrollEdgeEffectStyle](https://developer.apple.com/documentation/swiftui/view/scrolledgeeffectstyle(_:for:))）。
 /// 根 **`IOSRootView`** 使用系统 **`TabView`** 时，底栏与切换动效由系统提供（见 [Landmarks: Building an app with Liquid Glass](https://developer.apple.com/documentation/swiftui/landmarks-building-an-app-with-liquid-glass)）；`scrollEdgeEffectStyle` 仍作用于各页内 **`ScrollView`**。
-/// 底边 **`.soft`** 与根级 `bolaRootTabScrollEdgeStyles()` 及各 Tab 主列上的本 modifier 可叠加以统一风格。
+/// 顶/底均用 **`.automatic`**，与导航栏侧滚动边缘观感一致；根级 `bolaRootTabScrollEdgeStyles()` 与各单列上的本 modifier 可叠加以统一风格。
 private struct BolaScrollEdgeLiquidGlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
             content
-                .scrollEdgeEffectStyle(.soft, for: .bottom)
+                .scrollEdgeEffectStyle(.automatic, for: .bottom)
                 .scrollEdgeEffectStyle(.automatic, for: .top)
         } else {
             content
@@ -87,7 +87,7 @@ private struct BolaRootTabScrollEdgeStylesModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
             content
-                .scrollEdgeEffectStyle(.soft, for: .bottom)
+                .scrollEdgeEffectStyle(.automatic, for: .bottom)
                 .scrollEdgeEffectStyle(.automatic, for: .top)
         } else {
             content

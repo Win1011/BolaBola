@@ -116,7 +116,7 @@
 
 1. **Apple Developer**：为 App ID 配置 **App Groups**，勾选 `group.com.gathxr.BolaBola`（与 `Shared/AppGroupConfig.swift` 中 `suiteName` 一致）。  
 2. **Xcode**：iOS 与 Watch **两个 target** → **Signing & Capabilities** → 添加 **App Groups**，勾选同一 group。  
-3. **Entitlements**：在 `BolaBola iOS/BolaBola.entitlements` 与 `BolaBola Watch App/BolaBola Watch App.entitlements` 中恢复注释块 **`RESTORE_APP_GROUP_WHEN_PAID_DEV`** 所示的 `com.apple.security.application-groups` 段落（或按 Xcode 自动写回）。  
+3. **Entitlements**：在 `Entitlements/BolaBola.entitlements`（iOS，已移出 File System Sync 目录以避免构建时与签名冲突）与 `BolaBola Watch App/BolaBola Watch App.entitlements` 中恢复注释块 **`RESTORE_APP_GROUP_WHEN_PAID_DEV`** 所示的 `com.apple.security.application-groups` 段落（或按 Xcode 自动写回）。  
 4. **代码**：全工程搜索 **`RESTORE_APP_GROUP_WHEN_PAID_DEV`**，对照 `AppGroupConfig`、`BolaSharedDefaults` 等说明复查。  
 
 **注意**：恢复后 `resolved()` 会重新指向 **共享 suite**。此前只写在 **各端 standard** 里的数据 **不会自动合并进 group**，是否需要一次性迁移或「以某一端为准」属于产品决策，需单独设计。

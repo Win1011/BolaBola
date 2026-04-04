@@ -13,6 +13,13 @@ private enum LifeAccentChromeButtonMetrics {
     static let fontSize: CGFloat = 12
 }
 
+private enum LifeRecordTileMetrics {
+    /// 生活记录卡左上角：emoji / SF Symbol 统一视觉尺寸（原 28）。
+    static let leadingIconSize: CGFloat = 36
+    /// 通用卡「内容」单行占位高度，无内容时也占位，主标题纵向对齐一致。
+    static let subtitleReservedHeight: CGFloat = 22
+}
+
 struct IOSLifeContainerView: View {
     @Binding var lifeSegment: IOSLifeSubPage
     @Binding var bubbleMode: Bool
@@ -32,12 +39,15 @@ struct IOSLifeContainerView: View {
     @State private var addKind: LifeRecordKind = .event
     @State private var newRecordTitle: String = ""
     @State private var newRecordSubtitle: String = ""
+    /// 空字符串表示使用类型默认图标；否则为所选预设或手动输入的一个 emoji。
+    @State private var newRecordIconEmoji: String = ""
 
     var body: some View {
         ZStack(alignment: .top) {
             lifePageBackground
                 .ignoresSafeArea(edges: [.top, .bottom])
 
+            /// 生活 / 时光用 `switch` 切换单列纵向 `ScrollView`：内层分页 `TabView`/横向 `ScrollView` 会破坏安全区或阻断根级 `tabBarMinimizeBehavior`，故仅保留导航栏分段切换。
             Group {
                 switch lifeSegment {
                 case .dailyLife:
@@ -57,6 +67,9 @@ struct IOSLifeContainerView: View {
             if new == .dailyLife {
                 reloadDigest()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaLifeRecordsDidReset)) { _ in
+            lifeRecords = LifeRecordListStore.load()
         }
         .sheet(isPresented: $showDigestEditor) {
             NavigationStack {
@@ -84,36 +97,55 @@ struct IOSLifeContainerView: View {
             }
         }
         .sheet(isPresented: $showAddRecordSheet) {
-            NavigationStack {
-                Form {
-                    Picker("类型", selection: $addKind) {
-                        Text("事件卡").tag(LifeRecordKind.event)
-                        Text("习惯卡").tag(LifeRecordKind.habitTodo)
-                    }
-                    TextField("标题", text: $newRecordTitle)
-                    TextField("副标题（可选）", text: $newRecordSubtitle)
+            addLifeRecordSheet
+        }
+    }
+
+    private var addLifeRecordSheet: some View {
+        NavigationStack {
+            Form {
+                Picker("类型", selection: $addKind) {
+                    Text("事件").tag(LifeRecordKind.event)
+                    Text("习惯").tag(LifeRecordKind.habitTodo)
+                    Text("美食").tag(LifeRecordKind.food)
+                    Text("出行").tag(LifeRecordKind.travel)
+                    Text("运动").tag(LifeRecordKind.fitness)
+                    Text("观影").tag(LifeRecordKind.movie)
+                    Text("购物").tag(LifeRecordKind.shopping)
                 }
-                .navigationTitle("添加卡片")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("取消") {
-                            showAddRecordSheet = false
-                            resetAddForm()
-                        }
+                .onChange(of: addKind) { _, _ in
+                    newRecordIconEmoji = ""
+                }
+                Section {
+                    LifeRecordEmojiPaletteView(kind: addKind, selection: $newRecordIconEmoji)
+                } header: {
+                    Text("图标")
+                }
+                TextField("标题", text: $newRecordTitle)
+                TextField("内容（可选）", text: $newRecordSubtitle, axis: .vertical)
+                    .lineLimit(3 ... 6)
+            }
+            .navigationTitle("添加卡片")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        showAddRecordSheet = false
+                        resetAddForm()
                     }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("添加") {
-                            let card = LifeRecordCard(
-                                kind: addKind,
-                                title: newRecordTitle.isEmpty ? (addKind == .event ? "事件" : "习惯") : newRecordTitle,
-                                subtitle: newRecordSubtitle.isEmpty ? nil : newRecordSubtitle
-                            )
-                            lifeRecords.append(card)
-                            LifeRecordListStore.save(lifeRecords)
-                            showAddRecordSheet = false
-                            resetAddForm()
-                        }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("添加") {
+                        let card = LifeRecordCard(
+                            kind: addKind,
+                            title: newRecordTitle.isEmpty ? defaultTitle(for: addKind) : newRecordTitle,
+                            subtitle: newRecordSubtitle.isEmpty ? nil : newRecordSubtitle,
+                            iconEmoji: lifeRecordFirstGrapheme(from: newRecordIconEmoji)
+                        )
+                        lifeRecords.append(card)
+                        LifeRecordListStore.save(lifeRecords)
+                        showAddRecordSheet = false
+                        resetAddForm()
                     }
                 }
             }
@@ -137,6 +169,7 @@ struct IOSLifeContainerView: View {
             .padding(.bottom, 24)
         }
         .background(Color.clear)
+        .scrollIndicators(.hidden)
         .refreshable {
             reloadDigest()
             weather.requestAndFetch()
@@ -154,6 +187,7 @@ struct IOSLifeContainerView: View {
             .padding(.bottom, 24)
         }
         .background(Color.clear)
+        .scrollIndicators(.hidden)
     }
 
     private var lifePageBackground: some View {
@@ -174,7 +208,7 @@ struct IOSLifeContainerView: View {
             LifeBreathingOrbLayer()
                 .offset(y: -255)
         }
-        // 底部氛围光球：锚在屏底；向下偏移量 200；减去底部安全区以适配不同机型。
+        // 底部氛围光球：与 GitHub `main` 一致（`offset` 200 − 底部 safeArea）。
         .overlay(alignment: .bottom) {
             GeometryReader { geo in
                 LifeBreathingOrbLayer(isBottomAccent: true)
@@ -336,6 +370,7 @@ struct IOSLifeContainerView: View {
                     addKind = .event
                     newRecordTitle = ""
                     newRecordSubtitle = ""
+                    newRecordIconEmoji = ""
                     showAddRecordSheet = true
                 } label: {
                     HStack(spacing: 5) {
@@ -365,42 +400,32 @@ struct IOSLifeContainerView: View {
             switch card.kind {
             case .weather:
                 weatherTile
-            case .event, .habitTodo:
+            default:
                 genericRecordTile(card)
             }
         }
     }
 
     private var weatherTile: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: weatherIconName)
-                    .font(.system(size: 28))
-                    .foregroundStyle(BolaTheme.accent)
+                // WeatherKit：`condition` → emoji；Open-Meteo：WMO `weather_code` → emoji。
+                Text(weatherEmoji)
+                    .font(.system(size: LifeRecordTileMetrics.leadingIconSize))
+                    .fixedSize(horizontal: true, vertical: true)
+                    .frame(minWidth: 40, minHeight: 40, alignment: .leading)
+                    .accessibilityLabel("天气状况")
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
-            Spacer(minLength: 0)
             Text("天气")
                 .font(.system(size: 19, weight: .semibold))
-            if weather.isLoading {
-                ProgressView()
-                    .scaleEffect(0.85)
-            } else if let w = weather.weather {
-                Text(String(format: "%.0f°C", w.temperatureC))
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(BolaTheme.figmaSubtleCaption)
-            } else if weather.lastError != nil {
-                Text("无法获取")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("轻点刷新")
-                    .font(.caption)
-                    .foregroundStyle(BolaTheme.figmaSubtleCaption)
-            }
+                .lineLimit(1)
+                .truncationMode(.tail)
+            weatherDetailLine
+                .frame(maxWidth: .infinity, minHeight: LifeRecordTileMetrics.subtitleReservedHeight, alignment: .leading)
         }
         .padding(14)
         .frame(maxWidth: .infinity, minHeight: 148, alignment: .leading)
@@ -417,34 +442,62 @@ struct IOSLifeContainerView: View {
         }
     }
 
-    private var weatherIconName: String {
-        guard let code = weather.weather?.weatherCode else {
-            return "sun.max.fill"
+    @ViewBuilder
+    private var weatherDetailLine: some View {
+        if weather.isLoading {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .scaleEffect(0.85)
+                Text("加载中·—")
+                    .font(.caption)
+                    .foregroundStyle(BolaTheme.figmaSubtleCaption)
+            }
+            .lineLimit(1)
+        } else if let w = weather.weather {
+            Text("\(w.conditionText)·\(String(format: "%.0f", w.temperatureC))°C")
+                .font(.caption)
+                .foregroundStyle(BolaTheme.figmaSubtleCaption)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        } else if weather.lastError != nil {
+            Text("无法获取·—")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        } else {
+            Text("轻点刷新·—")
+                .font(.caption)
+                .foregroundStyle(BolaTheme.figmaSubtleCaption)
+                .lineLimit(1)
         }
-        return WeatherCodeMapper.systemImageName(code: code)
+    }
+
+    private var weatherEmoji: String {
+        weather.weather?.emoji ?? "☀️"
     }
 
     private func genericRecordTile(_ card: LifeRecordCard) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let sub = card.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: card.kind == .event ? "star.fill" : "checklist")
-                    .font(.system(size: 28))
-                    .foregroundStyle(BolaTheme.accent)
+                lifeRecordLeadingIcon(for: card)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
-            Spacer(minLength: 0)
             Text(card.title)
                 .font(.system(size: 19, weight: .semibold))
                 .foregroundStyle(.primary)
-            if let sub = card.subtitle, !sub.isEmpty {
-                Text(sub)
-                    .font(.caption)
-                    .foregroundStyle(BolaTheme.figmaSubtleCaption)
-                    .lineLimit(2)
-            }
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Text(sub.isEmpty ? " " : sub)
+                .font(.caption)
+                .foregroundStyle(BolaTheme.figmaSubtleCaption)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .opacity(sub.isEmpty ? 0 : 1)
+                .frame(maxWidth: .infinity, minHeight: LifeRecordTileMetrics.subtitleReservedHeight, alignment: .leading)
         }
         .padding(14)
         .frame(maxWidth: .infinity, minHeight: 148, alignment: .leading)
@@ -465,6 +518,72 @@ struct IOSLifeContainerView: View {
     private func resetAddForm() {
         newRecordTitle = ""
         newRecordSubtitle = ""
+        newRecordIconEmoji = ""
+    }
+
+    private func defaultTitle(for kind: LifeRecordKind) -> String {
+        switch kind {
+        case .weather: return "天气"
+        case .event: return "事件"
+        case .habitTodo: return "习惯"
+        case .food: return "美食"
+        case .travel: return "出行"
+        case .fitness: return "运动"
+        case .movie: return "观影"
+        case .shopping: return "购物"
+        }
+    }
+
+    /// 默认事件 ⭐️、习惯 ✅；用户在表单里填的 `iconEmoji` 优先。
+    @ViewBuilder
+    private func lifeRecordLeadingIcon(for card: LifeRecordCard) -> some View {
+        let trimmed = card.iconEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if let ch = trimmed.first {
+            Text(String(ch))
+                .font(.system(size: LifeRecordTileMetrics.leadingIconSize))
+                .fixedSize(horizontal: true, vertical: true)
+                .frame(minWidth: 40, minHeight: 40, alignment: .leading)
+                .accessibilityLabel("卡片图标")
+        } else {
+            Text(lifeRecordDefaultEmoji(for: card.kind))
+                .font(.system(size: LifeRecordTileMetrics.leadingIconSize))
+                .fixedSize(horizontal: true, vertical: true)
+                .frame(minWidth: 40, minHeight: 40, alignment: .leading)
+                .accessibilityLabel(lifeRecordKindAccessibilityLabel(for: card.kind))
+        }
+    }
+
+    private func lifeRecordKindAccessibilityLabel(for kind: LifeRecordKind) -> String {
+        switch kind {
+        case .weather: return "天气"
+        case .event: return "事件"
+        case .habitTodo: return "习惯"
+        case .food: return "美食"
+        case .travel: return "出行"
+        case .fitness: return "运动"
+        case .movie: return "观影"
+        case .shopping: return "购物"
+        }
+    }
+
+    private func lifeRecordDefaultEmoji(for kind: LifeRecordKind) -> String {
+        switch kind {
+        case .event: return "⭐️"
+        case .habitTodo: return "✅"
+        case .weather: return "🌤️"
+        case .food: return "🍜"
+        case .travel: return "✈️"
+        case .fitness: return "🏃"
+        case .movie: return "🎬"
+        case .shopping: return "🛍️"
+        }
+    }
+
+    /// 保存时只取用户输入的第一个完整字素（避免误存整句）。
+    private func lifeRecordFirstGrapheme(from raw: String) -> String? {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let ch = t.first else { return nil }
+        return String(ch)
     }
 }
 
