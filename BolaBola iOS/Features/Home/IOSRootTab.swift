@@ -8,7 +8,7 @@ import Foundation
 enum IOSRootTab: Int, CaseIterable, Hashable {
     /// 主界面：模拟表盘、陪伴值与表盘配置（底栏第一项）。
     case mine = 0
-    /// 成长：游戏化与任务（底栏第二项；视图仍为 `IOSStatusView` 占位，待替换为成长页）。
+    /// 成长：游戏化与任务（底栏第二项；`IOSGrowthView`）。
     case status = 1
     /// 生活：数据、提醒、记录与时光（底栏第三项）。
     case life = 2

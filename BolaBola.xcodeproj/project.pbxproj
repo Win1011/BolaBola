@@ -13,8 +13,9 @@
 		A05C53A22F7D19000042AB26 /* BolaBola Watch WidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A05C53902F7D18FE0042AB26 /* BolaBola Watch WidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F1A1E0A22F667F99001E5A33 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F1A1E0A12F667F99001E5A33 /* GoogleService-Info.plist */; };
 		F1A1E0A32F667F99001E5A33 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F1A1E0A12F667F99001E5A33 /* GoogleService-Info.plist */; };
-		F1B1E0162F667F99001E5A41 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = F1B1E0182F667F99001E5A41 /* FirebaseAnalytics */; };
+		F1B1E0162F667F99001E5A41 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = F1B1E0182F667F99001E5A41 /* FirebaseCore */; };
 		F1C1E0212F8A01000042AB26 /* WeatherKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F1C1E0202F8A01000042AB26 /* WeatherKit.framework */; };
+		F2B2E0162F667F99001E5A41 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = F2B2E0182F667F99001E5A41 /* Lottie */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -120,7 +121,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				F1C1E0212F8A01000042AB26 /* WeatherKit.framework in Frameworks */,
-				F1B1E0162F667F99001E5A41 /* FirebaseAnalytics in Frameworks */,
+				F1B1E0162F667F99001E5A41 /* FirebaseCore in Frameworks */,
+				F2B2E0162F667F99001E5A41 /* Lottie in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -235,7 +237,8 @@
 			);
 			name = BolaBola;
 			packageProductDependencies = (
-				F1B1E0182F667F99001E5A41 /* FirebaseAnalytics */,
+				F1B1E0182F667F99001E5A41 /* FirebaseCore */,
+				F2B2E0182F667F99001E5A41 /* Lottie */,
 			);
 			productName = BolaBola;
 			productReference = 2F55E26A2F667F99001E5A32 /* BolaBola.app */;
@@ -295,6 +298,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				F1B1E0122F667F99001E5A41 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				F2B2E0122F667F99001E5A41 /* XCRemoteSwiftPackageReference "lottie-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2F55E24E2F667F99001E5A32 /* Products */;
@@ -769,17 +773,30 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
 			requirement = {
-				kind = exactVersion;
-				version = 12.11.0;
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.11.0;
+			};
+		};
+		F2B2E0122F667F99001E5A41 /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.5.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		F1B1E0182F667F99001E5A41 /* FirebaseAnalytics */ = {
+		F1B1E0182F667F99001E5A41 /* FirebaseCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F1B1E0122F667F99001E5A41 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseAnalytics;
+			productName = FirebaseCore;
+		};
+		F2B2E0182F667F99001E5A41 /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F2B2E0122F667F99001E5A41 /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -29,6 +29,7 @@ struct IOSLifeContainerView: View {
 
     @StateObject private var rhythm = IOSRhythmHRVModel()
     @StateObject private var weather = IOSWeatherLocationModel()
+    @StateObject private var healthHabits = IOSHealthHabitAnalysisModel()
 
     @State private var lifeRecords: [LifeRecordCard] = LifeRecordListStore.load()
     @State private var digestText: String = ""
@@ -62,6 +63,9 @@ struct IOSLifeContainerView: View {
             reloadDigest()
             weather.requestAndFetch()
             Task { await rhythm.refresh() }
+        }
+        .task {
+            await healthHabits.refresh()
         }
         .onChange(of: lifeSegment) { _, new in
             if new == .dailyLife {
@@ -163,6 +167,7 @@ struct IOSLifeContainerView: View {
                 bolaTodayFigma
                 remindersSection
                 lifeRecordsFigma
+                IOSHealthHabitAnalysisSection(model: healthHabits)
             }
             .padding(.horizontal, BolaTheme.paddingHorizontal)
             .padding(.top, 14)
@@ -174,6 +179,7 @@ struct IOSLifeContainerView: View {
             reloadDigest()
             weather.requestAndFetch()
             await rhythm.refresh()
+            await healthHabits.refresh()
         }
     }
 
