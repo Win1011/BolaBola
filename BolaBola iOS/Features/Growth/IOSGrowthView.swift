@@ -4,6 +4,8 @@
 //
 
 import SwiftUI
+import UIKit
+import Lottie
 
 struct IOSGrowthView: View {
     @Environment(\.scenePhase) private var scenePhase
@@ -30,7 +32,7 @@ struct IOSGrowthView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    /// 整块白色等级条：单独上移，更贴近导航栏与屏幕顶部（与用户所称「等级 section」一致）。
+                    /// 岛图 `offset` 会向上叠到等级条区域：等级条需更高 zIndex，避免被图挡在下面。
                     GrowthLevelValuePill(
                         level: level,
                         progressCurrent: levelProgressCurrent,
@@ -38,16 +40,16 @@ struct IOSGrowthView: View {
                         onInfoTap: { showLevelInfo = true }
                     )
                     .padding(.top, -6)
+                    .zIndex(2)
 
                     Spacer()
-                        .frame(height: 16)
+                        .frame(height: 5)
 
                     GrowthHeroSection()
-
-                    Spacer()
-                        .frame(height: 10)
+                        .zIndex(0)
 
                     GrowthDailyTasksSection(viewModel: dailyTasksVM, topRow: topRowDefinitions, bottomRow: bottomRowDefinitions)
+                        .padding(.top, -14)
 
                     Spacer()
                         .frame(height: 36)
@@ -126,11 +128,11 @@ private struct GrowthLevelValuePill: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 5) {
                     Text("等级值")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(BolaTheme.figmaMutedBody)
                     Button(action: onInfoTap) {
                         Image(systemName: "info.circle")
-                            .font(.system(size: 13, weight: .regular))
+                            .font(.system(size: 14, weight: .regular))
                             .foregroundStyle(BolaTheme.figmaMutedBody)
                     }
                     .buttonStyle(.plain)
@@ -243,12 +245,12 @@ private struct GrowthHeroSection: View {
                 .scaledToFit()
                 .frame(maxWidth: 288)
                 .frame(maxWidth: .infinity)
-                .offset(x: 12, y: -30)
+                .offset(x: 12, y: -35)
                 .accessibilityLabel("Bola 与树岛")
 
             GrowthSpeechBubble(text: "快来翻翻看今天的三个随机任务！")
                 .frame(maxWidth: .infinity)
-                .padding(.top, 2)
+                .padding(.top, 10)
                 .zIndex(1)
         }
     }
@@ -263,21 +265,21 @@ private struct GrowthSpeechBubble: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 14)
+                .padding(.horizontal, 15)
+                .padding(.vertical, 11)
                 .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    RoundedRectangle(cornerRadius: 17, style: .continuous)
                         .fill(BolaTheme.surfaceBubble)
-                        .shadow(color: .black.opacity(0.07), radius: 10, x: 0, y: 3)
+                        .shadow(color: .black.opacity(0.07), radius: 8, x: 0, y: 2)
                 )
 
             BubbleTail()
                 .fill(BolaTheme.surfaceBubble)
-                .frame(width: 18, height: 10)
-                .offset(y: 5)
-                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                .frame(width: 16, height: 9)
+                .offset(y: 4)
+                .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 2)
         }
-        .padding(.bottom, 6)
+        .padding(.bottom, 2)
     }
 }
 
@@ -303,19 +305,26 @@ private struct GrowthDailyTasksSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color(red: 0.85, green: 0.65, blue: 0.2))
-                Text("每日任务")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.primary)
+            HStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    LottieView(animation: LottieAnimation.named("GrowthDailyTasksStar"))
+                        .configure { $0.contentMode = .scaleAspectFill }
+                        .playing(loopMode: .loop)
+                        .resizable()
+                        .frame(width: 34, height: 34)
+                        .clipped()
+                        .accessibilityHidden(true)
+                    Text("每日任务")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .padding(.leading, -3)
+                }
                 Spacer(minLength: 0)
                 Button {
                     viewModel.debugRefreshDailyTasks()
                 } label: {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 17, weight: .medium))
                         .foregroundStyle(BolaTheme.figmaMutedBody)
                 }
                 .buttonStyle(.plain)
@@ -714,13 +723,27 @@ private struct GrowthRewardGallerySection: View {
 
     var body: some View {
         GrowthGroupedSection {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("解锁更多奖励")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.primary)
-                Text("长按图标拖拽到表盘即可自定义位置")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(BolaTheme.figmaMutedBody)
+            /// 外层 `spacing`：主标题区（含副标题）与下方格子之间的距离。
+            /// 内层 `spacing`：主标题行与副标题文案之间的距离。
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .center, spacing: 3) {
+                        Text("完成任务解锁更多奖励")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.primary)
+                        LottieView(animation: LottieAnimation.named("GrowthRewardGiftPremium"))
+                            .configure { $0.contentMode = .scaleAspectFill }
+                            .playing(loopMode: .loop)
+                            .resizable()
+                            .frame(width: 28, height: 28)
+                            .clipped()
+                            .offset(y: -3)
+                            .accessibilityHidden(true)
+                    }
+                    Text("加油完成任务，解锁更多奖励吧！")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(BolaTheme.figmaMutedBody.opacity(0.68))
+                }
 
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(cells.indices, id: \.self) { i in
@@ -758,9 +781,13 @@ private struct GrowthRewardCell: View {
     NavigationStack {
         IOSGrowthView()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("成长")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("成长")
+                        .font(.system(size: 20, weight: .semibold))
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     IOSNavigationGlassIconButton(
                         systemName: "gearshape.fill",

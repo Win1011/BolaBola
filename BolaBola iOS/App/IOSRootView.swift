@@ -44,9 +44,9 @@ struct IOSRootView: View {
         NavigationStack {
             IOSGrowthView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .navigationTitle("成长")
+                .navigationTitle("")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { settingsOnlyToolbar }
+                .toolbar { growthNavigationToolbar }
         }
         .tint(Color(UIColor.label))
     }
@@ -215,6 +215,18 @@ struct IOSRootView: View {
 
     @ToolbarContentBuilder
     private var settingsOnlyToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            settingsButton
+        }
+    }
+
+    /// 成长 Tab：导航栏标题略大于系统默认 inline 标题。
+    @ToolbarContentBuilder
+    private var growthNavigationToolbar: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            Text("成长")
+                .font(.system(size: 20, weight: .semibold))
+        }
         ToolbarItem(placement: .topBarTrailing) {
             settingsButton
         }
