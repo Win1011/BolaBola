@@ -71,6 +71,14 @@ final class PetViewModel: ObservableObject {
     /// 吃东西状态机：waiting → eating → finished
     private(set) var isInEatingState: Bool = false
 
+    /// 夜间睡眠状态机：nightSleepWait → fallAsleep → sleepLoop（循环到 8:30am 或被点醒）
+    private(set) var isInNightSleepState: Bool = false
+    /// 夜间睡眠：是否已进入 sleepLoop 循环（true 后点击视为叫醒）
+    private var isNightSleepAsleep: Bool = false
+    /// 早晨自动醒来时刻（8:30am）小时
+    private let nightSleepWakeHour: Int = 8
+    private let nightSleepWakeMinute: Int = 30
+
     /// 当前气泡文案（空则隐藏）；新文案会替换上一条并重新计时
     @Published var dialogueLine: String = ""
     private var dialogueDismissWorkItem: DispatchWorkItem?
@@ -417,6 +425,12 @@ final class PetViewModel: ObservableObject {
             return PetAnimations.happy // 占位，后面改成对应动画
         case .sleep:
             return PetAnimations.sleepOnce
+        case .nightSleepWait:
+            return PetAnimations.nightSleepWait
+        case .fallAsleep:
+            return PetAnimations.fallAsleep
+        case .sleepLoop:
+            return PetAnimations.sleepLoop
         case .special:
             return PetAnimations.happy // 占位
         }
@@ -430,8 +444,19 @@ final class PetViewModel: ObservableObject {
             let next = currentFrameIndex + 1
             if next >= frameCount {
                 if isLoop {
+                    // 夜间 sleeploop：每次循环结束检查是否应该自动醒来
+                    if isInNightSleepState && isNightSleepAsleep && currentEmotion == .sleepLoop {
+                        if shouldAutoWakeFromNightSleep() {
+                            wakeUpFromNightSleep()
+                            return
+                        }
+                    }
                     currentFrameIndex = 0
                 } else {
+                    if isInNightSleepState && currentEmotion == .fallAsleep {
+                        finishFallAsleepAnimation()
+                        return
+                    }
                     // 非循环动画播完
                     if surpriseJumpTwoQueued {
                         // 惊喜分两段：surprisedOne/Two 播完（2轮）后，额外再播一次 jump1Once / jumpTwoOnce（随机）。
@@ -564,8 +589,7 @@ final class PetViewModel: ObservableObject {
             return
         }
         if isInNightSleepWindow(date), Double.random(in: 0...1) < sleepNightProbability {
-            currentEmotion = .sleep
-            showDialogue(BolaDialogueLines.nightSleepyInsertLine(), duration: 4.5)
+            enterNightSleepWaitState()
             return
         }
         if (25...80).contains(v), Double.random(in: 0...1) < shakeMidTierProbability {
@@ -687,6 +711,76 @@ final class PetViewModel: ObservableObject {
         currentFrameIndex = 0
     }
 
+    // MARK: - 夜间睡眠
+
+    /// 进入夜间睡眠等待：循环 sleepy + 固定台词
+    private func enterNightSleepWaitState() {
+        isInNightSleepState = true
+        isNightSleepAsleep = false
+        isTapInteractionAnimating = true
+        currentEmotion = .nightSleepWait
+        currentFrameIndex = 0
+        showDialogue("已经很晚了，好想睡觉", duration: 120)
+    }
+
+    /// 夜间睡眠等待中被点击：播一轮 fallasleep + 过渡台词
+    private func handleNightSleepWaitTap() {
+        showDialogue("那我睡啦，你也早点睡吧～", duration: 6)
+        currentEmotion = .fallAsleep
+        currentFrameIndex = 0
+    }
+
+    /// fallasleep 播完：进入 sleeploop 循环
+    private func finishFallAsleepAnimation() {
+        isNightSleepAsleep = true
+        currentEmotion = .sleepLoop
+        currentFrameIndex = 0
+    }
+
+    /// 叫醒：无论点击叫醒还是清晨自动醒，均回到默认展示
+    private func wakeUpFromNightSleep() {
+        isInNightSleepState = false
+        isNightSleepAsleep = false
+        isTapInteractionAnimating = false
+        dialogueDismissWorkItem?.cancel()
+        dialogueLine = ""
+        selectDefaultEmotion()
+        applyDefaultEmotionDisplay()
+        currentFrameIndex = 0
+    }
+
+    /// 调试：强制进入夜间睡眠等待状态（模拟到达睡觉时间）
+    func debugEnterNightSleep() {
+        // 清理其它插入/交互，避免冲突
+        isInEatingState = false
+        tapChainReturnsToRandomIdle = false
+        shouldPlayTapJumpFollowUp = false
+        enterNightSleepWaitState()
+    }
+
+    /// 调试：模拟到达次日 8:30（若正在睡觉则立即醒来）
+    func debugSimulateMorningWake() {
+        if isInNightSleepState {
+            wakeUpFromNightSleep()
+        } else {
+            selectDefaultEmotion()
+            applyDefaultEmotionDisplay()
+            currentFrameIndex = 0
+        }
+    }
+
+    /// 是否已到清晨自动醒来时刻（>= 8:30am 且 < 23:30）
+    private func shouldAutoWakeFromNightSleep(_ date: Date = Date()) -> Bool {
+        let c = Calendar.current
+        let h = c.component(.hour, from: date)
+        let m = c.component(.minute, from: date)
+        // 清晨到入夜前：[08:30, 23:30)
+        if h > nightSleepWakeHour && h < 23 { return true }
+        if h == nightSleepWakeHour && m >= nightSleepWakeMinute { return true }
+        if h == 23 && m < 30 { return true }
+        return false
+    }
+
     func refreshLatestHeartRateForDisplay() {
         HealthKitManager.shared.fetchLatestHeartRateForDisplay { [weak self] bpm in
             Task { @MainActor in
@@ -706,6 +800,19 @@ final class PetViewModel: ObservableObject {
     }
 
     func cycleEmotionOnTap() {
+        // 夜间睡眠状态：等待中点击 → 入睡；已睡着点击 → 叫醒
+        if isInNightSleepState {
+            if currentEmotion == .nightSleepWait {
+                handleNightSleepWaitTap()
+                return
+            }
+            if isNightSleepAsleep && (currentEmotion == .sleepLoop || currentEmotion == .fallAsleep) {
+                wakeUpFromNightSleep()
+                return
+            }
+            return
+        }
+
         // 吃东西等待中：点击触发吃东西动画
         if isInEatingState && currentEmotion == .eatingWait {
             handleEatingTap()

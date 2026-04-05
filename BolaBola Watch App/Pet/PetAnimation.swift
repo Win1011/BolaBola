@@ -88,6 +88,12 @@ enum PetEmotion {
     case angry
     case sleep
     case special
+    /// 夜间睡眠：等待入睡（循环 sleepy）
+    case nightSleepWait
+    /// 夜间睡眠：播一轮 fallasleep
+    case fallAsleep
+    /// 夜间睡眠：循环 sleeploop 直到早上被叫醒
+    case sleepLoop
 }
 
 enum PetAnimationSource {
@@ -154,6 +160,9 @@ enum AnimationScale {
     static let eatingOnce: CGFloat = 1.5
     static let sleepy: CGFloat = 1.5
     static let sleep: CGFloat = 1.5
+    static let nightSleepWait: CGFloat = 1.5
+    static let fallAsleep: CGFloat = 1.5
+    static let sleepLoop: CGFloat = 1.5
 }
 
 // MARK: - 动画帧限制（用于控制 watchOS 内存）
@@ -816,6 +825,39 @@ enum PetAnimations {
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleepy", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
             fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: false
+        )
+    )
+
+    /// 夜间睡眠等待：循环 sleepy 资源，等待用户点击触发入睡
+    static let nightSleepWait: PetAnimation = PetAnimation(
+        emotion: .nightSleepWait,
+        displayScale: AnimationScale.nightSleepWait,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleepy", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            isLoop: true
+        )
+    )
+
+    /// 夜间睡眠：入睡过渡（fallasleep 播一轮）
+    static let fallAsleep: PetAnimation = PetAnimation(
+        emotion: .fallAsleep,
+        displayScale: AnimationScale.fallAsleep,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "fallasleep", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            isLoop: false
+        )
+    )
+
+    /// 夜间睡眠：sleeploop 循环到早晨被叫醒
+    static let sleepLoop: PetAnimation = PetAnimation(
+        emotion: .sleepLoop,
+        displayScale: AnimationScale.sleepLoop,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleeploop", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            isLoop: true
         )
     )
 }

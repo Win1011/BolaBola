@@ -284,6 +284,36 @@ struct WatchPanelSheetView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.mini)
 
+                    Button {
+                        viewModel.debugEnterNightSleep()
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Image(systemName: "moon.zzz.fill")
+                                .font(.caption2)
+                            Text("DebugSleepTime")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 32)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+
+                    Button {
+                        viewModel.debugSimulateMorningWake()
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Image(systemName: "sun.max.fill")
+                                .font(.caption2)
+                            Text("DebugWakeUp")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 32)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         panelCard(title: "心率", subtitle: "\(viewModel.latestHeartRateText) BPM") {
                             viewModel.refreshLatestHeartRateForDisplay()
