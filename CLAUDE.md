@@ -8,7 +8,7 @@ BolaBola is a digital pet companion app — an iOS app paired with a watchOS app
 
 **Targets:** BolaBola (iOS 17+), BolaBola Watch App (watchOS 10+)  
 **Language:** Swift 6, SwiftUI  
-**Dependencies:** Managed via Swift Package Manager (Firebase Analytics only; no other external frameworks)
+**Dependencies:** Managed via Swift Package Manager (**FirebaseCore** only, for `FirebaseApp.configure()`; no other external frameworks)
 
 ## Build Commands
 
@@ -70,7 +70,7 @@ All business logic lives in `Shared/` and is compiled into both targets:
 
 **WatchConnectivity timing:** `updateApplicationContext` is used for companion value (latest-wins, no queue). Chat turns use `transferUserInfo` (FIFO, survives app suspension). LLM config is pulled by the watch on demand via a `requestSync: "llmKeychain"` message — the push path is unreliable.
 
-**Firebase on watchOS:** Firebase Analytics SDK is binary-incompatible with watchOS. Firebase is iOS-only (`IOSAppDelegate`). Do not add Firebase imports to Watch or Shared targets.
+**Firebase on watchOS:** Firebase iOS SDK is binary-incompatible with watchOS. Firebase is iOS-only (`IOSAppDelegate`). Do not add Firebase imports to Watch or Shared targets.
 
 **Swift 6 concurrency:** `LLMClient`, `LLMModels`, and sync payloads are marked `Sendable`. When adding async code that crosses actor boundaries, maintain `Sendable` conformance and avoid data races.
 

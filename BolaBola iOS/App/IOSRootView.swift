@@ -42,7 +42,7 @@ struct IOSRootView: View {
 
     private var statusTabRoot: some View {
         NavigationStack {
-            IOSStatusView()
+            IOSGrowthView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .navigationTitle("成长")
                 .navigationBarTitleDisplayMode(.inline)

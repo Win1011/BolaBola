@@ -5,6 +5,11 @@
 
 import Foundation
 
+public extension Notification.Name {
+    /// 称号选择已持久化（与主界面成长页联动刷新）。
+    static let bolaTitleSelectionDidChange = Notification.Name("bolaTitleSelectionDidChange")
+}
+
 public enum BolaTitlePhraseBank: Sendable {
     public static let groupA: [String] = [
         "路过的", "认真的", "熬夜的", "爱喝水的", "正在减肥的", "随缘的", "元气满满的", "低调的"
@@ -50,6 +55,7 @@ public enum BolaTitleSelectionStore {
         let d = BolaSharedDefaults.resolved()
         if let data = try? JSONEncoder().encode(selection) {
             d.set(data, forKey: defaultsKey)
+            NotificationCenter.default.post(name: .bolaTitleSelectionDidChange, object: nil)
         }
     }
 
