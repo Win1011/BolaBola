@@ -68,6 +68,16 @@ enum GrowthRandomCardFlipStore {
 
 // MARK: - 单张卡配置（换图、换文案只改数据）
 
+/// 卡面上半区底色策略（与 `GrowthPortraitTaskCard` 对应）。
+enum GrowthDailyTaskCardSurfaceKind: Equatable {
+    /// 与随机卡背面一致的主色渐变（如散步）
+    case accentGradient
+    /// 亮黄 + 纹理（如聊天）
+    case yellowPattern
+    /// 主色偏弱渐变，与亮黄区分（如随机任务正面）
+    case accentMuted
+}
+
 struct GrowthDailyTaskCardDefinition: Identifiable, Equatable {
     let id: String
     var tag: String
@@ -76,12 +86,14 @@ struct GrowthDailyTaskCardDefinition: Identifiable, Equatable {
     var detailLine1: String
     var detailLine2: String
     var isFlippable: Bool
+    var surfaceKind: GrowthDailyTaskCardSurfaceKind
 }
 
 // MARK: - ViewModel（实时进度）
 
 @MainActor
 final class GrowthDailyTasksViewModel: ObservableObject {
+    static let shared = GrowthDailyTasksViewModel()
     @Published private(set) var progressByTaskId: [String: Double]
     /// 底部三张随机卡：本周期内用户已翻开过的任务 id（翻面后持久为正面至下次 8:00 周期）。
     @Published private(set) var revealedRandomTaskIds: Set<String>
@@ -124,6 +136,10 @@ final class GrowthDailyTasksViewModel: ObservableObject {
         min(1, max(0, progressByTaskId[id] ?? 0))
     }
 
+    var completedCount: Int {
+        definitions.filter { progress(for: $0.id) >= 1.0 }.count
+    }
+
     func updateProgress(taskId: String, value: Double) {
         progressByTaskId[taskId] = min(1, max(0, value))
     }
@@ -132,9 +148,27 @@ final class GrowthDailyTasksViewModel: ObservableObject {
     func debugRefreshDailyTasks() {
         GrowthRandomCardFlipStore.debugClearRandomRevealed()
         revealedRandomTaskIds = GrowthRandomCardFlipStore.syncPeriodAndLoadRevealedIds()
+        GrowthTaskCompletionAnimStore.debugClearSeen()
         var next = progressByTaskId
         for d in definitions {
             next[d.id] = Self.placeholderProgress(for: d.id)
+        }
+        progressByTaskId = next
+    }
+
+    /// 调试：完成下一个未完成的任务（按 definitions 顺序）。
+    func debugCompleteNextTask() {
+        guard let task = definitions.first(where: { progress(for: $0.id) < 1.0 }) else { return }
+        var next = progressByTaskId
+        next[task.id] = 1.0
+        progressByTaskId = next
+    }
+
+    /// 调试：一键将所有任务进度设为 1.0（已完成）。
+    func debugCompleteAllTasks() {
+        var next = progressByTaskId
+        for d in definitions {
+            next[d.id] = 1.0
         }
         progressByTaskId = next
     }
@@ -146,6 +180,39 @@ final class GrowthDailyTasksViewModel: ObservableObject {
         case "random_a", "random_b", "random_c": return 0
         default: return 0
         }
+    }
+}
+
+// MARK: - 完成动画播放记录（首次看到完成动画后记入持久化，之后只展示静帧）
+
+enum GrowthTaskCompletionAnimStore {
+    private static let seenKey = "growth_task_completion_anim_seen_ids"
+    private static var defaults: UserDefaults { BolaSharedDefaults.resolved() }
+
+    static func hasSeen(taskId: String) -> Bool {
+        loadSeenIds().contains(taskId)
+    }
+
+    static func markSeen(taskId: String) {
+        var ids = loadSeenIds()
+        guard !ids.contains(taskId) else { return }
+        ids.insert(taskId)
+        if let data = try? JSONEncoder().encode(Array(ids).sorted()) {
+            defaults.set(data, forKey: seenKey)
+        }
+    }
+
+    /// 调试：清空「已看过完成动画」记录，便于反复测首次播放。
+    static func debugClearSeen() {
+        defaults.removeObject(forKey: seenKey)
+    }
+
+    private static func loadSeenIds() -> Set<String> {
+        guard let data = defaults.data(forKey: seenKey),
+              let arr = try? JSONDecoder().decode([String].self, from: data) else {
+            return []
+        }
+        return Set(arr)
     }
 }
 
@@ -161,7 +228,8 @@ enum GrowthDailyTaskModels {
             placeholderSystemImage: "figure.walk",
             detailLine1: "和我一起散步",
             detailLine2: "10min / 5000 步",
-            isFlippable: false
+            isFlippable: false,
+            surfaceKind: .accentGradient
         ),
         GrowthDailyTaskCardDefinition(
             id: "chat",
@@ -170,7 +238,8 @@ enum GrowthDailyTaskModels {
             placeholderSystemImage: "bubble.left.and.bubble.right.fill",
             detailLine1: "和我聊聊",
             detailLine2: "今天发生什么了",
-            isFlippable: false
+            isFlippable: false,
+            surfaceKind: .yellowPattern
         ),
         GrowthDailyTaskCardDefinition(
             id: "random_a",
@@ -179,7 +248,8 @@ enum GrowthDailyTaskModels {
             placeholderSystemImage: "sparkles",
             detailLine1: "随机任务",
             detailLine2: "轻点翻面查看",
-            isFlippable: true
+            isFlippable: true,
+            surfaceKind: .accentMuted
         ),
         GrowthDailyTaskCardDefinition(
             id: "random_b",
@@ -188,7 +258,8 @@ enum GrowthDailyTaskModels {
             placeholderSystemImage: "sparkles",
             detailLine1: "随机任务",
             detailLine2: "轻点翻面查看",
-            isFlippable: true
+            isFlippable: true,
+            surfaceKind: .accentMuted
         ),
         GrowthDailyTaskCardDefinition(
             id: "random_c",
@@ -197,7 +268,8 @@ enum GrowthDailyTaskModels {
             placeholderSystemImage: "sparkles",
             detailLine1: "随机任务",
             detailLine2: "轻点翻面查看",
-            isFlippable: true
+            isFlippable: true,
+            surfaceKind: .accentMuted
         )
     ]
 }

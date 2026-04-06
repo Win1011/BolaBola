@@ -65,6 +65,19 @@ struct IOSSettingsListView: View {
             }
 
             Section {
+                Button("一键完成所有每日任务") {
+                    GrowthDailyTasksViewModel.shared.debugCompleteAllTasks()
+                }
+                Button("重置每日任务进度", role: .destructive) {
+                    GrowthDailyTasksViewModel.shared.debugRefreshDailyTasks()
+                }
+            } header: {
+                Text("Debug · 成长")
+            } footer: {
+                Text("仅供调试使用，不影响真实数据。")
+            }
+
+            Section {
                 HStack {
                     Text("应用名称")
                     Spacer()

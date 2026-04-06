@@ -9,7 +9,7 @@ import Lottie
 
 struct IOSGrowthView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var dailyTasksVM = GrowthDailyTasksViewModel()
+    @StateObject private var dailyTasksVM = GrowthDailyTasksViewModel.shared
     private let level: Int = 1
     /// 当前等级内已获得的进度点（占位，后续可接真实成长数值）。
     private let levelProgressCurrent: Int = 7
@@ -48,8 +48,22 @@ struct IOSGrowthView: View {
                     GrowthHeroSection()
                         .zIndex(0)
 
-                    GrowthDailyTasksSection(viewModel: dailyTasksVM, topRow: topRowDefinitions, bottomRow: bottomRowDefinitions)
-                        .padding(.top, -14)
+                    GrowthGroupedSection {
+                        ZStack(alignment: .topTrailing) {
+                            Image("backgroundstar")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 100)
+                                .opacity(0.10)
+                                .offset(x: 27, y: -1)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                            GrowthDailyTasksSection(viewModel: dailyTasksVM, topRow: topRowDefinitions, bottomRow: bottomRowDefinitions)
+                                .padding(.bottom, 12)
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous))
+                    .padding(.top, -14)
 
                     Spacer()
                         .frame(height: 36)
@@ -111,33 +125,24 @@ private struct GrowthLevelValuePill: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
-            HStack {
-                Spacer(minLength: 0)
-                GrowthLVStrokedLabel(level: level, fontSize: 22)
-                Spacer(minLength: 0)
+            Button(action: onInfoTap) {
+                HStack {
+                    Spacer(minLength: 0)
+                    GrowthLVStrokedLabel(level: level, fontSize: 22)
+                    Spacer(minLength: 0)
+                }
+                .frame(width: 66, alignment: .center)
+                .padding(.leading, 12)
+                .padding(.trailing, 4)
+                .padding(.vertical, 10)
             }
-            .frame(width: 66, alignment: .center)
-            .padding(.leading, 12)
-            .padding(.trailing, 4)
-            .padding(.vertical, 10)
+            .buttonStyle(.plain)
 
             Rectangle()
                 .fill(Color(uiColor: .separator).opacity(0.35))
                 .frame(width: 1, height: 34)
 
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 5) {
-                    Text("等级值")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(BolaTheme.figmaMutedBody)
-                    Button(action: onInfoTap) {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(BolaTheme.figmaMutedBody)
-                    }
-                    .buttonStyle(.plain)
-                }
-
                 GeometryReader { geo in
                     let w = geo.size.width
                     let h: CGFloat = 11
@@ -247,6 +252,22 @@ private struct GrowthHeroSection: View {
                 .frame(maxWidth: .infinity)
                 .offset(x: 12, y: -35)
                 .accessibilityLabel("Bola 与树岛")
+                .background(alignment: .center) {
+                    // 渐变球：透明→主题色，不参与布局，仅视觉层
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.clear, BolaTheme.accent.opacity(0.65)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 440, height: 440)
+                        .offset(y: -60)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .hidden()
+                }
 
             GrowthSpeechBubble(text: "快来翻翻看今天的三个随机任务！")
                 .frame(maxWidth: .infinity)
@@ -294,7 +315,6 @@ private struct BubbleTail: Shape {
     }
 }
 
-
 // MARK: - 每日任务
 
 private struct GrowthDailyTasksSection: View {
@@ -305,30 +325,39 @@ private struct GrowthDailyTasksSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 0) {
-                HStack(spacing: 0) {
-                    LottieView(animation: LottieAnimation.named("GrowthDailyTasksStar"))
-                        .configure { $0.contentMode = .scaleAspectFill }
-                        .playing(loopMode: .loop)
-                        .resizable()
-                        .frame(width: 34, height: 34)
-                        .clipped()
-                        .accessibilityHidden(true)
-                    Text("每日任务")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .padding(.leading, -3)
+            HStack(alignment: .center, spacing: 0) {
+                // 左：标题 + 副标题（固定不截断）
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 2) {
+                        Text("每日任务")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .fixedSize()
+                        LottieView(animation: LottieAnimation.named("GrowthDailyTasksStar"))
+                            .configure { $0.contentMode = .scaleAspectFill }
+                            .playing(loopMode: .loop)
+                            .resizable()
+                            .frame(width: 28, height: 28)
+                            .clipped()
+                            .scaleEffect(x: -1, y: 1)
+                            .offset(x: -6, y: -6)
+                            .accessibilityHidden(true)
+                    }
+                    Text("今日 \(viewModel.completedCount)/\(viewModel.definitions.count) 完成")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(BolaTheme.figmaMutedBody.opacity(0.68))
+                        .fixedSize()
                 }
-                Spacer(minLength: 0)
-                Button {
-                    viewModel.debugRefreshDailyTasks()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(BolaTheme.figmaMutedBody)
+
+                Spacer().frame(width: 12)
+
+                // 右：五个盖章
+                HStack(spacing: 4) {
+                    ForEach(0 ..< viewModel.definitions.count, id: \.self) { i in
+                        GrowthTaskStamp(completed: i < viewModel.completedCount)
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("刷新每日任务")
+                .padding(.leading, -9)
             }
 
             GrowthDailyTaskCardsGrid(
@@ -419,7 +448,7 @@ private struct GrowthDailyTaskFiveCardLayout: Layout {
     }
 }
 
-// MARK: - 3:4 卡牌模版（亮黄 + 纹理铺满全卡；下半叠透明白 + 文案与完成度）
+// MARK: - 3:4 卡牌模版（分类底色 + 纹理；下半叠透明白 + 文案与完成度）
 
 private enum GrowthTaskCardPalette {
     /// 卡面底色（与纹理一起铺满整张卡）
@@ -428,12 +457,33 @@ private enum GrowthTaskCardPalette {
     static let bottomFill = Color.white.opacity(0.7)
     /// 上半区高度占比（约 6 : 4）
     static let topHeightFraction: CGFloat = 0.58
+
+    /// 与卡背、散步卡正面一致的主色渐变。
+    static let accentCardGradient = LinearGradient(
+        colors: [
+            BolaTheme.accent.opacity(0.88),
+            BolaTheme.accent.opacity(0.65)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    /// 随机任务正面：偏弱主色，与亮黄卡区分。
+    static let accentMutedCardGradient = LinearGradient(
+        colors: [
+            BolaTheme.accent.opacity(0.52),
+            BolaTheme.accent.opacity(0.34)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
 }
 
 private struct GrowthTaskCardYellowPatternOverlay: View {
     /// 单张纹理铺满卡片后旋转、略缩小；不用 `.tile`，否则整张图被重复平铺会像图案叠在一起。
     private let rotationDegrees: CGFloat = -40
     private let patternScale: CGFloat = 0.65
+    var patternOpacity: CGFloat = 0.26
 
     var body: some View {
         GeometryReader { geo in
@@ -450,7 +500,7 @@ private struct GrowthTaskCardYellowPatternOverlay: View {
         }
         .clipped()
         .allowsHitTesting(false)
-        .opacity(0.26)
+        .opacity(patternOpacity)
     }
 }
 
@@ -463,42 +513,61 @@ private struct GrowthPortraitTaskCard: View {
         GeometryReader { geo in
             let h = geo.size.height
             let topH = h * GrowthTaskCardPalette.topHeightFraction
-            ZStack {
-                // 黄 + 纹理铺满整张卡；下半再叠半透明白，纹理会从底下透上来。
-                ZStack {
-                    GrowthTaskCardPalette.topYellow
-                    GrowthTaskCardYellowPatternOverlay()
-                }
-                .allowsHitTesting(false)
+            ZStack(alignment: .topTrailing) {
+                cardFullBleedBackground()
+                    .allowsHitTesting(false)
 
                 VStack(spacing: 0) {
                     cardTopContent(height: topH)
                     cardBottomHalf(height: h - topH)
                 }
+
+                /// 与卡身同一次 `clipShape`；贴齐卡片上缘与右缘（无额外 inset）。
+                growthTagChip()
+                    .zIndex(1)
             }
         }
         .aspectRatio(GrowthDailyTaskModels.cardAspectRatio, contentMode: .fit)
-        .overlay(alignment: .topTrailing) {
-            growthTagChip()
-        }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
     }
 
+    @ViewBuilder
+    private func cardFullBleedBackground() -> some View {
+        switch definition.surfaceKind {
+        case .accentGradient:
+            ZStack {
+                Rectangle().fill(GrowthTaskCardPalette.accentCardGradient)
+                GrowthTaskCardYellowPatternOverlay(patternOpacity: 0.14)
+            }
+        case .yellowPattern:
+            ZStack {
+                GrowthTaskCardPalette.topYellow
+                GrowthTaskCardYellowPatternOverlay()
+            }
+        case .accentMuted:
+            ZStack {
+                Rectangle().fill(GrowthTaskCardPalette.accentMutedCardGradient)
+                GrowthTaskCardYellowPatternOverlay(patternOpacity: 0.18)
+            }
+        }
+    }
+
     private func growthTagChip() -> some View {
         Text(definition.tag)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(.white)
-            .padding(.horizontal, 10)
-            .padding(.top, 6)
-            .padding(.bottom, 7)
+            .padding(.horizontal, 7)
+            .padding(.top, 4)
+            .padding(.bottom, 5)
             .background(
                 UnevenRoundedRectangle(
                     cornerRadii: RectangleCornerRadii(
                         topLeading: 0,
-                        bottomLeading: 10,
+                        bottomLeading: 8,
                         bottomTrailing: 0,
-                        topTrailing: 0
+                        /// 与卡片 `cornerRadius` 一致，外缘贴齐卡片右上角圆弧。
+                        topTrailing: cornerRadius
                     ),
                     style: .continuous
                 )
@@ -512,11 +581,29 @@ private struct GrowthPortraitTaskCard: View {
                 .fill(Color.white)
                 .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
             Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color(red: 0.82, green: 0.72, blue: 0.05))
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(fabChevronColor)
         }
         .frame(width: 24, height: 24)
         .accessibilityHidden(true)
+    }
+
+    private var fabChevronColor: Color {
+        switch definition.surfaceKind {
+        case .yellowPattern:
+            return Color(red: 0.82, green: 0.72, blue: 0.05)
+        case .accentGradient, .accentMuted:
+            return BolaTheme.onAccentForeground.opacity(0.88)
+        }
+    }
+
+    private var placeholderSymbolForeground: Color {
+        switch definition.surfaceKind {
+        case .yellowPattern:
+            return Color.black.opacity(0.32)
+        case .accentGradient, .accentMuted:
+            return Color.white.opacity(0.9)
+        }
     }
 
     /// 透明底插图在画布内视觉重心常偏上，相对几何中心略下移。
@@ -536,7 +623,7 @@ private struct GrowthPortraitTaskCard: View {
                 } else {
                     Image(systemName: definition.placeholderSystemImage)
                         .font(.system(size: 40, weight: .medium))
-                        .foregroundStyle(Color.black.opacity(0.32))
+                        .foregroundStyle(placeholderSymbolForeground)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -571,7 +658,7 @@ private struct GrowthPortraitTaskCard: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, 3)
 
-                GrowthTaskCompletionBar(progress: progress)
+                GrowthTaskCompletionBar(progress: progress, taskId: definition.id)
                     .padding(.top, 8)
             }
             .padding(.horizontal, 10)
@@ -647,16 +734,7 @@ private struct GrowthTaskCardBack: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            BolaTheme.accent.opacity(0.88),
-                            BolaTheme.accent.opacity(0.65)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(GrowthTaskCardPalette.accentCardGradient)
 
             GrowthTaskCardYellowPatternOverlay()
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -676,11 +754,157 @@ private struct GrowthTaskCardBack: View {
     }
 }
 
-/// 「完成度」+ 进度条，直接贴在任务文案下方，不再使用独立白底卡片。
-private struct GrowthTaskCompletionBar: View {
-    let progress: Double
+// MARK: - 任务完成庆祝 Lottie（UIKit 直驱播放）
+
+private enum GrowthTaskCongratulationsLottieLoader {
+    /// 同步文件夹在部分打包方式下会出现在子目录，故先试子路径再回退根目录。
+    static func animation() -> LottieAnimation? {
+        let bundle = Bundle.main
+        if let a = LottieAnimation.named("GrowthTaskCongratulations", bundle: bundle, subdirectory: "Features/Growth") {
+            return a
+        }
+        return LottieAnimation.named("GrowthTaskCongratulations", bundle: bundle)
+    }
+}
+
+/// SwiftUI `LottieView` 在部分机型上对「首帧即播放」应用不稳定；此处用 `LottieAnimationView` 显式 `play`。
+/// `LottieAnimationView` 的固有尺寸等于动画画布（如 720×720），会撑破外层 `frame`；必须放进固定大小的容器并 `scaleAspectFit` 铺满。
+private struct GrowthTaskCongratulationsLottiePlayer: UIViewRepresentable {
+    let animation: LottieAnimation?
+    /// `false` 表示只显示最后一帧（已看过或播完后的静帧）。
+    let playCelebration: Bool
+    let onPlaybackFinished: (Bool) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onPlaybackFinished: onPlaybackFinished)
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let container = UIView()
+        container.clipsToBounds = true
+        container.backgroundColor = .clear
+
+        let configuration = LottieConfiguration(
+            renderingEngine: .automatic,
+            reducedMotionOption: .standardMotion
+        )
+        let lottie = LottieAnimationView(animation: animation, configuration: configuration)
+        lottie.contentMode = .scaleAspectFit
+        lottie.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(lottie)
+
+        NSLayoutConstraint.activate([
+            lottie.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            lottie.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            lottie.topAnchor.constraint(equalTo: container.topAnchor),
+            lottie.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        ])
+
+        context.coordinator.lottieView = lottie
+        return container
+    }
+
+    func updateUIView(_ container: UIView, context: Context) {
+        guard let lottie = context.coordinator.lottieView else { return }
+        if lottie.animation !== animation {
+            lottie.animation = animation
+        }
+        guard animation != nil else { return }
+
+        if playCelebration {
+            context.coordinator.startPlaybackIfNeeded(on: lottie, container: container)
+        } else {
+            lottie.currentProgress = 1.0
+        }
+    }
+
+    final class Coordinator {
+        fileprivate var lottieView: LottieAnimationView?
+        private let onPlaybackFinished: (Bool) -> Void
+        private var hasStartedPlayback = false
+
+        init(onPlaybackFinished: @escaping (Bool) -> Void) {
+            self.onPlaybackFinished = onPlaybackFinished
+        }
+
+        /// 首帧 `updateUIView` 时常尚未布局，`bounds` 为 0，此时 `play` 会几乎看不到运动；延后到下一帧并等到尺寸有效后再播。
+        func startPlaybackIfNeeded(on view: LottieAnimationView, container: UIView) {
+            guard !hasStartedPlayback else { return }
+            hasStartedPlayback = true
+            view.currentProgress = 0
+
+            DispatchQueue.main.async { [weak self, weak view, weak container] in
+                guard let self, let view, let container else { return }
+                self.playWhenLaidOut(view: view, container: container, attempt: 0)
+            }
+        }
+
+        private func playWhenLaidOut(view: LottieAnimationView, container: UIView, attempt: Int) {
+            container.superview?.layoutIfNeeded()
+            container.layoutIfNeeded()
+            view.layoutIfNeeded()
+
+            let w = container.bounds.width
+            let h = container.bounds.height
+            if w < 0.5 || h < 0.5, attempt < 25 {
+                DispatchQueue.main.async { [weak self, weak view, weak container] in
+                    guard let self, let view, let container else { return }
+                    self.playWhenLaidOut(view: view, container: container, attempt: attempt + 1)
+                }
+                return
+            }
+
+            view.play(fromProgress: 0, toProgress: 1, loopMode: .playOnce) { [onPlaybackFinished] completed in
+                onPlaybackFinished(completed)
+            }
+        }
+    }
+}
+
+// MARK: - 盖章（任务完成状态）
+
+private struct GrowthTaskStamp: View {
+    let completed: Bool
 
     var body: some View {
+        ZStack {
+            Image(completed ? "GrowthStampDone" : "GrowthStampEmpty")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 36, height: 36)
+
+            if completed {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color.green)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private enum GrowthTaskCompletionBarMetrics {
+    /// 与标题旁星星 Lottie（28pt）同量级，略放大便于看清动效。
+    static let celebrationLottieSide: CGFloat = 32
+}
+
+/// 「完成度」+ 进度条，直接贴在任务文案下方，不再使用独立白底卡片。
+/// 任务完成时：首次展示播放一遍 Lottie 庆祝动画，之后只展示最后一帧静帧。
+private struct GrowthTaskCompletionBar: View {
+    let progress: Double
+    let taskId: String
+
+    /// 播完后置为 true，驱动切到静帧；持久化见 `GrowthTaskCompletionAnimStore`。
+    @State private var animationFinished: Bool = false
+
+    /// 每次从 Store 读（debug 清空记录后才会重播），勿用仅 init 一次的 @State 缓存。
+    private var seenInStore: Bool {
+        GrowthTaskCompletionAnimStore.hasSeen(taskId: taskId)
+    }
+
+    /// 与进度条行同结构的占位，完成时用 `opacity(0)` 隐藏但继续参与布局，避免白底区被挤压变形。
+    @ViewBuilder
+    private func progressTrackRow(progress visibleProgress: Double, hidden: Bool) -> some View {
         HStack(alignment: .center, spacing: 8) {
             Text("完成度")
                 .font(.system(size: 10, weight: .medium))
@@ -695,12 +919,55 @@ private struct GrowthTaskCompletionBar: View {
                         .frame(height: 5)
                     Capsule()
                         .fill(BolaTheme.accent)
-                        .frame(width: max(4, w * progress), height: 5)
+                        .frame(width: max(4, w * visibleProgress), height: 5)
                 }
             }
             .frame(height: 5)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .opacity(hidden ? 0 : 1)
+        .accessibilityHidden(hidden)
+    }
+
+    var body: some View {
+        let isComplete = progress >= 1.0
+        let showStatic = seenInStore || animationFinished
+
+        progressTrackRow(progress: min(1, progress), hidden: isComplete)
+            .overlay(alignment: .center) {
+                if isComplete {
+                    congratulationsLottieOverlay(
+                        showStatic: showStatic,
+                        taskId: taskId,
+                        animationFinished: $animationFinished
+                    )
+                    .allowsHitTesting(false)
+                }
+            }
+            .onChange(of: progress) { _, new in
+                if new < 1.0 {
+                    animationFinished = false
+                }
+            }
+    }
+
+    private func congratulationsLottieOverlay(
+        showStatic: Bool,
+        taskId: String,
+        animationFinished: Binding<Bool>
+    ) -> some View {
+        GrowthTaskCongratulationsLottiePlayer(
+            animation: GrowthTaskCongratulationsLottieLoader.animation(),
+            playCelebration: !showStatic,
+            onPlaybackFinished: { completed in
+                guard completed else { return }
+                GrowthTaskCompletionAnimStore.markSeen(taskId: taskId)
+                animationFinished.wrappedValue = true
+            }
+        )
+        .frame(width: GrowthTaskCompletionBarMetrics.celebrationLottieSide, height: GrowthTaskCompletionBarMetrics.celebrationLottieSide)
+        .offset(y: -2)
+        .id(taskId)
     }
 }
 

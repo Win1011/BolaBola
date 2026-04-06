@@ -10,7 +10,7 @@ import UserNotifications
 struct IOSRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: IOSRootTab = .mine
-    @State private var lifeSegment: IOSLifeSubPage = .dailyLife
+    @State private var growthSegment: IOSGrowthSubPage = .growth
     @AppStorage("bola_life_bubble_mode_v1") private var lifeBubbleMode = false
 
     @State private var companion: Double = 50
@@ -27,7 +27,6 @@ struct IOSRootView: View {
     private var lifeTabRoot: some View {
         NavigationStack {
             IOSLifeContainerView(
-                lifeSegment: $lifeSegment,
                 bubbleMode: $lifeBubbleMode,
                 reminders: $reminders,
                 onRequestChat: { selectedTab = .chat }
@@ -42,7 +41,7 @@ struct IOSRootView: View {
 
     private var statusTabRoot: some View {
         NavigationStack {
-            IOSGrowthView()
+            IOSGrowthContainerView(growthSegment: $growthSegment)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .navigationTitle("")
                 .navigationBarTitleDisplayMode(.inline)
@@ -184,7 +183,8 @@ struct IOSRootView: View {
             }
         }
         ToolbarItem(placement: .principal) {
-            IOSLifeSegmentLarge(lifeSegment: $lifeSegment)
+            Text("生活")
+                .font(.system(size: 20, weight: .semibold))
         }
         ToolbarItem(placement: .topBarTrailing) {
             settingsButton
@@ -220,12 +220,20 @@ struct IOSRootView: View {
         }
     }
 
-    /// 成长 Tab：导航栏标题略大于系统默认 inline 标题。
+    /// 成长 Tab：成长 / 时光分段（与生活 Tab 一致）。
     @ToolbarContentBuilder
     private var growthNavigationToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            IOSNavigationGlassIconButton(
+                systemName: "checkmark.circle",
+                font: .system(size: 18, weight: .medium),
+                accessibilityLabel: "Debug 完成任务"
+            ) {
+                GrowthDailyTasksViewModel.shared.debugCompleteNextTask()
+            }
+        }
         ToolbarItem(placement: .principal) {
-            Text("成长")
-                .font(.system(size: 20, weight: .semibold))
+            IOSGrowthSegmentLarge(growthSegment: $growthSegment)
         }
         ToolbarItem(placement: .topBarTrailing) {
             settingsButton

@@ -21,7 +21,6 @@ private enum LifeRecordTileMetrics {
 }
 
 struct IOSLifeContainerView: View {
-    @Binding var lifeSegment: IOSLifeSubPage
     @Binding var bubbleMode: Bool
     @Binding var reminders: [BolaReminder]
     /// 点 idle 头像进入根级「对话」Tab。
@@ -48,15 +47,8 @@ struct IOSLifeContainerView: View {
             lifePageBackground
                 .ignoresSafeArea(edges: [.top, .bottom])
 
-            /// 生活 / 时光用 `switch` 切换单列纵向 `ScrollView`：内层分页 `TabView`/横向 `ScrollView` 会破坏安全区或阻断根级 `tabBarMinimizeBehavior`，故仅保留导航栏分段切换。
-            Group {
-                switch lifeSegment {
-                case .dailyLife:
-                    lifeScroll
-                case .timeMoments:
-                    timeMomentsScroll
-                }
-            }
+            /// 单列纵向 `ScrollView`（「时光」已迁至成长 Tab）。
+            lifeScroll
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
@@ -66,11 +58,6 @@ struct IOSLifeContainerView: View {
         }
         .task {
             await healthHabits.refresh()
-        }
-        .onChange(of: lifeSegment) { _, new in
-            if new == .dailyLife {
-                reloadDigest()
-            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaLifeRecordsDidReset)) { _ in
             lifeRecords = LifeRecordListStore.load()
@@ -181,19 +168,6 @@ struct IOSLifeContainerView: View {
             await rhythm.refresh()
             await healthHabits.refresh()
         }
-    }
-
-    private var timeMomentsScroll: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                IOSLifeTimePageView(bubbleMode: bubbleMode, useLifePageBackdrop: true)
-            }
-            .padding(.horizontal, BolaTheme.paddingHorizontal)
-            .padding(.top, 14)
-            .padding(.bottom, 24)
-        }
-        .background(Color.clear)
-        .scrollIndicators(.hidden)
     }
 
     private var lifePageBackground: some View {
