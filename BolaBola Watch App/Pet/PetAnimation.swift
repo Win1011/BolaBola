@@ -83,6 +83,12 @@ enum PetEmotion {
     case eatingWait
     /// 吃东西：播一轮 eatapple
     case eatingOnce
+    /// 喝水提醒等待：循环 idledrink1
+    case idleDrink1
+    /// 喝水提醒等待：循环 idledrink2
+    case idleDrink2
+    /// 喝水：播一轮 drink
+    case drinkOnce
     case sleepy       // 新增：sleepy 动作
     case happy
     case angry
@@ -158,6 +164,9 @@ enum AnimationScale {
     static let like1Once: CGFloat = 1.5
     static let eatingWait: CGFloat = 1.5
     static let eatingOnce: CGFloat = 1.5
+    static let idleDrink1: CGFloat = 1.5
+    static let idleDrink2: CGFloat = 1.5
+    static let drinkOnce: CGFloat = 1.5
     static let sleepy: CGFloat = 1.5
     static let sleep: CGFloat = 1.5
     static let nightSleepWait: CGFloat = 1.5
@@ -802,6 +811,39 @@ enum PetAnimations {
         displayScale: AnimationScale.eatingOnce,
         source: .frames(
             frameNames: PetAnimationLoader.loadFrameNames(prefix: "eatapple", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            isLoop: false
+        )
+    )
+
+    /// 喝水提醒等待：随机进入的 idledrink1 循环
+    static let idleDrink1: PetAnimation = PetAnimation(
+        emotion: .idleDrink1,
+        displayScale: AnimationScale.idleDrink1,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idledrink1", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            isLoop: true
+        )
+    )
+
+    /// 喝水提醒等待：随机进入的 idledrink2 循环
+    static let idleDrink2: PetAnimation = PetAnimation(
+        emotion: .idleDrink2,
+        displayScale: AnimationScale.idleDrink2,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idledrink2", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            isLoop: true
+        )
+    )
+
+    /// 点击喝水提醒后：drink 播一轮
+    static let drinkOnce: PetAnimation = PetAnimation(
+        emotion: .drinkOnce,
+        displayScale: AnimationScale.drinkOnce,
+        source: .frames(
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "drink", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
             fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
             isLoop: false
         )

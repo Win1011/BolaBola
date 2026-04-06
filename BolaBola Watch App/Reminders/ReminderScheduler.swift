@@ -12,6 +12,7 @@ final class ReminderScheduler: NSObject, UNUserNotificationCenterDelegate {
     static let shared = ReminderScheduler()
 
     private let center = UNUserNotificationCenter.current()
+    private let reminderIDPrefix = "bola_r_"
 
     private override init() {
         super.init()
@@ -45,6 +46,7 @@ final class ReminderScheduler: NSObject, UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        triggerWaterReminderIfNeeded(notification)
         completionHandler([.banner, .sound])
     }
 
@@ -53,10 +55,25 @@ final class ReminderScheduler: NSObject, UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        triggerWaterReminderIfNeeded(response.notification)
         let id = response.notification.request.identifier
         if id == "bola_digest_daily" {
             BolaSharedDefaults.resolved().set(true, forKey: BolaNotificationBridgeKeys.digestTapOpen)
         }
         completionHandler()
+    }
+
+    private func triggerWaterReminderIfNeeded(_ notification: UNNotification) {
+        guard isWaterReminderIdentifier(notification.request.identifier) else { return }
+        BolaSharedDefaults.resolved().set(true, forKey: BolaNotificationBridgeKeys.waterReminderTrigger)
+        NotificationCenter.default.post(name: .bolaWaterReminderTriggered, object: nil)
+    }
+
+    private func isWaterReminderIdentifier(_ identifier: String) -> Bool {
+        guard identifier.hasPrefix(reminderIDPrefix) else { return false }
+        let raw = String(identifier.dropFirst(reminderIDPrefix.count))
+        let uuidText = raw.split(separator: "_", maxSplits: 1).first.map(String.init) ?? raw
+        guard let id = UUID(uuidString: uuidText) else { return false }
+        return ReminderListStore.load().first(where: { $0.id == id })?.kind == .water
     }
 }

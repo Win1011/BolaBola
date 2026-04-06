@@ -285,6 +285,21 @@ struct WatchPanelSheetView: View {
                     .controlSize(.mini)
 
                     Button {
+                        viewModel.debugSimulateWaterReminderFire()
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Image(systemName: "drop.fill")
+                                .font(.caption2)
+                            Text("模拟喝水提醒")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 32)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+
+                    Button {
                         viewModel.debugEnterNightSleep()
                         dismiss()
                     } label: {

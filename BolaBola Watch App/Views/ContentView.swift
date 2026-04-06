@@ -70,6 +70,9 @@ final class PetViewModel: ObservableObject {
 
     /// 吃东西状态机：waiting → eating → finished
     private(set) var isInEatingState: Bool = false
+    /// 喝水状态机：idleDrink → drinkOnce → blowbubble → finished
+    private(set) var isInDrinkWaterState: Bool = false
+    private var drinkWaterFinishWorkItem: DispatchWorkItem?
 
     /// 夜间睡眠状态机：nightSleepWait → fallAsleep → sleepLoop（循环到 8:30am 或被点醒）
     private(set) var isInNightSleepState: Bool = false
@@ -419,6 +422,12 @@ final class PetViewModel: ObservableObject {
             return PetAnimations.eatingWait
         case .eatingOnce:
             return PetAnimations.eatingOnce
+        case .idleDrink1:
+            return PetAnimations.idleDrink1
+        case .idleDrink2:
+            return PetAnimations.idleDrink2
+        case .drinkOnce:
+            return PetAnimations.drinkOnce
         case .happy:
             return PetAnimations.happy
         case .angry:
@@ -467,6 +476,10 @@ final class PetViewModel: ObservableObject {
                     }
                     if currentEmotion == .eatingOnce {
                         finishEatingAnimation()
+                        return
+                    }
+                    if currentEmotion == .drinkOnce {
+                        finishDrinkWaterAnimation()
                         return
                     }
                     if isInEatingState && (currentEmotion == .happyIdleOnce || currentEmotion == .like1Once || currentEmotion == .like2Once) {
@@ -679,6 +692,8 @@ final class PetViewModel: ObservableObject {
 
     /// 进入吃东西等待状态：循环 idleapple + 饿了台词
     func enterEatingState() {
+        drinkWaterFinishWorkItem?.cancel()
+        isInDrinkWaterState = false
         isInEatingState = true
         isTapInteractionAnimating = true
         currentEmotion = .eatingWait
@@ -711,10 +726,59 @@ final class PetViewModel: ObservableObject {
         currentFrameIndex = 0
     }
 
+    // MARK: - 喝水
+
+    /// 进入喝水提醒等待状态：随机循环 idledrink1 / idledrink2 + 固定台词
+    func enterDrinkWaterState() {
+        drinkWaterFinishWorkItem?.cancel()
+        isInEatingState = false
+        isInNightSleepState = false
+        isNightSleepAsleep = false
+        tapChainReturnsToRandomIdle = false
+        shouldPlayTapJumpFollowUp = false
+        pendingTierDeferredWorkItem?.cancel()
+        pendingTierSpeechAfterTap = nil
+        surprisePending = false
+        isInDrinkWaterState = true
+        isTapInteractionAnimating = true
+        currentEmotion = Bool.random() ? .idleDrink1 : .idleDrink2
+        currentFrameIndex = 0
+        showDialogue("有点渴啦", duration: 120)
+    }
+
+    /// 喝水等待中被点击：播一轮 drink
+    private func handleDrinkWaterTap() {
+        drinkWaterFinishWorkItem?.cancel()
+        currentEmotion = .drinkOnce
+        currentFrameIndex = 0
+        dialogueDismissWorkItem?.cancel()
+        dialogueLine = ""
+    }
+
+    /// drink 播完：随机进入吹泡泡，并提示用户喝水
+    private func finishDrinkWaterAnimation() {
+        currentEmotion = Bool.random() ? .blowbubble1 : .blowbubble2
+        currentFrameIndex = 0
+        showDialogue("你也喝点水吧", duration: 5)
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.isInDrinkWaterState else { return }
+            self.isInDrinkWaterState = false
+            self.isTapInteractionAnimating = false
+            self.selectDefaultEmotion()
+            self.applyDefaultEmotionDisplay()
+            self.currentFrameIndex = 0
+        }
+        drinkWaterFinishWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: work)
+    }
+
     // MARK: - 夜间睡眠
 
     /// 进入夜间睡眠等待：循环 sleepy + 固定台词
     private func enterNightSleepWaitState() {
+        drinkWaterFinishWorkItem?.cancel()
+        isInDrinkWaterState = false
         isInNightSleepState = true
         isNightSleepAsleep = false
         isTapInteractionAnimating = true
@@ -799,6 +863,18 @@ final class PetViewModel: ObservableObject {
         playDailyDigestLetter(body: body)
     }
 
+    func consumeWaterReminderIfNeeded() {
+        let d = bolaDefaults
+        guard d.bool(forKey: BolaNotificationBridgeKeys.waterReminderTrigger) else { return }
+        d.set(false, forKey: BolaNotificationBridgeKeys.waterReminderTrigger)
+        enterDrinkWaterState()
+    }
+
+    func debugSimulateWaterReminderFire() {
+        BolaSharedDefaults.resolved().set(true, forKey: BolaNotificationBridgeKeys.waterReminderTrigger)
+        NotificationCenter.default.post(name: .bolaWaterReminderTriggered, object: nil)
+    }
+
     func cycleEmotionOnTap() {
         // 夜间睡眠状态：等待中点击 → 入睡；已睡着点击 → 叫醒
         if isInNightSleepState {
@@ -810,6 +886,11 @@ final class PetViewModel: ObservableObject {
                 wakeUpFromNightSleep()
                 return
             }
+            return
+        }
+
+        if isInDrinkWaterState && (currentEmotion == .idleDrink1 || currentEmotion == .idleDrink2) {
+            handleDrinkWaterTap()
             return
         }
 
@@ -1070,6 +1151,7 @@ final class PetViewModel: ObservableObject {
             }
             refreshLatestHeartRateForDisplay()
             consumeDigestNotificationIfNeeded()
+            consumeWaterReminderIfNeeded()
             if healthKitReadAuthorized {
                 startHeartRateForegroundMonitoring()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
@@ -1339,11 +1421,13 @@ struct ContentView: View {
         }
         .onAppear {
             viewModel.onViewAppear()
+            viewModel.consumeWaterReminderIfNeeded()
         }
         .onChange(of: scenePhase) { _, newPhase in
             viewModel.handleScenePhaseChange(newPhase)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaWaterReminderTriggered)) { _ in
+            viewModel.enterDrinkWaterState()
+        }
     }
 }
-
-
