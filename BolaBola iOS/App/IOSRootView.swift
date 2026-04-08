@@ -109,7 +109,6 @@ struct IOSRootView: View {
                 Label("对话", systemImage: "bubble.left.and.bubble.right.fill")
             }
         }
-        .tint(BolaTheme.accent)
         .bolaIOS26TabBarMinimizeOnScroll()
         .bolaRootTabScrollEdgeStyles()
         .ignoresSafeArea(.keyboard)

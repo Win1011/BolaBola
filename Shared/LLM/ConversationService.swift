@@ -9,10 +9,37 @@ private let bolaConversationSyncLog = Logger(subsystem: "com.gathxr.BolaBola.syn
 private let bolaWatchVoiceLog = Logger(subsystem: "com.gathxr.BolaBola", category: "WatchVoice")
 
 public enum ConversationService {
-    public static func bolaSystemPrompt(companionValue: Int) -> String {
+    public static func bolaSystemPrompt(companionValue: Int, growthLevel: Int? = nil) -> String {
         let tier = CompanionTier.value(for: companionValue)
+        let level = growthLevel ?? BolaLevelFormula.levelAndRemainder(
+            fromTotalXP: BolaGrowthStore.load().totalXP).level
+        let caps = BolaLevelGate.Capabilities(level: level)
+
+        var levelInstruction = ""
+        switch caps.speechMode {
+        case .none:
+            // Lv0：不应到达这里（调用方应拦截），但保险起见给最简回复
+            levelInstruction = "你还很小，只会发出简短的声音，每次回复不超过 10 字，不用完整句子。"
+        case .clumsy:
+            levelInstruction = "你正在学说话（Lv\(level)），偶尔把词说错或重复，每次回复不超过 40 字，语气稚嫩可爱。"
+        case .normal:
+            if caps.hasPersonality, let p = BolaGrowthStore.load().personalityType {
+                let styleHint: String
+                switch p {
+                case BolaPersonalityType.energetic.rawValue:  styleHint = "活力四射、充满正能量"
+                case BolaPersonalityType.gentle.rawValue:     styleHint = "温柔体贴、说话轻声细语"
+                case BolaPersonalityType.tsundere.rawValue:   styleHint = "傲娇但内心在乎你"
+                case BolaPersonalityType.chill.rawValue:      styleHint = "佛系淡然、偶尔来一句金句"
+                default:                                       styleHint = "可爱"
+                }
+                levelInstruction = "你的性格是「\(styleHint)」，每次回复不超过 80 字。"
+            } else {
+                levelInstruction = "简短可爱，每次回复不超过 80 字。"
+            }
+        }
+
         return """
-        你是手表宠物 Bola，简短可爱，每次回复不超过 80 字，不用 Markdown。
+        你是手表宠物 Bola，不用 Markdown。\(levelInstruction)
         用户陪伴值整数为 \(companionValue)，档位约 \(tier)（越高越亲密）。不要给出医疗诊断；心率等信息仅供参考。
 
         如果用户要求设闹钟、定时器或计时提醒，在回复末尾加上标签（用户看不到标签）：
@@ -59,6 +86,12 @@ public enum ConversationService {
         let ids = delta.map(\.id.uuidString).joined(separator: ",")
         bolaConversationSyncLog.info("replyToUser OK → pushChatDelta ids=[\(ids, privacy: .public)] utteranceLen=\(utterance.count, privacy: .public)")
         BolaWCSessionCoordinator.shared.pushChatDelta(delta)
+
+        // XP：iOS 对话（每日限 2 次）+ 首次对话里程碑
+        BolaXPEngine.grantIOSChatXP()
+        BolaXPEngine.completeMilestone(.firstIOSChat)
+        TitleUnlockManager.refreshUnlocks()
+
         return reply
     }
 

@@ -17,6 +17,9 @@ public enum CompanionPersistenceKeys {
 
     public static let migratedToAppGroupMarker = "bola_migrated_to_app_group"
 
+    /// 用户在 iPhone 上为宠物起的显示名（空则 UI 回退为「Bola」）。
+    public static let companionDisplayName = "bola_companion_display_name_v1"
+
     public static var allCompanionKeys: [String] {
         [
             companionValue,

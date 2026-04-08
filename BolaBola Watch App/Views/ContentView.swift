@@ -299,9 +299,32 @@ final class PetViewModel: ObservableObject {
         previousCompanionRoundedForHundredSpeech = v
 
         let tier = BolaDialogueLines.companionTier(for: v)
-        if lastCompanionTierForSpeech >= 0, lastCompanionTierForSpeech != tier,
-           let line = BolaDialogueLines.tierChangedLine(from: lastCompanionTierForSpeech, to: tier) {
-            showDialogue(line)
+        if lastCompanionTierForSpeech >= 0, lastCompanionTierForSpeech != tier {
+            if let line = BolaDialogueLines.tierChangedLine(from: lastCompanionTierForSpeech, to: tier) {
+                showDialogue(line)
+            }
+            // 档位升级里程碑 XP
+            if tier > lastCompanionTierForSpeech {
+                let milestoneMap: [Int: BolaGrowthMilestone] = [
+                    1: .tierUpgrade1, 2: .tierUpgrade2, 3: .tierUpgrade3,
+                    4: .tierUpgrade4, 5: .tierUpgrade5, 6: .tierUpgrade6
+                ]
+                if let ms = milestoneMap[tier] {
+                    BolaXPEngine.completeMilestone(ms)
+                    TitleUnlockManager.refreshUnlocks(currentCompanionValue: v)
+                }
+            }
+        }
+        // companion100 里程碑（首次到达 100）
+        if previousCompanionRoundedForHundredSpeech < 100 && v == 100 {
+            BolaXPEngine.completeMilestone(.companion100)
+            TitleUnlockManager.refreshUnlocks(currentCompanionValue: 100)
+        }
+        // 记录历史最高陪伴值
+        let defaults = BolaSharedDefaults.resolved()
+        let prevMax = defaults.double(forKey: "bola_max_ever_companion_v1")
+        if Double(v) > prevMax {
+            defaults.set(Double(v), forKey: "bola_max_ever_companion_v1")
         }
         lastCompanionTierForSpeech = tier
     }

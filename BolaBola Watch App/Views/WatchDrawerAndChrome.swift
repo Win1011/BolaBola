@@ -136,6 +136,10 @@ struct WatchBottomChromeToolbar: View {
                 do {
                     let reply = try await ConversationService.replyToUserFromRecordedAudio(fileURL: url, companionValue: v)
                     watchChromeVoiceLog.info("toggleMic: cloud path OK")
+                    // XP：Watch 语音（每日限 2 次）+ 首次语音里程碑
+                    BolaXPEngine.grantWatchVoiceXP()
+                    BolaXPEngine.completeMilestone(.firstWatchVoice)
+                    TitleUnlockManager.refreshUnlocks()
                     await MainActor.run {
                         viewModel.playVoiceAssistantReply(reply)
                     }

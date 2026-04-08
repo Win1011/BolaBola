@@ -14,6 +14,8 @@ struct IOSSettingsListView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var confirmResetLifeRecords = false
+    @State private var confirmResetGrowth = false
+    @State private var growthSummary: String = ""
 
     var body: some View {
         List {
@@ -65,17 +67,57 @@ struct IOSSettingsListView: View {
             }
 
             Section {
+                // 当前状态展示
+                HStack {
+                    Text("等级 / XP")
+                    Spacer()
+                    Text(growthSummary)
+                        .foregroundStyle(.secondary)
+                        .font(.caption.monospacedDigit())
+                }
+                // XP 操作
+                Button("+10 XP（模拟任务完成）") {
+                    BolaXPEngine.grantTaskXP()
+                    refreshGrowthSummary()
+                }
+                Button("+20 XP（模拟首次对话）") {
+                    BolaXPEngine.completeMilestone(.firstIOSChat)
+                    refreshGrowthSummary()
+                }
+                Button("+100 XP（模拟陪伴满百）") {
+                    BolaXPEngine.completeMilestone(.companion100)
+                    refreshGrowthSummary()
+                }
+                Button("解锁所有称号词条") {
+                    var state = BolaGrowthStore.load()
+                    // 临时设高 XP + 所有里程碑，触发解锁
+                    state.totalXP = max(state.totalXP, BolaLevelFormula.cumulativeXP(forLevel: 20))
+                    state.completedMilestones = BolaGrowthMilestone.allCases.map(\.rawValue)
+                    state.personalityType = BolaPersonalityType.energetic.rawValue
+                    BolaGrowthStore.save(state)
+                    TitleUnlockManager.refreshUnlocks(
+                        state: state,
+                        currentCompanionValue: 100,
+                        maxEverCompanionValue: 100
+                    )
+                    refreshGrowthSummary()
+                }
+                // 任务调试
                 Button("一键完成所有每日任务") {
                     GrowthDailyTasksViewModel.shared.debugCompleteAllTasks()
                 }
                 Button("重置每日任务进度", role: .destructive) {
                     GrowthDailyTasksViewModel.shared.debugRefreshDailyTasks()
                 }
+                Button("重置等级与 XP…", role: .destructive) {
+                    confirmResetGrowth = true
+                }
             } header: {
                 Text("Debug · 成长")
             } footer: {
-                Text("仅供调试使用，不影响真实数据。")
+                Text("仅供调试，不影响真实健康数据。里程碑奖励为一次性，重置后可再次触发。")
             }
+            .onAppear { refreshGrowthSummary() }
 
             Section {
                 HStack {
@@ -124,6 +166,24 @@ struct IOSSettingsListView: View {
             }
             Button("取消", role: .cancel) {}
         }
+        .confirmationDialog(
+            "将清零 totalXP、里程碑、性格类型，且无法撤销。",
+            isPresented: $confirmResetGrowth,
+            titleVisibility: .visible
+        ) {
+            Button("清零等级与 XP", role: .destructive) {
+                BolaGrowthStore.save(BolaGrowthState())
+                refreshGrowthSummary()
+            }
+            Button("取消", role: .cancel) {}
+        }
+    }
+
+    private func refreshGrowthSummary() {
+        let state = BolaGrowthStore.load()
+        let (lvl, rem) = BolaLevelFormula.levelAndRemainder(fromTotalXP: state.totalXP)
+        let next = BolaLevelFormula.xpRequired(forLevel: lvl)
+        growthSummary = "Lv.\(lvl)  \(rem)/\(next) XP  (总\(state.totalXP))"
     }
 
     private var notificationStatusLabel: String {

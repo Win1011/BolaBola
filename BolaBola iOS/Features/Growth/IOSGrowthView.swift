@@ -10,11 +10,7 @@ import Lottie
 struct IOSGrowthView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var dailyTasksVM = GrowthDailyTasksViewModel.shared
-    private let level: Int = 1
-    /// 当前等级内已获得的进度点（占位，后续可接真实成长数值）。
-    private let levelProgressCurrent: Int = 7
-    /// 升到下一级所需进度点（占位）。
-    private let levelProgressTarget: Int = 20
+    @StateObject private var levelVM = GrowthLevelViewModel.shared
     @State private var showLevelInfo = false
 
     private var topRowDefinitions: [GrowthDailyTaskCardDefinition] {
@@ -25,6 +21,8 @@ struct IOSGrowthView: View {
         Array(dailyTasksVM.definitions.suffix(3))
     }
 
+    private var companionDisplayName: String { CompanionDisplayNameStore.resolved() }
+
     var body: some View {
         ZStack(alignment: .top) {
             BolaGrowthAmbientBackground()
@@ -34,9 +32,10 @@ struct IOSGrowthView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     /// 岛图 `offset` 会向上叠到等级条区域：等级条需更高 zIndex，避免被图挡在下面。
                     GrowthLevelValuePill(
-                        level: level,
-                        progressCurrent: levelProgressCurrent,
-                        progressTarget: levelProgressTarget,
+                        companionDisplayName: companionDisplayName,
+                        level: levelVM.level,
+                        progressCurrent: levelVM.xpInLevel,
+                        progressTarget: levelVM.xpForNextLevel,
                         onInfoTap: { showLevelInfo = true }
                     )
                     .padding(.top, -6)
@@ -111,6 +110,7 @@ struct IOSGrowthView: View {
 // MARK: - 等级值条
 
 private struct GrowthLevelValuePill: View {
+    var companionDisplayName: String = "Bola"
     let level: Int
     let progressCurrent: Int
     let progressTarget: Int
@@ -134,15 +134,21 @@ private struct GrowthLevelValuePill: View {
                 .frame(width: 66, alignment: .center)
                 .padding(.leading, 12)
                 .padding(.trailing, 4)
-                .padding(.vertical, 10)
+                .padding(.vertical, 8)
             }
             .buttonStyle(.plain)
 
             Rectangle()
                 .fill(Color(uiColor: .separator).opacity(0.35))
-                .frame(width: 1, height: 34)
+                .frame(width: 1, height: 36)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(companionDisplayName)
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 GeometryReader { geo in
                     let w = geo.size.width
                     let h: CGFloat = 11
@@ -180,7 +186,7 @@ private struct GrowthLevelValuePill: View {
             }
             .padding(.leading, 12)
             .padding(.trailing, 16)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(
@@ -352,7 +358,7 @@ private struct GrowthDailyTasksSection: View {
                 Spacer().frame(width: 12)
 
                 // 右：五个盖章
-                HStack(spacing: 4) {
+                HStack(spacing: 5) {
                     ForEach(0 ..< viewModel.definitions.count, id: \.self) { i in
                         GrowthTaskStamp(completed: i < viewModel.completedCount)
                     }
@@ -871,11 +877,11 @@ private struct GrowthTaskStamp: View {
             Image(completed ? "GrowthStampDone" : "GrowthStampEmpty")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 36, height: 36)
+                .frame(width: 37, height: 37)
 
             if completed {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Color.green)
             }
         }

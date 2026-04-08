@@ -278,10 +278,24 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         if let data = try? JSONEncoder().encode(slots) {
             payload[WCSyncPayload.watchFaceSlotsB64] = data.base64EncodedString()
         }
-        let title = BolaTitleSelectionStore.clamped(BolaTitleSelectionStore.load())
+        let title = BolaTitleSelectionStore.load()
         if let data = try? JSONEncoder().encode(title) {
             payload[WCSyncPayload.titleSelectionB64] = data.base64EncodedString()
         }
+        // Growth state
+        let growthState = BolaGrowthStore.load()
+        if let data = try? JSONEncoder().encode(growthState) {
+            payload[WCSyncPayload.growthStateB64] = data.base64EncodedString()
+        }
+        // Title unlocked IDs
+        let unlockedIds = Array(TitleUnlockStore.loadUnlockedIds()).sorted()
+        if let data = try? JSONEncoder().encode(unlockedIds) {
+            payload[WCSyncPayload.titleUnlockedIdsB64] = data.base64EncodedString()
+        }
+        // Max-ever companion value for title unlock conditions
+        let defaults = BolaSharedDefaults.resolved()
+        let maxCV = defaults.double(forKey: "bola_max_ever_companion_v1")
+        payload[WCSyncPayload.maxEverCompanionValue] = maxCV
     }
     #endif
 
@@ -506,7 +520,7 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
     }
 
     #if os(watchOS)
-    /// 从 iPhone 的 `applicationContext` / `userInfo` 合并表盘槽与称号（不依赖陪伴值是否存在）。
+    /// 从 iPhone 的 `applicationContext` / `userInfo` 合并表盘槽、称号、成长状态。
     private static func ingestWatchHomeScreenPayloadIfPresent(_ dict: [String: Any]) {
         var changed = false
         if let b64 = dict[WCSyncPayload.watchFaceSlotsB64] as? String,
@@ -518,7 +532,21 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         if let b64 = dict[WCSyncPayload.titleSelectionB64] as? String,
            let data = Data(base64Encoded: b64),
            let sel = try? JSONDecoder().decode(BolaTitleSelection.self, from: data) {
-            BolaTitleSelectionStore.save(BolaTitleSelectionStore.clamped(sel))
+            BolaTitleSelectionStore.save(sel)
+            changed = true
+        }
+        // 成长状态合并（totalXP 取大值）
+        if let b64 = dict[WCSyncPayload.growthStateB64] as? String,
+           let data = Data(base64Encoded: b64),
+           let remoteState = try? JSONDecoder().decode(BolaGrowthState.self, from: data) {
+            BolaGrowthStore.mergeFromRemote(remoteState)
+            changed = true
+        }
+        // 称号解锁 ID 合并（取并集）
+        if let b64 = dict[WCSyncPayload.titleUnlockedIdsB64] as? String,
+           let data = Data(base64Encoded: b64),
+           let ids = try? JSONDecoder().decode([String].self, from: data) {
+            TitleUnlockStore.mergeFromRemote(Set(ids))
             changed = true
         }
         if changed {

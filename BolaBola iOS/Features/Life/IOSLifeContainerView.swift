@@ -1,6 +1,6 @@
 //
 //  IOSLifeContainerView.swift
-//  生活 Tab：对齐 Figma「iPhone 17 - 15」6068:3708。
+//  生活 Tab：半圆弧主视觉 + 双列（提醒/健康）+ 今日记录。
 //
 
 import Combine
@@ -14,16 +14,94 @@ private enum LifeAccentChromeButtonMetrics {
 }
 
 private enum LifeRecordTileMetrics {
-    /// 生活记录卡左上角：emoji / SF Symbol 统一视觉尺寸（原 28）。
     static let leadingIconSize: CGFloat = 36
-    /// 通用卡「内容」单行占位高度，无内容时也占位，主标题纵向对齐一致。
     static let subtitleReservedHeight: CGFloat = 22
 }
+
+private enum LifeMiddleCardMetrics {
+    /// 右侧单张健康卡（睡眠 / 运动）固定高度，按内容预留，不裁剪、不 clip。
+    static let healthCardRowHeight: CGFloat = 152
+    /// 两卡之间的垂直间距。
+    static let healthStackSpacing: CGFloat = 12
+    /// 右列总高度 = 睡眠 + 间距 + 运动；左列「正在关心的事」白卡与之严格同高。
+    static var dashboardColumnHeight: CGFloat {
+        healthCardRowHeight * 2 + healthStackSpacing
+    }
+}
+
+// MARK: - 半圆弧 Shape（圆心在矩形底部中心）
+
+private struct SemiCircleArcShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.addArc(
+            center: CGPoint(x: rect.midX, y: rect.maxY),
+            radius: rect.width / 2,
+            startAngle: .degrees(180),
+            endAngle: .degrees(0),
+            clockwise: false
+        )
+        return p
+    }
+}
+
+private struct BubbleTail: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        p.closeSubpath()
+        return p
+    }
+}
+
+private enum LifePreviewMocks {
+    static let reminders: [BolaReminder] = [
+        BolaReminder(
+            title: "喝水",
+            notificationBody: "记得补充水分",
+            schedule: .interval(60 * 60),
+            kind: .water,
+            isEnabled: true
+        ),
+        BolaReminder(
+            title: "活动一下",
+            notificationBody: "起来走一走",
+            schedule: .calendar(hour: 15, minute: 30, weekdays: []),
+            kind: .move,
+            isEnabled: true
+        ),
+        BolaReminder(
+            title: "睡前放松",
+            notificationBody: "准备休息",
+            schedule: .calendar(hour: 22, minute: 30, weekdays: []),
+            kind: .sleep,
+            isEnabled: false
+        ),
+    ]
+}
+
+private struct IOSLifeContainerPreviewHost: View {
+    @State private var reminders: [BolaReminder] = LifePreviewMocks.reminders
+
+    var body: some View {
+        IOSLifeContainerView(
+            bubbleMode: .constant(false),
+            reminders: $reminders
+        )
+    }
+}
+
+#Preview("Life") {
+    IOSLifeContainerPreviewHost()
+}
+
+// MARK: - 主视图
 
 struct IOSLifeContainerView: View {
     @Binding var bubbleMode: Bool
     @Binding var reminders: [BolaReminder]
-    /// 点 idle 头像进入根级「对话」Tab。
     var onRequestChat: () -> Void = {}
 
     @StateObject private var rhythm = IOSRhythmHRVModel()
@@ -34,20 +112,30 @@ struct IOSLifeContainerView: View {
     @State private var digestText: String = ""
     @State private var showDigestEditor = false
     @State private var draftDigest: String = ""
+    @State private var showRhythmInfo = false
 
     @State private var showAddRecordSheet = false
     @State private var addKind: LifeRecordKind = .event
     @State private var newRecordTitle: String = ""
     @State private var newRecordSubtitle: String = ""
-    /// 空字符串表示使用类型默认图标；否则为所选预设或手动输入的一个 emoji。
     @State private var newRecordIconEmoji: String = ""
+
+    /// 半圆节奏进度（0...1）：优先用当前小时 HRV，若当前小时无样本则回退今日均值。
+    private var rhythmArcProgress: Double {
+        let hour = Calendar.current.component(.hour, from: Date())
+        let values = rhythm.hourlyNormalized
+        let current = values.indices.contains(hour) ? values[hour] : 0
+        if current > 0.001 { return min(1, max(0, current)) }
+        let positives = values.filter { $0 > 0.001 }
+        guard !positives.isEmpty else { return 0 }
+        let avg = positives.reduce(0, +) / Double(positives.count)
+        return min(1, max(0, avg))
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
             lifePageBackground
                 .ignoresSafeArea(edges: [.top, .bottom])
-
-            /// 单列纵向 `ScrollView`（「时光」已迁至成长 Tab）。
             lifeScroll
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -63,102 +151,36 @@ struct IOSLifeContainerView: View {
             lifeRecords = LifeRecordListStore.load()
         }
         .sheet(isPresented: $showDigestEditor) {
-            NavigationStack {
-                Form {
-                    Section("今日小结") {
-                        TextField("Bola 口吻的一句话", text: $draftDigest, axis: .vertical)
-                            .lineLimit(3 ... 8)
-                    }
-                }
-                .navigationTitle("修改")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("取消") { showDigestEditor = false }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("保存") {
-                            let d = BolaSharedDefaults.resolved()
-                            d.set(draftDigest, forKey: DailyDigestStorageKeys.lastDigestBody)
-                            digestText = draftDigest
-                            showDigestEditor = false
-                        }
-                    }
-                }
-            }
+            digestEditorSheet
         }
         .sheet(isPresented: $showAddRecordSheet) {
             addLifeRecordSheet
         }
-    }
-
-    private var addLifeRecordSheet: some View {
-        NavigationStack {
-            Form {
-                Picker("类型", selection: $addKind) {
-                    Text("事件").tag(LifeRecordKind.event)
-                    Text("习惯").tag(LifeRecordKind.habitTodo)
-                    Text("美食").tag(LifeRecordKind.food)
-                    Text("出行").tag(LifeRecordKind.travel)
-                    Text("运动").tag(LifeRecordKind.fitness)
-                    Text("观影").tag(LifeRecordKind.movie)
-                    Text("购物").tag(LifeRecordKind.shopping)
-                }
-                .onChange(of: addKind) { _, _ in
-                    newRecordIconEmoji = ""
-                }
-                Section {
-                    LifeRecordEmojiPaletteView(kind: addKind, selection: $newRecordIconEmoji)
-                } header: {
-                    Text("图标")
-                }
-                TextField("标题", text: $newRecordTitle)
-                TextField("内容（可选）", text: $newRecordSubtitle, axis: .vertical)
-                    .lineLimit(3 ... 6)
-            }
-            .navigationTitle("添加卡片")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
-                        showAddRecordSheet = false
-                        resetAddForm()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("添加") {
-                        let card = LifeRecordCard(
-                            kind: addKind,
-                            title: newRecordTitle.isEmpty ? defaultTitle(for: addKind) : newRecordTitle,
-                            subtitle: newRecordSubtitle.isEmpty ? nil : newRecordSubtitle,
-                            iconEmoji: lifeRecordFirstGrapheme(from: newRecordIconEmoji)
-                        )
-                        lifeRecords.append(card)
-                        LifeRecordListStore.save(lifeRecords)
-                        showAddRecordSheet = false
-                        resetAddForm()
-                    }
-                }
-            }
+        .alert("节奏条", isPresented: $showRhythmInfo) {
+            Button("好的", role: .cancel) {}
+        } message: {
+            Text("基于今日心率变异性（HRV）样本按小时汇总，仅作状态参考，非医疗诊断。")
         }
     }
 
-    /// 生活页主列：Section1（今日看到+节奏条）/ Section2（正在关心）/ Section3（生活记录）之间 **等距**。
-    private var lifePageMainSectionSpacing: CGFloat {
-        bubbleMode ? 40 : 36
-    }
+    // MARK: - 滚动主体
 
     private var lifeScroll: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: lifePageMainSectionSpacing) {
-                bolaTodayFigma
-                remindersSection
+            VStack(alignment: .leading, spacing: 24) {
+                // 1. 全宽半圆弧主视觉（负 padding 出血到屏边）
+                heroArcSection
+                    .padding(.horizontal, -BolaTheme.paddingHorizontal)
+
+                // 2. 双列：提醒（左）+ 健康快捷卡（右）
+                middleTwoColumnSection
+
+                // 3. 今日生活记录
                 lifeRecordsFigma
-                IOSHealthHabitAnalysisSection(model: healthHabits)
             }
             .padding(.horizontal, BolaTheme.paddingHorizontal)
-            .padding(.top, 14)
-            .padding(.bottom, 24)
+            .padding(.top, 6)
+            .padding(.bottom, 28)
         }
         .background(Color.clear)
         .scrollIndicators(.hidden)
@@ -174,146 +196,316 @@ struct IOSLifeContainerView: View {
         BolaLifeAmbientBackground()
     }
 
-    // MARK: - Section 1（Figma：开放排版，非整张大灰卡）
+    // MARK: - Section 1：半圆弧主视觉
 
-    private var bolaTodayFigma: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .center) {
-                Text("Bola今日看到…")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.primary)
-                Spacer(minLength: 0)
-                Button {
-                    draftDigest = digestText
-                    showDigestEditor = true
-                } label: {
-                    HStack(spacing: 5) {
-                        LifeAccentChromePlusIcon()
-                        Text("修改")
-                            .font(.system(size: LifeAccentChromeButtonMetrics.fontSize, weight: .semibold))
-                            .foregroundStyle(BolaTheme.onAccentForeground)
+    private var heroArcSection: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let arcSizeReduce: CGFloat = 52
+            let arcTrackLiftY: CGFloat = 16
+            let heroContentDropY: CGFloat = 50
+            let heroSectionLiftY: CGFloat = 16
+            let strokeW: CGFloat = 12
+            let arcWidth = max(0, w - arcSizeReduce)
+            // 弧半径：令弧端点贴近屏边，留半个描边宽度避免裁切
+            let arcR = (arcWidth - strokeW) / 2
+            // 弧框高度 = 半径 + 描边半宽 + 2pt 余量
+            let arcFrameH = arcR + strokeW / 2 + 2
+            let progress = rhythmArcProgress
+            let theta = CGFloat.pi * (1 - CGFloat(progress))
+            let markerX = arcWidth / 2 + arcR * cos(theta)
+            let markerY = arcFrameH - arcR * sin(theta)
+            let markerOutset: CGFloat = 5
+            let radialX = markerX - arcWidth / 2
+            let radialY = markerY - arcFrameH
+            let radialLen = max(0.001, sqrt(radialX * radialX + radialY * radialY))
+            let markerOutsetX = radialX / radialLen * markerOutset
+            let markerOutsetY = radialY / radialLen * markerOutset
+
+            ZStack(alignment: .bottom) {
+                // 灰色背景轨道
+                SemiCircleArcShape()
+                    .stroke(
+                        Color(uiColor: .systemFill),
+                        style: StrokeStyle(lineWidth: strokeW, lineCap: .round)
+                    )
+                    .frame(width: arcWidth, height: arcFrameH)
+                    .offset(y: -arcTrackLiftY)
+
+                // 黄绿渐变弧
+                SemiCircleArcShape()
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 1.00, green: 0.63, blue: 0.25),
+                                Color(red: 0.86, green: 0.99, blue: 0.18),
+                                Color(red: 0.10, green: 0.82, blue: 0.26)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        style: StrokeStyle(lineWidth: strokeW, lineCap: .round)
+                    )
+                    .frame(width: arcWidth, height: arcFrameH)
+                    .overlay(alignment: .topLeading) {
+                        Circle()
+                            .fill(BolaTheme.surfaceBubble)
+                            .frame(width: 18, height: 18)
+                            .offset(
+                                x: markerX + markerOutsetX - 9,
+                                y: markerY + markerOutsetY - 9
+                            )
+                            .shadow(color: .black.opacity(0.12), radius: 3, x: 0, y: 1)
                     }
-                    .padding(.horizontal, LifeAccentChromeButtonMetrics.hPad)
-                    .padding(.vertical, LifeAccentChromeButtonMetrics.vPad)
-                    .background(Capsule().fill(BolaTheme.accent))
+                    .offset(y: -arcTrackLiftY)
+
+                // 岛图居中，底部对齐弧底部
+                Button {
+                    onRequestChat()
+                } label: {
+                    Image("GrowthHeroIsland")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: min(w * 0.54, 204))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("打开对话")
+                .padding(.bottom, strokeW / 2 + 2)
+                .offset(y: heroContentDropY)
+
+                // 节奏条标签（左下角）
+                HStack(spacing: 4) {
+                    Text("节奏条")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Button {
+                        showRhythmInfo = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.leading, BolaTheme.paddingHorizontal + 4)
+                .padding(.bottom, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top, spacing: 2) {
-                    VStack(spacing: 0) {
-                        Button {
-                            onRequestChat()
-                        } label: {
-                            LifeIdleOneAvatarView()
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("打开对话")
-
-                        Text("和Bola聊聊")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(BolaTheme.figmaSubtleCaption)
-                            .multilineTextAlignment(.center)
-                            .frame(width: LifeIdleOneAvatarView.displayWidth)
-                            .offset(y: -22)
-                    }
-                    .frame(width: LifeIdleOneAvatarView.displayWidth, alignment: .center)
-                    .offset(x: -6, y: -13)
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(speechLine)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .multilineTextAlignment(.leading)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous)
-                                    .fill(BolaTheme.surfaceBubble)
-                                    .shadow(color: Color.black.opacity(0.06), radius: 4, y: 2)
-                            )
-
-                        figmaBulletGrid
-                    }
-                    .offset(x: -12)
-                }
-                .padding(bubbleMode ? 12 : 0)
-                .background {
-                    if bubbleMode {
-                        RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous)
-                            .fill(BolaTheme.surfaceElevated)
-                            .shadow(color: Color.black.opacity(0.1), radius: 16, y: 6)
-                    }
-                }
-
-                IOSRhythmBarSection(model: rhythm, bubbleMode: bubbleMode)
-                    .offset(y: -26)
-                    .padding(.bottom, -26)
+            .frame(width: w, height: geo.size.height, alignment: .bottom)
+            .offset(y: -heroSectionLiftY)
+            // 语音气泡：浮在弧内上方
+            .overlay(alignment: .top) {
+                heroBubble
+                    .padding(.horizontal, BolaTheme.paddingHorizontal + 12)
+                    .padding(.top, 22)
+                    .offset(y: heroContentDropY)
             }
         }
+        .frame(height: heroArcTotalHeight)
+    }
+
+    /// 整个弧区高度 = 弧半径 + 描边 + 上方气泡空间
+    private var heroArcTotalHeight: CGFloat {
+        let w = UIScreen.main.bounds.width
+        let arcR = (w - 52 - 12) / 2
+        return arcR + 60
+    }
+
+    private var heroBubble: some View {
+        ZStack(alignment: .bottom) {
+            Text(speechLine)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 15)
+                .padding(.vertical, 11)
+                .background(
+                    RoundedRectangle(cornerRadius: 17, style: .continuous)
+                        .fill(BolaTheme.surfaceBubble)
+                        .shadow(color: .black.opacity(0.07), radius: 8, x: 0, y: 2)
+                )
+
+            BubbleTail()
+                .fill(BolaTheme.surfaceBubble)
+                .frame(width: 16, height: 9)
+                .offset(y: 4)
+                .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 2)
+        }
+        .padding(.bottom, 2)
     }
 
     private var speechLine: String {
         let t = digestText.trimmingCharacters(in: .whitespacesAndNewlines)
         if t.isEmpty { return "节奏不错！继续保持哦~" }
-        return primaryDigestLine
-    }
-
-    private var primaryDigestLine: String {
-        let t = digestText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.isEmpty { return "" }
         if let first = t.split(separator: "。").first, !first.isEmpty {
             return String(first) + "。"
         }
         return t
     }
 
-    private var figmaBulletGrid: some View {
-        let lines = digestBulletLines(from: digestText)
-        return LazyVGrid(
-            columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
-            alignment: .leading,
-            spacing: 8
-        ) {
-            ForEach(lines.indices, id: \.self) { i in
-                HStack(alignment: .top, spacing: 6) {
-                    Circle()
-                        .fill(BolaTheme.accent)
-                        .frame(width: 5, height: 5)
-                        .overlay {
-                            Circle().strokeBorder(Color.black.opacity(0.88), lineWidth: 0.6)
-                        }
-                        .padding(.top, 4)
-                    Text(lines[i])
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(BolaTheme.figmaMutedBody)
-                        .fixedSize(horizontal: false, vertical: true)
+    // MARK: - Section 2：双列（提醒 + 健康快捷卡）
+
+    private var middleTwoColumnSection: some View {
+        HStack(alignment: .top, spacing: 12) {
+            IOSRemindersSectionView(reminders: $reminders, style: .figmaLife)
+                .frame(maxWidth: .infinity)
+                .frame(height: LifeMiddleCardMetrics.dashboardColumnHeight, alignment: .topLeading)
+
+            VStack(spacing: LifeMiddleCardMetrics.healthStackSpacing) {
+                compactSleepCard
+                    .frame(height: LifeMiddleCardMetrics.healthCardRowHeight)
+                compactExerciseCard
+                    .frame(height: LifeMiddleCardMetrics.healthCardRowHeight)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: LifeMiddleCardMetrics.dashboardColumnHeight, alignment: .top)
+        }
+        .padding(.top, 24)
+    }
+
+    // MARK: - 睡眠紧凑卡
+
+    private var compactSleepCard: some View {
+        NavigationLink {
+            IOSHealthSleepDetailView(model: healthHabits)
+        } label: {
+            compactSleepContent
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var compactSleepContent: some View {
+        let hours = IOSHealthHabitSnapshot.todaySleepHoursValue(healthHabits)
+        let fraction = min(1.0, max(0.0, hours / IOSHealthRingGoals.sleepHoursTarget))
+
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center) {
+                Image(systemName: "moon.zzz.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(BolaTheme.listRowIcon)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer().frame(height: 6)
+
+            Text("睡眠")
+                .font(.system(size: 17, weight: .semibold))
+
+            Spacer(minLength: 8)
+
+            // 进度条
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.indigo.opacity(0.13))
+                        .frame(height: 7)
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.indigo.opacity(0.6), Color.indigo],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: max(0, g.size.width * fraction), height: 7)
                 }
             }
+            .frame(height: 7)
+
+            Spacer().frame(height: 6)
+
+            Text(hours > 0.01 ? "\(String(format: "%.1f", hours)) 小时" : "暂无数据")
+                .font(.caption2)
+                .foregroundStyle(hours > 0.01 ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary))
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous)
+                .fill(BolaTheme.surfaceBubble)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous)
+                .stroke(Color(uiColor: .separator).opacity(0.25), lineWidth: 1)
+        )
     }
 
-    private func digestBulletLines(from raw: String) -> [String] {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            return ["下午一直在走动", "下午一直在走动", "心情有点起伏…", "心情有点起伏…"]
+    // MARK: - 运动紧凑卡
+
+    private var compactExerciseCard: some View {
+        NavigationLink {
+            IOSHealthActivityDetailView(model: healthHabits)
+        } label: {
+            compactExerciseContent
         }
-        let parts = trimmed.split(whereSeparator: { $0 == "。" || $0 == "；" || $0 == "\n" })
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        let rest = Array(parts.dropFirst())
-        if rest.isEmpty { return [] }
-        return Array(rest.prefix(4))
+        .buttonStyle(.plain)
     }
 
-    // MARK: - Section 3
+    private var compactExerciseContent: some View {
+        let steps = IOSHealthHabitSnapshot.todayStepsValue(healthHabits)
+        let fraction = min(1.0, max(0.0, steps / IOSHealthRingGoals.stepsPerDay))
+        let hasData = steps > 0
 
-    private var remindersSection: some View {
-        IOSRemindersSectionView(reminders: $reminders, style: .figmaLife)
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center) {
+                Image(systemName: "figure.walk")
+                    .font(.subheadline)
+                    .foregroundStyle(BolaTheme.listRowIcon)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer().frame(height: 6)
+
+            Text("运动")
+                .font(.system(size: 17, weight: .semibold))
+
+            Spacer(minLength: 8)
+
+            // 圆环
+            ZStack {
+                Circle()
+                    .stroke(Color.green.opacity(0.13), lineWidth: 8)
+                Circle()
+                    .trim(from: 0, to: fraction)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.green.opacity(0.65), Color.green],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+            }
+            .frame(width: 52, height: 52)
+            .frame(maxWidth: .infinity)
+
+            Spacer().frame(height: 6)
+
+            Text(hasData ? "\(IOSHealthHabitSnapshot.intString(from: steps)) 步" : "暂无数据")
+                .font(.caption2)
+                .foregroundStyle(hasData ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary))
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous)
+                .fill(BolaTheme.surfaceBubble)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous)
+                .stroke(Color(uiColor: .separator).opacity(0.25), lineWidth: 1)
+        )
     }
 
-    // MARK: - Section 4
+    // MARK: - Section 3：今日生活记录
 
     private var lifeRecordsFigma: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -364,7 +556,6 @@ struct IOSLifeContainerView: View {
     private var weatherTile: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                // WeatherKit：`condition` → emoji；Open-Meteo：WMO `weather_code` → emoji。
                 Text(weatherEmoji)
                     .font(.system(size: LifeRecordTileMetrics.leadingIconSize))
                     .fixedSize(horizontal: true, vertical: true)
@@ -401,8 +592,7 @@ struct IOSLifeContainerView: View {
     private var weatherDetailLine: some View {
         if weather.isLoading {
             HStack(spacing: 8) {
-                ProgressView()
-                    .scaleEffect(0.85)
+                ProgressView().scaleEffect(0.85)
                 Text("加载中·—")
                     .font(.caption)
                     .foregroundStyle(BolaTheme.figmaSubtleCaption)
@@ -466,6 +656,85 @@ struct IOSLifeContainerView: View {
         )
     }
 
+    // MARK: - Sheets
+
+    private var digestEditorSheet: some View {
+        NavigationStack {
+            Form {
+                Section("今日小结") {
+                    TextField("Bola 口吻的一句话", text: $draftDigest, axis: .vertical)
+                        .lineLimit(3 ... 8)
+                }
+            }
+            .navigationTitle("修改")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { showDigestEditor = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        let d = BolaSharedDefaults.resolved()
+                        d.set(draftDigest, forKey: DailyDigestStorageKeys.lastDigestBody)
+                        digestText = draftDigest
+                        showDigestEditor = false
+                    }
+                }
+            }
+        }
+    }
+
+    private var addLifeRecordSheet: some View {
+        NavigationStack {
+            Form {
+                Picker("类型", selection: $addKind) {
+                    Text("事件").tag(LifeRecordKind.event)
+                    Text("习惯").tag(LifeRecordKind.habitTodo)
+                    Text("美食").tag(LifeRecordKind.food)
+                    Text("出行").tag(LifeRecordKind.travel)
+                    Text("运动").tag(LifeRecordKind.fitness)
+                    Text("观影").tag(LifeRecordKind.movie)
+                    Text("购物").tag(LifeRecordKind.shopping)
+                }
+                .onChange(of: addKind) { _, _ in newRecordIconEmoji = "" }
+                Section {
+                    LifeRecordEmojiPaletteView(kind: addKind, selection: $newRecordIconEmoji)
+                } header: {
+                    Text("图标")
+                }
+                TextField("标题", text: $newRecordTitle)
+                TextField("内容（可选）", text: $newRecordSubtitle, axis: .vertical)
+                    .lineLimit(3 ... 6)
+            }
+            .navigationTitle("添加卡片")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        showAddRecordSheet = false
+                        resetAddForm()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("添加") {
+                        let card = LifeRecordCard(
+                            kind: addKind,
+                            title: newRecordTitle.isEmpty ? defaultTitle(for: addKind) : newRecordTitle,
+                            subtitle: newRecordSubtitle.isEmpty ? nil : newRecordSubtitle,
+                            iconEmoji: lifeRecordFirstGrapheme(from: newRecordIconEmoji)
+                        )
+                        lifeRecords.append(card)
+                        LifeRecordListStore.save(lifeRecords)
+                        showAddRecordSheet = false
+                        resetAddForm()
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
     private func reloadDigest() {
         digestText = BolaSharedDefaults.resolved().string(forKey: DailyDigestStorageKeys.lastDigestBody) ?? ""
     }
@@ -489,7 +758,6 @@ struct IOSLifeContainerView: View {
         }
     }
 
-    /// 默认事件 ⭐️、习惯 ✅；用户在表单里填的 `iconEmoji` 优先。
     @ViewBuilder
     private func lifeRecordLeadingIcon(for card: LifeRecordCard) -> some View {
         let trimmed = card.iconEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -504,11 +772,11 @@ struct IOSLifeContainerView: View {
                 .font(.system(size: LifeRecordTileMetrics.leadingIconSize))
                 .fixedSize(horizontal: true, vertical: true)
                 .frame(minWidth: 40, minHeight: 40, alignment: .leading)
-                .accessibilityLabel(lifeRecordKindAccessibilityLabel(for: card.kind))
+                .accessibilityLabel(lifeRecordKindLabel(for: card.kind))
         }
     }
 
-    private func lifeRecordKindAccessibilityLabel(for kind: LifeRecordKind) -> String {
+    private func lifeRecordKindLabel(for kind: LifeRecordKind) -> String {
         switch kind {
         case .weather: return "天气"
         case .event: return "事件"
@@ -534,43 +802,9 @@ struct IOSLifeContainerView: View {
         }
     }
 
-    /// 保存时只取用户输入的第一个完整字素（避免误存整句）。
     private func lifeRecordFirstGrapheme(from raw: String) -> String? {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let ch = t.first else { return nil }
         return String(ch)
     }
 }
-
-// MARK: - 「和Bola聊聊」头像
-
-/// 使用 `UIImage.withRenderingMode(.alwaysOriginal)`，避免 Asset 被当成 Template 整块染成前景色（黑矩形）。
-/// 显示尺寸较资源略小，为右侧文案让出横向空间；比例与原先 228×156 一致。
-private struct LifeIdleOneAvatarView: View {
-    /// 布局宽度固定，`contentZoom` + `scaledToFill` 在框内再放大，多余裁掉。
-    static let displayWidth: CGFloat = 136
-    static let displayHeight: CGFloat = 110
-    private static let contentZoom: CGFloat = 1.48
-
-    var body: some View {
-        Group {
-            if let base = UIImage(named: "idleone0") {
-                Image(uiImage: base.withRenderingMode(.alwaysOriginal))
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFill()
-                    .scaleEffect(Self.contentZoom, anchor: .center)
-                    .frame(width: Self.displayWidth, height: Self.displayHeight)
-                    .clipped()
-            } else {
-                Image(systemName: "face.smiling.fill")
-                    .font(.system(size: 50))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(BolaTheme.accent)
-            }
-        }
-        .frame(width: Self.displayWidth, height: Self.displayHeight)
-        .clipShape(RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous))
-    }
-}
-

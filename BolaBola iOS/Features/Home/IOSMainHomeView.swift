@@ -16,8 +16,9 @@ struct IOSMainHomeView: View {
     @StateObject private var weather = IOSWeatherLocationModel()
     @State private var showWatchAppMissingHint = false
     @State private var slotsConfig = WatchFaceSlotsStore.load()
-    @State private var titleIndexA = BolaTitleSelectionStore.load().indexA
-    @State private var titleIndexB = BolaTitleSelectionStore.load().indexB
+    @State private var titleWordIdA = BolaTitleSelectionStore.load().wordIdA
+    @State private var titleWordIdB = BolaTitleSelectionStore.load().wordIdB
+    @State private var unlockedTitleIds: Set<String> = TitleUnlockStore.loadUnlockedIds()
     @State private var showCompanionInfo = false
     /// 为 true 时表盘显示三槽圆圈并允许拖放；「清空」亦仅在此模式下显示。
     @State private var isWatchFaceEditing = false
@@ -25,7 +26,20 @@ struct IOSMainHomeView: View {
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
     private var titleLine: String {
-        BolaTitleSelection(indexA: titleIndexA, indexB: titleIndexB).resolvedLine()
+        BolaTitleSelection(wordIdA: titleWordIdA, wordIdB: titleWordIdB).resolvedLine()
+    }
+
+    private var unlockedPoolA: [TitleWord] {
+        TitleWordBank.poolA.filter { unlockedTitleIds.contains($0.id) }
+    }
+    private var unlockedPoolB: [TitleWord] {
+        TitleWordBank.poolB.filter { unlockedTitleIds.contains($0.id) }
+    }
+
+    private var titleUnlocked: Bool {
+        let level = BolaLevelFormula.levelAndRemainder(
+            fromTotalXP: BolaGrowthStore.load().totalXP).level
+        return level >= 3
     }
 
     private var weatherSymbol: String {
@@ -259,53 +273,69 @@ struct IOSMainHomeView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
 
-            HStack(spacing: 0) {
-                Picker("A", selection: $titleIndexA) {
-                    ForEach(0 ..< BolaTitlePhraseBank.groupA.count, id: \.self) { i in
-                        Text(BolaTitlePhraseBank.groupA[i]).tag(i)
+            if titleUnlocked {
+                HStack(spacing: 0) {
+                    Picker("A", selection: $titleWordIdA) {
+                        ForEach(unlockedPoolA, id: \.id) { w in
+                            Text(w.text).tag(w.id)
+                        }
                     }
-                }
-                .pickerStyle(.wheel)
-                .frame(maxWidth: .infinity)
-                .clipped()
+                    .pickerStyle(.wheel)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
 
-                Text("·")
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
+                    Text("·")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
 
-                Picker("B", selection: $titleIndexB) {
-                    ForEach(0 ..< BolaTitlePhraseBank.groupB.count, id: \.self) { i in
-                        Text(BolaTitlePhraseBank.groupB[i]).tag(i)
+                    Picker("B", selection: $titleWordIdB) {
+                        ForEach(unlockedPoolB, id: \.id) { w in
+                            Text(w.text).tag(w.id)
+                        }
                     }
+                    .pickerStyle(.wheel)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
                 }
-                .pickerStyle(.wheel)
-                .frame(maxWidth: .infinity)
-                .clipped()
+                .frame(height: 120)
+                .padding(.vertical, 8)
+                .padding(.horizontal, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(BolaTheme.surfaceElevated)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color(uiColor: .separator).opacity(0.25), lineWidth: 1)
+                )
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: "lock.fill")
+                        .foregroundStyle(.secondary)
+                    Text("升到 Lv.3 解锁称号自定义")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 12)
             }
-            .frame(height: 120)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(BolaTheme.surfaceElevated)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(Color(uiColor: .separator).opacity(0.25), lineWidth: 1)
-            )
         }
-        .onChange(of: titleIndexA) { _, _ in persistTitle() }
-        .onChange(of: titleIndexB) { _, _ in persistTitle() }
+        .onChange(of: titleWordIdA) { _, _ in persistTitle() }
+        .onChange(of: titleWordIdB) { _, _ in persistTitle() }
         .onAppear {
-            titleIndexA = min(titleIndexA, max(BolaTitlePhraseBank.groupA.count - 1, 0))
-            titleIndexB = min(titleIndexB, max(BolaTitlePhraseBank.groupB.count - 1, 0))
+            unlockedTitleIds = TitleUnlockStore.loadUnlockedIds()
+            let validated = BolaTitleSelectionStore.validated()
+            titleWordIdA = validated.wordIdA
+            titleWordIdB = validated.wordIdB
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaTitleUnlocksDidChange)) { _ in
+            unlockedTitleIds = TitleUnlockStore.loadUnlockedIds()
         }
     }
 
     private func persistTitle() {
-        let sel = BolaTitleSelection(indexA: titleIndexA, indexB: titleIndexB)
-        BolaTitleSelectionStore.save(BolaTitleSelectionStore.clamped(sel))
+        let sel = BolaTitleSelection(wordIdA: titleWordIdA, wordIdB: titleWordIdB)
+        BolaTitleSelectionStore.save(sel)
         BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
     }
 
