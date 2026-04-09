@@ -21,7 +21,6 @@ struct IOSRootView: View {
     @State private var showDigestSheet = false
     @State private var digestBody = ""
     @State private var showSettingsSheet = false
-
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
     private var lifeTabRoot: some View {
@@ -139,11 +138,12 @@ struct IOSRootView: View {
             BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
         }
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active else { return }
-            BolaWCSessionCoordinator.shared.reapplyLatestReceivedContext()
-            BolaWCSessionCoordinator.shared.pushStoredLLMConfigurationToWatchIfConfigured()
-            refreshCompanionFromPersistedDefaults()
-            BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
+            if phase == .active {
+                BolaWCSessionCoordinator.shared.reapplyLatestReceivedContext()
+                BolaWCSessionCoordinator.shared.pushStoredLLMConfigurationToWatchIfConfigured()
+                refreshCompanionFromPersistedDefaults()
+                BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaCompanionStateDidMergeFromWatch)) { _ in
             refreshCompanionFromPersistedDefaults()

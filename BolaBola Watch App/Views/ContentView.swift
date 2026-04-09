@@ -112,6 +112,8 @@ final class PetViewModel: ObservableObject {
     private let heartRateForegroundPollSeconds: TimeInterval = 90
     /// 仅前台时播放主动闲聊（与计划「仅前台」一致）
     private var isForegroundActive = true
+    /// 只要 Watch App 处于打开状态就累计成长时间；陪伴值 >= 80 时按更高权重结算。
+    private var openAppGrowthSessionStartedAt: Date?
 
     /// 抽屉面板展示用（最近一次心率 BPM 数字或 "—"）
     @Published var latestHeartRateText: String = "—"
@@ -1158,11 +1160,13 @@ final class PetViewModel: ObservableObject {
         switch phase {
         case .background:
             isForegroundActive = false
+            endOpenAppGrowthSessionIfNeeded()
             stopHeartRateForegroundMonitoring()
             defaults.set(lastCompanionWallClockTime, forKey: CompanionPersistenceKeys.lastCompanionWallClock)
             persistCompanionSnapshot(defaults)
         case .active:
             isForegroundActive = true
+            beginOpenAppGrowthSessionIfNeeded()
             #if os(watchOS)
             BolaWCSessionCoordinator.shared.reapplyLatestReceivedContext()
             #endif
@@ -1183,9 +1187,28 @@ final class PetViewModel: ObservableObject {
             }
         case .inactive:
             isForegroundActive = false
+            endOpenAppGrowthSessionIfNeeded()
         @unknown default:
             break
         }
+    }
+
+    private func beginOpenAppGrowthSessionIfNeeded(now: Date = Date()) {
+        guard openAppGrowthSessionStartedAt == nil else { return }
+        openAppGrowthSessionStartedAt = now
+    }
+
+    private func endOpenAppGrowthSessionIfNeeded(now: Date = Date()) {
+        guard let startedAt = openAppGrowthSessionStartedAt else { return }
+        openAppGrowthSessionStartedAt = nil
+
+        let elapsed = now.timeIntervalSince(startedAt)
+        guard elapsed >= 1 else { return }
+
+        let companionRounded = Int(companionValue.rounded())
+        let grantedXP = BolaXPEngine.grantOpenAppXP(elapsedSeconds: elapsed, companionValue: companionRounded)
+        guard grantedXP > 0 else { return }
+        TitleUnlockManager.refreshUnlocks(currentCompanionValue: companionRounded)
     }
 
     // MARK: - Surprise / Default state machine (minimal, testable)
@@ -1445,6 +1468,7 @@ struct ContentView: View {
         .onAppear {
             viewModel.onViewAppear()
             viewModel.consumeWaterReminderIfNeeded()
+            viewModel.handleScenePhaseChange(scenePhase)
         }
         .onChange(of: scenePhase) { _, newPhase in
             viewModel.handleScenePhaseChange(newPhase)

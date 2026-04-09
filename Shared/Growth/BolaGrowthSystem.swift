@@ -78,6 +78,8 @@ public enum BolaGrowthMilestone: String, Codable, CaseIterable, Sendable {
 
 public struct BolaGrowthState: Codable, Sendable {
     public var totalXP: Int = 0
+    /// 打开 App 的成长时间权重累计；每满一个阈值可结算为 1 XP。
+    public var openAppGrowthCarrySeconds: TimeInterval = 0
 
     // 每日计数器（与 dailyPeriodStart 绑定，超过 08:00 周期自动重置）
     public var dailyPeriodStart: TimeInterval = 0
@@ -161,17 +163,39 @@ public enum BolaXPEngine {
 
     // MARK: XP 发放
 
-    /// 任务完成：+10 XP（陪伴值≥80 额外+2），每日上限 5 次。
+    public static let openAppXPSecondsPerPoint: TimeInterval = 20 * 60
+    public static let highCompanionOpenAppXPMultiplier: Double = 1.2
+
+    /// 任务完成：+10 XP，每日上限 5 次。
     @discardableResult
-    public static func grantTaskXP(companionValue: Int = 0) -> Bool {
+    public static func grantTaskXP() -> Bool {
         var state = BolaGrowthStore.load()
         _resetIfNeeded(&state)
         guard state.dailyTaskXPCount < 5 else { return false }
-        let bonus = companionValue >= 80 ? 2 : 0
-        state.totalXP += 10 + bonus
+        state.totalXP += 10
         state.dailyTaskXPCount += 1
         BolaGrowthStore.save(state)
         return true
+    }
+
+    /// 应用处于打开状态时累计成长；陪伴值 >= 80 时按 1.2x 结算。
+    @discardableResult
+    public static func grantOpenAppXP(elapsedSeconds: TimeInterval, companionValue: Int) -> Int {
+        guard elapsedSeconds > 0 else { return 0 }
+        var state = BolaGrowthStore.load()
+        _resetIfNeeded(&state)
+
+        let multiplier = companionValue >= 80 ? highCompanionOpenAppXPMultiplier : 1.0
+        state.openAppGrowthCarrySeconds += elapsedSeconds * multiplier
+
+        let grantedXP = Int(state.openAppGrowthCarrySeconds / openAppXPSecondsPerPoint)
+        if grantedXP > 0 {
+            state.totalXP += grantedXP
+            state.openAppGrowthCarrySeconds -= Double(grantedXP) * openAppXPSecondsPerPoint
+        }
+
+        BolaGrowthStore.save(state)
+        return grantedXP
     }
 
     /// iOS 对话完成：+5 XP，每日上限 2 次。

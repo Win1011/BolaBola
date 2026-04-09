@@ -167,19 +167,21 @@ struct IOSLifeContainerView: View {
 
     private var lifeScroll: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 0) {
                 // 1. 全宽半圆弧主视觉（负 padding 出血到屏边）
                 heroArcSection
                     .padding(.horizontal, -BolaTheme.paddingHorizontal)
 
                 // 2. 双列：提醒（左）+ 健康快捷卡（右）
                 middleTwoColumnSection
+                    .padding(.top, 19)
 
                 // 3. 今日生活记录
                 lifeRecordsFigma
+                    .padding(.top, 28)
             }
             .padding(.horizontal, BolaTheme.paddingHorizontal)
-            .padding(.top, 6)
+            .padding(.top, 0)
             .padding(.bottom, 28)
         }
         .background(Color.clear)
@@ -204,7 +206,8 @@ struct IOSLifeContainerView: View {
             let arcSizeReduce: CGFloat = 52
             let arcTrackLiftY: CGFloat = 16
             let heroContentDropY: CGFloat = 50
-            let heroSectionLiftY: CGFloat = 16
+            let heroBubbleDropY: CGFloat = 20
+            let heroSectionLiftY: CGFloat = 33
             let strokeW: CGFloat = 12
             let arcWidth = max(0, w - arcSizeReduce)
             // 弧半径：令弧端点贴近屏边，留半个描边宽度避免裁切
@@ -271,10 +274,11 @@ struct IOSLifeContainerView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("打开对话")
                 .padding(.bottom, strokeW / 2 + 2)
+                .offset(x: 10)
                 .offset(y: heroContentDropY)
 
                 // 节奏条标签（左下角）
-                HStack(spacing: 4) {
+                HStack(spacing: 0) {
                     Text("节奏条")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.secondary)
@@ -287,8 +291,8 @@ struct IOSLifeContainerView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.leading, BolaTheme.paddingHorizontal + 4)
-                .padding(.bottom, 14)
+                .padding(.leading, BolaTheme.paddingHorizontal + 20)
+                .padding(.bottom, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(width: w, height: geo.size.height, alignment: .bottom)
@@ -298,7 +302,7 @@ struct IOSLifeContainerView: View {
                 heroBubble
                     .padding(.horizontal, BolaTheme.paddingHorizontal + 12)
                     .padding(.top, 22)
-                    .offset(y: heroContentDropY)
+                    .offset(y: heroBubbleDropY)
             }
         }
         .frame(height: heroArcTotalHeight)

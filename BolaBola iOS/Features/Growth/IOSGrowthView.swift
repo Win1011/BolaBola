@@ -86,7 +86,7 @@ struct IOSGrowthView: View {
         .sheet(isPresented: $showLevelInfo) {
             NavigationStack {
                 ScrollView {
-                    Text("等级值用于解锁成长奖励与图鉴内容，具体规则将在后续版本完善。")
+                    Text("等级值用于解锁成长奖励与图鉴内容。任务、对话与里程碑会提升等级；当陪伴值达到 80 以上时，手表 App 打开期间的成长速度会额外加快。")
                         .font(.body)
                         .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)

@@ -178,7 +178,17 @@ struct IOSRemindersSectionView: View {
     }
 
     private func rowTitleLine(for r: BolaReminder) -> String {
-        "\(companionDisplayName) · \(r.title)"
+        let rawTitle = r.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let escapedName = NSRegularExpression.escapedPattern(for: companionDisplayName)
+        let prefixPattern = "^\(escapedName)\\s*·\\s*"
+        let normalizedTitle: String
+        if let regex = try? NSRegularExpression(pattern: prefixPattern) {
+            let full = NSRange(rawTitle.startIndex..<rawTitle.endIndex, in: rawTitle)
+            normalizedTitle = regex.stringByReplacingMatches(in: rawTitle, options: [], range: full, withTemplate: "")
+        } else {
+            normalizedTitle = rawTitle
+        }
+        return "\(companionDisplayName) · \(normalizedTitle)"
     }
 
     private func reminderRow(_ r: BolaReminder) -> some View {
