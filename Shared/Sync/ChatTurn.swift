@@ -14,6 +14,8 @@ public extension Notification.Name {
     static let bolaWatchInstallabilityDidChange = Notification.Name("bolaWatchInstallabilityDidChange")
     /// iPhone：收到手表经 WC 推送的陪伴游戏状态快照并写入本机 defaults 后发出，用于刷新 UI。
     static let bolaCompanionStateDidMergeFromWatch = Notification.Name("bolaCompanionStateDidMergeFromWatch")
+    static let bolaOpenSettingsRequested = Notification.Name("bolaOpenSettingsRequested")
+    static let bolaLLMConfigurationDidChange = Notification.Name("bolaLLMConfigurationDidChange")
 }
 
 public struct ChatTurn: Codable, Equatable, Identifiable, Sendable {

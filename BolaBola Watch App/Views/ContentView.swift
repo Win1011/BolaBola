@@ -941,9 +941,16 @@ final class PetViewModel: ObservableObject {
             return
         }
 
-        // 插入动画未播完时不响应新点击（避免连续跳）
+        // 插入动画未播完时不响应新点击（避免连续跳）。如果外部刷新已经把画面带回普通循环态，
+        // 这里顺手释放陈旧锁，避免 idleFive 等默认态看起来“点不动”。
         if isTapInteractionAnimating {
-            return
+            if shouldRecoverStaleTapInteractionLock() {
+                tapChainReturnsToRandomIdle = false
+                shouldPlayTapJumpFollowUp = false
+                isTapInteractionAnimating = false
+            } else {
+                return
+            }
         }
 
         if nowTs - lastTapBurstAt > tapBurstWindowSeconds {
@@ -1003,6 +1010,29 @@ final class PetViewModel: ObservableObject {
             showDialogue(BolaDialogueLines.tapJumpOpening(v: vNow, defaultEmotion: currentDefaultEmotion))
         }
         print("🐾 Tap -> jump tap", String(describing: currentEmotion))
+    }
+
+    private func shouldRecoverStaleTapInteractionLock() -> Bool {
+        guard !voiceConversationActive,
+              !isInEatingState,
+              !isInDrinkWaterState,
+              !isInNightSleepState
+        else {
+            return false
+        }
+
+        switch currentEmotion {
+        case .idle, .idleOne, .idleTwo, .idleThree, .idleFour, .idleFive, .idleSix,
+                .unhappyTwo, .happyIdle,
+                .scale, .die, .angry2, .unhappy, .hurt,
+                .blowbubble1, .blowbubble2,
+                .like1, .like2,
+                .sad1, .sad2,
+                .jumpTwo, .happy1, .jump1:
+            return true
+        default:
+            return false
+        }
     }
 
     // MARK: - Companion value time coupling
@@ -1446,7 +1476,8 @@ struct ContentView: View {
 
             WatchBottomChromeToolbar(
                 viewModel: viewModel,
-                onOpenPanel: { showPanelSheet = true }
+                onOpenPanel: { showPanelSheet = true },
+                canDialogue: BolaLevelGate.capabilities().canDialogue
             )
             .frame(maxWidth: .infinity)
         }

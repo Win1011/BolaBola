@@ -21,6 +21,7 @@ struct IOSRootView: View {
     @State private var showDigestSheet = false
     @State private var digestBody = ""
     @State private var showSettingsSheet = false
+    @State private var showOnboarding = !BolaOnboardingState.isCompleted
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
     private var lifeTabRoot: some View {
@@ -68,13 +69,11 @@ struct IOSRootView: View {
     private var chatTabRoot: some View {
         NavigationStack {
             IOSChatTestSection(companion: companion)
-                .padding(.horizontal, BolaTheme.paddingHorizontal)
-                .padding(.top, 0)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .background(BolaTheme.backgroundGrouped)
-                .navigationTitle("对话")
+                .navigationTitle("和 \(companionChatDisplayName) 聊天")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { settingsOnlyToolbar }
+                .toolbarBackground(.hidden, for: .navigationBar)
+                .toolbar { chatToolbarContent }
         }
         .tint(Color(UIColor.label))
     }
@@ -116,6 +115,11 @@ struct IOSRootView: View {
                 IOSSettingsListView()
             }
         }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            IOSOnboardingView {
+                showOnboarding = false
+            }
+        }
         .sheet(isPresented: $showDigestSheet) {
             NavigationStack {
                 ScrollView {
@@ -148,6 +152,9 @@ struct IOSRootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .bolaCompanionStateDidMergeFromWatch)) { _ in
             refreshCompanionFromPersistedDefaults()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaOpenSettingsRequested)) { _ in
+            showSettingsSheet = true
+        }
         .task {
             BolaSharedDefaults.migrateStandardToGroupIfNeeded()
             ReminderBootstrap.ensureDefaults()
@@ -159,8 +166,6 @@ struct IOSRootView: View {
                 }
             }
             BolaWCSessionCoordinator.shared.activate()
-            let center = UNUserNotificationCenter.current()
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
             await BolaReminderUNScheduler.sync(reminders: reminders)
             let digest = DailyDigestStore.load()
             await DailyDigestUNScheduler.sync(config: digest)
@@ -219,16 +224,42 @@ struct IOSRootView: View {
         }
     }
 
+    @ToolbarContentBuilder
+    private var chatToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            IOSNavigationGlassIconButton(
+                systemName: "calendar",
+                font: .system(size: 17, weight: .semibold),
+                accessibilityLabel: "聊天日历"
+            ) {
+                NotificationCenter.default.post(name: .bolaChatOpenHistoryCalendarRequested, object: nil)
+            }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            settingsButton
+        }
+    }
+
     /// 成长 Tab：成长 / 时光分段（与生活 Tab 一致）。
     @ToolbarContentBuilder
     private var growthNavigationToolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            IOSNavigationGlassIconButton(
-                systemName: "checkmark.circle",
-                font: .system(size: 18, weight: .medium),
-                accessibilityLabel: "Debug 完成任务"
-            ) {
-                GrowthDailyTasksViewModel.shared.debugCompleteNextTask()
+            if growthSegment == .timeMoments {
+                IOSNavigationGlassIconButton(
+                    systemName: "calendar",
+                    font: .system(size: 17, weight: .semibold),
+                    accessibilityLabel: "波拉日记日历"
+                ) {
+                    NotificationCenter.default.post(name: .bolaDiaryOpenCalendarRequested, object: nil)
+                }
+            } else {
+                IOSNavigationGlassIconButton(
+                    systemName: "checkmark.circle",
+                    font: .system(size: 18, weight: .medium),
+                    accessibilityLabel: "Debug 完成任务"
+                ) {
+                    GrowthDailyTasksViewModel.shared.debugCompleteNextTask()
+                }
             }
         }
         ToolbarItem(placement: .principal) {
@@ -247,6 +278,12 @@ struct IOSRootView: View {
         ) {
             showSettingsSheet = true
         }
+    }
+
+    private var companionChatDisplayName: String {
+        let name = bolaDefaults.string(forKey: CompanionPersistenceKeys.companionDisplayName)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? "Bola" : name
     }
 
     private func refreshCompanionFromPersistedDefaults() {

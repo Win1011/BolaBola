@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct IOSMainHomeView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Binding var companion: Double
     /// 与导航栏「刷新」联动：根视图递增即触发一次同步与健康/天气刷新。
     @Binding var refreshSignal: Int
@@ -14,7 +15,7 @@ struct IOSMainHomeView: View {
 
     @StateObject private var healthPreview = IOSWatchFaceHealthPreviewModel()
     @StateObject private var weather = IOSWeatherLocationModel()
-    @State private var showWatchAppMissingHint = false
+    @State private var watchInstallability = BolaWCSessionCoordinator.shared.watchInstallabilityStatus()
     @State private var slotsConfig = WatchFaceSlotsStore.load()
     @State private var titleWordIdA = BolaTitleSelectionStore.load().wordIdA
     @State private var titleWordIdB = BolaTitleSelectionStore.load().wordIdB
@@ -59,11 +60,8 @@ struct IOSMainHomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: BolaTheme.spacingSection) {
                     watchPreviewBlock
-                    if showWatchAppMissingHint {
-                        Text("系统显示手表端尚未安装 BolaBola（watchAppInstalled=false），手机无法下发数据。请在 iPhone 的「Watch」App →「我的手表」→ 向下找到 BolaBola 并安装；或用 Xcode 选择含 Watch 的 Scheme 运行到真机手表。安装后在手表上打开一次本应用。")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
+                    if let watchHintText {
+                        watchConnectivityHintCard(text: watchHintText)
                     }
                     companionSection
                     customWatchFaceAndPaletteGroup
@@ -87,6 +85,10 @@ struct IOSMainHomeView: View {
             BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaWatchInstallabilityDidChange)) { _ in
+            refreshWatchInstallHint()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
             refreshWatchInstallHint()
         }
         .onChange(of: refreshSignal) { _, _ in
@@ -130,6 +132,39 @@ struct IOSMainHomeView: View {
             isEditingSlots: isWatchFaceEditing
         )
         .frame(maxWidth: .infinity)
+    }
+
+    private var watchHintText: String? {
+        switch watchInstallability {
+        case .ready:
+            return nil
+        case .notPaired:
+            return "当前 iPhone 还没有配对 Apple Watch，所以 BolaBola 暂时无法把数据同步到手表。先完成手表配对，之后再打开一次 App 就可以继续联动。"
+        case .appNotInstalled:
+            return "系统显示已配对的手表上尚未安装 BolaBola，手机暂时无法下发数据。请在 iPhone 的「Watch」App →「我的手表」里找到 BolaBola 并安装；安装后在手表上打开一次本应用。"
+        }
+    }
+
+    private func watchConnectivityHintCard(text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "applewatch.radiowaves.left.and.right")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.orange)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
+                .fill(Color.orange.opacity(0.10))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
+                .stroke(Color.orange.opacity(0.18), lineWidth: 1)
+        }
     }
 
     /// 可拖入表盘三处圆圈的组件池；仅在「编辑表盘」模式下可拖拽，「清空」亦同。
@@ -352,7 +387,7 @@ struct IOSMainHomeView: View {
     }
 
     private func refreshWatchInstallHint() {
-        showWatchAppMissingHint = BolaWCSessionCoordinator.shared.shouldShowWatchAppMissingHint()
+        watchInstallability = BolaWCSessionCoordinator.shared.watchInstallabilityStatus()
     }
 
     @MainActor

@@ -39,6 +39,8 @@ public enum WCSyncPayload {
     public static let watchFaceSlotsB64 = "watchFaceSlotsB64"
     /// iPhone → Watch：`BolaTitleSelection` JSON 的 Base64。
     public static let titleSelectionB64 = "titleSelectionB64"
+    /// iPhone → Watch：当前人格选择（`default` / `tsundere`）。
+    public static let personalitySelectionRaw = "personalitySelectionRaw"
 
     /// 成长系统同步（`applicationContext`）：`BolaGrowthState` JSON 的 Base64。
     public static let growthStateB64 = "growthStateB64"
@@ -46,4 +48,6 @@ public enum WCSyncPayload {
     public static let titleUnlockedIdsB64 = "titleUnlockedIdsB64"
     /// iPhone → Watch：历史最高陪伴值（用于称号条件评估）。
     public static let maxEverCompanionValue = "maxEverCompanionValue"
+    /// iPhone -> Watch：提醒列表 `[BolaReminder]` JSON 的 Base64。
+    public static let remindersListB64 = "remindersListB64"
 }

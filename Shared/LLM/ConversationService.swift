@@ -11,9 +11,11 @@ private let bolaWatchVoiceLog = Logger(subsystem: "com.gathxr.BolaBola", categor
 public enum ConversationService {
     public static func bolaSystemPrompt(companionValue: Int, growthLevel: Int? = nil) -> String {
         let tier = CompanionTier.value(for: companionValue)
+        let growthState = BolaGrowthStore.load()
         let level = growthLevel ?? BolaLevelFormula.levelAndRemainder(
-            fromTotalXP: BolaGrowthStore.load().totalXP).level
+            fromTotalXP: growthState.totalXP).level
         let caps = BolaLevelGate.Capabilities(level: level)
+        let personalitySelection = BolaPersonalitySelectionStore.validated(growthState: growthState)
 
         var levelInstruction = ""
         switch caps.speechMode {
@@ -21,18 +23,18 @@ public enum ConversationService {
             // Lv0：不应到达这里（调用方应拦截），但保险起见给最简回复
             levelInstruction = "你还很小，只会发出简短的声音，每次回复不超过 10 字，不用完整句子。"
         case .clumsy:
-            levelInstruction = "你正在学说话（Lv\(level)），偶尔把词说错或重复，每次回复不超过 40 字，语气稚嫩可爱。"
+            if level <= 1 {
+                levelInstruction = "你刚学会说话（Lv\(level)），句子要很短，会重复字，表达稚嫩可爱，每次回复不超过 24 字。"
+            } else {
+                levelInstruction = "你还在学说话（Lv\(level)），偶尔会结巴或把词说错，句子比之前稍长一点，每次回复不超过 40 字。"
+            }
         case .normal:
-            if caps.hasPersonality, let p = BolaGrowthStore.load().personalityType {
-                let styleHint: String
-                switch p {
-                case BolaPersonalityType.energetic.rawValue:  styleHint = "活力四射、充满正能量"
-                case BolaPersonalityType.gentle.rawValue:     styleHint = "温柔体贴、说话轻声细语"
-                case BolaPersonalityType.tsundere.rawValue:   styleHint = "傲娇但内心在乎你"
-                case BolaPersonalityType.chill.rawValue:      styleHint = "佛系淡然、偶尔来一句金句"
-                default:                                       styleHint = "可爱"
-                }
-                levelInstruction = "你的性格是「\(styleHint)」，每次回复不超过 80 字。"
+            if caps.hasPersonality && personalitySelection == .tsundere {
+                levelInstruction = """
+                你当前启用了「傲娇」人格：嘴上别扭一点、偶尔先嘴硬再关心，但本质是在乎用户的。
+                不要刻薄，不要攻击用户，不要阴阳怪气过头，也不要变成恋爱陪聊机器人；你仍然是可爱的宠物 Bola。
+                每次回复不超过 80 字，语气要有傲娇感，但落点要温柔。
+                """
             } else {
                 levelInstruction = "简短可爱，每次回复不超过 80 字。"
             }
@@ -41,6 +43,7 @@ public enum ConversationService {
         return """
         你是手表宠物 Bola，不用 Markdown。\(levelInstruction)
         用户陪伴值整数为 \(companionValue)，档位约 \(tier)（越高越亲密）。不要给出医疗诊断；心率等信息仅供参考。
+        \(recentLifeContextInstruction())
 
         如果用户要求设闹钟、定时器或计时提醒，在回复末尾加上标签（用户看不到标签）：
         - 倒计时 N 分钟：<<ALARM:{"minutes":N}>>
@@ -77,6 +80,9 @@ public enum ConversationService {
             #if canImport(UserNotifications)
             await BolaReminderUNScheduler.sync(reminders: reminders)
             #endif
+            #if os(iOS)
+            BolaWCSessionCoordinator.shared.pushReminderRefreshToWatchIfPossible()
+            #endif
             bolaConversationSyncLog.info("replyToUser: alarm scheduled at \(parsed.intent.fireDate, privacy: .public)")
         } else {
             reply = rawReply
@@ -86,6 +92,13 @@ public enum ConversationService {
         let ids = delta.map(\.id.uuidString).joined(separator: ",")
         bolaConversationSyncLog.info("replyToUser OK → pushChatDelta ids=[\(ids, privacy: .public)] utteranceLen=\(utterance.count, privacy: .public)")
         BolaWCSessionCoordinator.shared.pushChatDelta(delta)
+
+        persistConversationMemoriesInBackground(
+            client: client,
+            utterance: utterance,
+            reply: reply,
+            defaults: defaults
+        )
 
         // XP：iOS 对话（每日限 2 次）+ 首次对话里程碑
         BolaXPEngine.grantIOSChatXP()
@@ -136,5 +149,79 @@ public enum ConversationService {
             return "听到啦：\(utterance.prefix(32))……今天也一起加油，我在。"
         }
         return "嘿嘿，\(utterance.prefix(28)) —— 最喜欢和你聊天啦！"
+    }
+
+    private static func recentLifeContextInstruction() -> String {
+        let recent = LifeRecordListStore.load()
+            .filter { $0.kind != .weather }
+            .sorted { $0.createdAt > $1.createdAt }
+            .prefix(5)
+            .map { card in
+                let detail = card.detailNote ?? card.subtitle ?? ""
+                return "- \(card.title)：\(detail)"
+            }
+            .joined(separator: "\n")
+
+        guard !recent.isEmpty else { return "" }
+        return """
+
+        最近生活记忆（可自然参考，不要逐条复述）：
+        \(recent)
+        """
+    }
+
+    private static func persistConversationMemoriesInBackground(
+        client: LLMClient,
+        utterance: String,
+        reply: String,
+        defaults: UserDefaults
+    ) {
+        let recentRecords = LifeRecordListStore.load(from: defaults)
+        Task(priority: .utility) {
+            guard let extraction = await DiaryIntentParser.extract(
+                client: client,
+                userText: utterance,
+                assistantReply: reply,
+                recentRecords: recentRecords
+            ) else {
+                return
+            }
+            persist(extraction: extraction, sourceText: utterance, defaults: defaults)
+        }
+    }
+
+    private static func persist(
+        extraction: ConversationMemoryExtraction,
+        sourceText: String,
+        defaults: UserDefaults
+    ) {
+        if let diary = extraction.diary {
+            BolaDiaryStore.append(
+                BolaDiaryEntry(
+                    summary: diary.summary,
+                    emoji: diary.emoji ?? "📝",
+                    sourceText: sourceText
+                ),
+                to: defaults
+            )
+        }
+
+        guard let cardDraft = extraction.lifeCard else { return }
+        let card = LifeRecordCard(
+            kind: cardDraft.kind,
+            title: cardDraft.title,
+            subtitle: cardDraft.detail,
+            detailNote: cardDraft.detail,
+            iconEmoji: cardDraft.emoji
+        )
+        var records = LifeRecordListStore.load(from: defaults)
+        if !records.contains(where: { existing in
+            existing.kind == card.kind
+                && existing.title == card.title
+                && (existing.detailNote ?? existing.subtitle ?? "") == (card.detailNote ?? card.subtitle ?? "")
+        }) {
+            records.append(card)
+            LifeRecordListStore.save(records, to: defaults)
+        }
     }
 }

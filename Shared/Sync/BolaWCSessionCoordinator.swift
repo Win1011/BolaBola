@@ -203,7 +203,20 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         bolaWCChatLog.info("sendPayload companion queued transferUserInfo keys=\(keys, privacy: .public)")
     }
 
-    #if os(iOS)
+#if os(iOS)
+    public enum WatchInstallabilityStatus: Sendable {
+        case ready
+        case notPaired
+        case appNotInstalled
+    }
+
+    public func watchInstallabilityStatus() -> WatchInstallabilityStatus {
+        guard WCSession.isSupported() else { return .ready }
+        let session = WCSession.default
+        guard session.isPaired else { return .notPaired }
+        return session.isWatchAppInstalled ? .ready : .appNotInstalled
+    }
+
     /// 将 LLM 配置发到已配对的 Apple Watch（`transferUserInfo`，可达时送达）。
     public func pushLLMConfigurationToWatch(apiKey: String, baseURL: String, model: String, useBearerAuth: Bool) {
         guard WCSession.isSupported() else { return }
@@ -218,12 +231,20 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         session.transferUserInfo(payload)
     }
 
+    /// 提醒列表在 iPhone 侧变更后，直接把列表发给手表并触发表端重排本地通知。
+    public func pushReminderRefreshToWatchIfPossible() {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isPaired, session.isWatchAppInstalled else { return }
+        let reminders = ReminderListStore.load()
+        guard let data = try? JSONEncoder().encode(reminders) else { return }
+        let payload = [WCSyncPayload.remindersListB64: data.base64EncodedString()]
+        session.transferUserInfo(payload)
+    }
+
     /// 系统是否认为「已配对的 Apple Watch 上已安装本 App」。为 false 时 `updateApplicationContext` 不会送达表端。
     public func shouldShowWatchAppMissingHint() -> Bool {
-        guard WCSession.isSupported() else { return false }
-        let s = WCSession.default
-        guard s.activationState == .activated, s.isPaired else { return false }
-        return !s.isWatchAppInstalled
+        watchInstallabilityStatus() == .appNotInstalled
     }
 
     private func postWatchInstallabilityChanged() {
@@ -282,6 +303,7 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         if let data = try? JSONEncoder().encode(title) {
             payload[WCSyncPayload.titleSelectionB64] = data.base64EncodedString()
         }
+        payload[WCSyncPayload.personalitySelectionRaw] = BolaPersonalitySelectionStore.validated().rawValue
         // Growth state
         let growthState = BolaGrowthStore.load()
         if let data = try? JSONEncoder().encode(growthState) {
@@ -535,6 +557,11 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
             BolaTitleSelectionStore.save(sel)
             changed = true
         }
+        if let raw = dict[WCSyncPayload.personalitySelectionRaw] as? String,
+           let selection = BolaPersonalitySelection(rawValue: raw) {
+            BolaPersonalitySelectionStore.save(selection)
+            changed = true
+        }
         // 成长状态合并（totalXP 取大值）
         if let b64 = dict[WCSyncPayload.growthStateB64] as? String,
            let data = Data(base64Encoded: b64),
@@ -558,6 +585,9 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
     /// 仅当远端时间戳更新时才写入并回调，避免旧包覆盖新本地编辑。
     private func ingest(_ dict: [String: Any]) {
         #if os(watchOS)
+        if Self.ingestRemindersIfPresent(dict) {
+            return
+        }
         Self.ingestWatchHomeScreenPayloadIfPresent(dict)
         #endif
         guard let (v, tsRaw) = Self.parsePayload(dict) else { return }
@@ -610,6 +640,18 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
         }
     }
 
+    #if os(watchOS)
+    @discardableResult
+    private static func ingestRemindersIfPresent(_ dict: [String: Any]) -> Bool {
+        guard let b64 = dict[WCSyncPayload.remindersListB64] as? String,
+              let data = Data(base64Encoded: b64),
+              let reminders = try? JSONDecoder().decode([BolaReminder].self, from: data) else { return false }
+        ReminderListStore.save(reminders)
+        Task { await BolaReminderUNScheduler.sync(reminders: reminders) }
+        return true
+    }
+    #endif
+
     // MARK: - WCSessionDelegate
 
     public func session(
@@ -649,6 +691,7 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
             #if os(iOS)
             self.pushStoredLLMConfigurationToWatchIfConfigured()
             self.pushLocalCompanionTowardWatchFromDefaults()
+            self.pushReminderRefreshToWatchIfPossible()
             self.postWatchInstallabilityChanged()
             #endif
             self.flushPendingChatDeltasIfReady(session: session)
@@ -667,6 +710,7 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
             self.flushPendingChatDeltasIfReady(session: session)
             self.pushStoredLLMConfigurationToWatchIfConfigured()
             self.pushLocalCompanionTowardWatchFromDefaults()
+            self.pushReminderRefreshToWatchIfPossible()
             self.postWatchInstallabilityChanged()
         }
     }
@@ -679,6 +723,7 @@ public final class BolaWCSessionCoordinator: NSObject, WCSessionDelegate {
             guard session.isReachable, session.isWatchAppInstalled else { return }
             self.pushStoredLLMConfigurationToWatchIfConfigured()
             self.pushLocalCompanionTowardWatchFromDefaults()
+            self.pushReminderRefreshToWatchIfPossible()
         }
     }
 

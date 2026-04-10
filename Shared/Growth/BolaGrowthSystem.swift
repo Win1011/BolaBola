@@ -89,7 +89,7 @@ public struct BolaGrowthState: Codable, Sendable {
     public var dailySleepCount: Int = 0       // 每日睡眠 XP 次数（上限 1）
 
     public var completedMilestones: [String] = []   // BolaGrowthMilestone.rawValue
-    public var personalityType: String? = nil        // Lv5+ 随机分配，持久化
+    public var personalityType: String? = nil        // Lv5+ 解锁当前版本已实现的人格，持久化
 
     public init() {
         dailyPeriodStart = GrowthDayBoundary.currentPeriodStart().timeIntervalSince1970
@@ -241,11 +241,11 @@ public enum BolaXPEngine {
         guard !state.completedMilestones.contains(milestone.rawValue) else { return false }
         state.totalXP += milestone.xpReward
         state.completedMilestones.append(milestone.rawValue)
-        // Lv5+ 首次分配性格
+        // 首版仅开放傲娇人格：到 Lv5 时写入可解锁的人格值，是否启用由设置页选择。
         if state.personalityType == nil {
             let (level, _) = BolaLevelFormula.levelAndRemainder(fromTotalXP: state.totalXP)
             if level >= 5 {
-                state.personalityType = BolaPersonalityType.allCases.randomElement()?.rawValue
+                state.personalityType = BolaPersonalityType.tsundere.rawValue
             }
         }
         BolaGrowthStore.save(state)
@@ -289,11 +289,71 @@ public enum BolaLevelGate {
     }
 }
 
-// MARK: - 性格类型（Lv5+ 随机分配）
+// MARK: - 性格类型（Lv5+ 解锁）
 
 public enum BolaPersonalityType: String, CaseIterable, Sendable {
     case energetic   = "元气"
     case gentle      = "温柔"
     case tsundere    = "傲娇"
     case chill       = "佛系"
+}
+
+public enum BolaPersonalitySelection: String, Codable, CaseIterable, Sendable {
+    case `default` = "default"
+    case tsundere = "tsundere"
+
+    public var displayName: String {
+        switch self {
+        case .default: return "默认"
+        case .tsundere: return "傲娇"
+        }
+    }
+}
+
+public enum BolaPersonalitySelectionStore {
+    private static let defaultsKey = "bola_personality_selection_v1"
+    private static var defaults: UserDefaults { BolaSharedDefaults.resolved() }
+
+    public static func load() -> BolaPersonalitySelection {
+        guard let raw = defaults.string(forKey: defaultsKey),
+              let selection = BolaPersonalitySelection(rawValue: raw) else {
+            return .default
+        }
+        return selection
+    }
+
+    public static func save(_ selection: BolaPersonalitySelection) {
+        let validated = validated(selection, growthState: BolaGrowthStore.load())
+        if validated == .default {
+            defaults.removeObject(forKey: defaultsKey)
+        } else {
+            defaults.set(validated.rawValue, forKey: defaultsKey)
+        }
+        NotificationCenter.default.post(name: .bolaPersonalitySelectionDidChange, object: nil)
+    }
+
+    public static func validated(growthState: BolaGrowthState = BolaGrowthStore.load()) -> BolaPersonalitySelection {
+        validated(load(), growthState: growthState)
+    }
+
+    public static func validated(
+        _ selection: BolaPersonalitySelection,
+        growthState: BolaGrowthState
+    ) -> BolaPersonalitySelection {
+        switch selection {
+        case .default:
+            return .default
+        case .tsundere:
+            return isTsundereUnlocked(growthState: growthState) ? .tsundere : .default
+        }
+    }
+
+    public static func isTsundereUnlocked(growthState: BolaGrowthState = BolaGrowthStore.load()) -> Bool {
+        let level = BolaLevelFormula.levelAndRemainder(fromTotalXP: growthState.totalXP).level
+        return level >= 5 && growthState.personalityType == BolaPersonalityType.tsundere.rawValue
+    }
+}
+
+public extension Notification.Name {
+    static let bolaPersonalitySelectionDidChange = Notification.Name("bolaPersonalitySelectionDidChange")
 }

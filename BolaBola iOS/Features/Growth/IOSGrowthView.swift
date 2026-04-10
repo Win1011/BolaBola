@@ -81,7 +81,11 @@ struct IOSGrowthView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 dailyTasksVM.refreshRandomFlipStateIfNeeded()
+                Task { await dailyTasksVM.refreshProgress() }
             }
+        }
+        .task {
+            await dailyTasksVM.refreshProgress()
         }
         .sheet(isPresented: $showLevelInfo) {
             NavigationStack {

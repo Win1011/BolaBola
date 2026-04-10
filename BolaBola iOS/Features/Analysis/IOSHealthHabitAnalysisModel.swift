@@ -38,7 +38,7 @@ final class IOSHealthHabitAnalysisModel: ObservableObject {
 
     /// 是否已在当前设备上走过一次「读取健康数据」系统授权流程。
     /// 注意：对**只读**类型，`authorizationStatus` 在授权后仍常为 `notDetermined`，不能用它判断是否可读，否则会永远卡在「请授权」。
-    private static let healthReadPromptCompletedKey = "bola_ios_health_read_prompt_completed"
+    static let healthReadPromptCompletedKey = "bola_ios_health_read_prompt_completed"
 
     private static var readTypes: Set<HKObjectType> {
         var s = Set<HKObjectType>()
@@ -104,7 +104,7 @@ final class IOSHealthHabitAnalysisModel: ObservableObject {
         }
 
         if status == .notDetermined {
-            if requestIfNeeded {
+            if requestIfNeeded, !prompted {
                 await requestAuthorization(types: types)
                 UserDefaults.standard.set(true, forKey: Self.healthReadPromptCompletedKey)
                 prompted = true

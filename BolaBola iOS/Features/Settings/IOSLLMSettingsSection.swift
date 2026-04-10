@@ -60,6 +60,7 @@ struct IOSLLMSettingsSection: View {
                     model: modelId.trimmingCharacters(in: .whitespacesAndNewlines),
                     useBearerAuth: useBearerAuth
                 )
+                NotificationCenter.default.post(name: .bolaLLMConfigurationDidChange, object: nil)
                 saveMessage = "已保存。手表会通过无线同步收到 Key；若仍提示未配置，请 iPhone 与手表都打开本 App 稍等，或在手表再试一次麦克风。"
             }
             .buttonStyle(.borderedProminent)

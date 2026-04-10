@@ -23,6 +23,7 @@ public struct LifeRecordCard: Identifiable, Codable, Equatable, Sendable {
     public var detailNote: String?
     /// 卡片左上角图标；`nil` 时由 UI 按 `kind` 使用默认 emoji（系统字体渲染）。
     public var iconEmoji: String?
+    public var createdAt: Date
 
     public init(
         id: UUID = UUID(),
@@ -30,7 +31,8 @@ public struct LifeRecordCard: Identifiable, Codable, Equatable, Sendable {
         title: String,
         subtitle: String? = nil,
         detailNote: String? = nil,
-        iconEmoji: String? = nil
+        iconEmoji: String? = nil,
+        createdAt: Date = Date()
     ) {
         self.id = id
         self.kind = kind
@@ -38,6 +40,22 @@ public struct LifeRecordCard: Identifiable, Codable, Equatable, Sendable {
         self.subtitle = subtitle
         self.detailNote = detailNote
         self.iconEmoji = iconEmoji
+        self.createdAt = createdAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, kind, title, subtitle, detailNote, iconEmoji, createdAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        kind = try container.decode(LifeRecordKind.self, forKey: .kind)
+        title = try container.decode(String.self, forKey: .title)
+        subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
+        detailNote = try container.decodeIfPresent(String.self, forKey: .detailNote)
+        iconEmoji = try container.decodeIfPresent(String.self, forKey: .iconEmoji)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
     }
 }
 

@@ -20,6 +20,11 @@ final class IOSWatchFaceHealthPreviewModel: ObservableObject {
             stepsText = "—"
             return
         }
+        guard BolaOnboardingState.isCompleted else {
+            heartRateText = "—"
+            stepsText = "—"
+            return
+        }
         var read = Set<HKObjectType>()
         if let t = HKQuantityType.quantityType(forIdentifier: .heartRate) { read.insert(t) }
         if let t = HKQuantityType.quantityType(forIdentifier: .stepCount) { read.insert(t) }

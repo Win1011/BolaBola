@@ -32,6 +32,7 @@ struct WatchBottomChromeToolbar: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var viewModel: PetViewModel
     var onOpenPanel: () -> Void
+    var canDialogue: Bool = true
 
     @State private var isRecording = false
     @State private var isAwaitingMicPermission = false
@@ -44,7 +45,9 @@ struct WatchBottomChromeToolbar: View {
         VStack(spacing: 2) {
             HStack {
                 Spacer(minLength: 0)
-                micControl
+                if canDialogue {
+                    micControl
+                }
                 Spacer(minLength: 0)
             }
             .offset(y: -6)

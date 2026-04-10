@@ -6,6 +6,11 @@
 import SwiftUI
 
 struct IOSRemindersSectionView: View {
+    private struct EditorSheetState: Identifiable {
+        let id = UUID()
+        let mode: IOSReminderEditorSheet.Mode
+    }
+
     enum Style {
         case standard
         /// Figma 生活页：白卡圆角 20、小粒「+添加」
@@ -18,8 +23,7 @@ struct IOSRemindersSectionView: View {
     var companionDisplayName: String = CompanionDisplayNameStore.resolved()
     var style: Style = .standard
 
-    @State private var showEditor = false
-    @State private var editorMode: IOSReminderEditorSheet.Mode = .create
+    @State private var activeEditor: EditorSheetState?
 
     private var figmaRowHeight: CGFloat { 36 }
     private var figmaRowSpacing: CGFloat { 7 }
@@ -27,11 +31,11 @@ struct IOSRemindersSectionView: View {
 
     var body: some View {
         content
-            .sheet(isPresented: $showEditor) {
+            .sheet(item: $activeEditor) { sheet in
                 IOSReminderEditorSheet(
-                    mode: editorMode,
+                    mode: sheet.mode,
                     onSave: { saved in
-                        switch editorMode {
+                        switch sheet.mode {
                         case .edit(let original):
                             if let idx = reminders.firstIndex(where: { $0.id == original.id }) {
                                 reminders[idx] = saved
@@ -42,7 +46,7 @@ struct IOSRemindersSectionView: View {
                         persistReminders()
                     },
                     onDelete: {
-                        if case .edit(let original) = editorMode {
+                        if case .edit(let original) = sheet.mode {
                             reminders.removeAll { $0.id == original.id }
                             persistReminders()
                         }
@@ -84,14 +88,12 @@ struct IOSRemindersSectionView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         Menu {
                             Button("+创建新提醒") {
-                                editorMode = .create
-                                showEditor = true
+                                activeEditor = EditorSheetState(mode: .create)
                             }
                             Section("模板") {
                                 ForEach(ReminderTemplateLibrary.all) { t in
                                     Button(t.title) {
-                                        editorMode = .createFromTemplate(t)
-                                        showEditor = true
+                                        activeEditor = EditorSheetState(mode: .createFromTemplate(t))
                                     }
                                 }
                             }
@@ -141,14 +143,12 @@ struct IOSRemindersSectionView: View {
                 Spacer()
                 Menu {
                     Button("+创建新提醒") {
-                        editorMode = .create
-                        showEditor = true
+                        activeEditor = EditorSheetState(mode: .create)
                     }
                     Section("模板") {
                         ForEach(ReminderTemplateLibrary.all) { t in
                             Button(t.title) {
-                                editorMode = .createFromTemplate(t)
-                                showEditor = true
+                                activeEditor = EditorSheetState(mode: .createFromTemplate(t))
                             }
                         }
                     }
@@ -252,8 +252,7 @@ struct IOSRemindersSectionView: View {
         )
         .contentShape(Rectangle())
         .onTapGesture {
-            editorMode = .edit(r)
-            showEditor = true
+            activeEditor = EditorSheetState(mode: .edit(r))
         }
         .contextMenu {
             Button(role: .destructive) {
@@ -267,6 +266,9 @@ struct IOSRemindersSectionView: View {
 
     private func persistReminders() {
         ReminderListStore.save(reminders)
-        Task { await BolaReminderUNScheduler.sync(reminders: reminders) }
+        Task {
+            await BolaReminderUNScheduler.sync(reminders: reminders)
+            BolaWCSessionCoordinator.shared.pushReminderRefreshToWatchIfPossible()
+        }
     }
 }

@@ -133,6 +133,7 @@ final class GrowthDailyTasksViewModel: ObservableObject {
     let definitions: [GrowthDailyTaskCardDefinition]
     private let healthStore = HKHealthStore()
     private var growthObserver: NSObjectProtocol?
+    private var chatObserver: NSObjectProtocol?
 
     init(
         definitions: [GrowthDailyTaskCardDefinition]? = nil,
@@ -153,21 +154,36 @@ final class GrowthDailyTasksViewModel: ObservableObject {
             forName: .bolaGrowthStateDidChange,
             object: nil, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.refreshChatProgress() }
+            Task { @MainActor [weak self] in await self?.refreshProgress() }
         }
-        refreshChatProgress()
+        chatObserver = NotificationCenter.default.addObserver(
+            forName: .bolaChatHistoryDidMerge,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.refreshProgress() }
+        }
+        Task { @MainActor [weak self] in
+            await self?.refreshProgress()
+        }
     }
 
-    /// 根据成长系统里今日 iOS 对话次数刷新「聊天」任务条（每日上限 2 次，与 `BolaXPEngine.grantIOSChatXP` 一致）。
-    private func refreshChatProgress() {
-        _ = BolaXPEngine.ensureDailyReset()
-        let count = BolaGrowthStore.load().dailyIOSChatCount
-        let p = min(1.0, Double(count) / 2.0)
-        updateProgress(taskId: "chat", value: p)
+    func refreshProgress() async {
+        var next = progressByTaskId
+        let defaults = BolaSharedDefaults.resolved()
+        next["walk"] = await Self.queryWalkProgress(store: healthStore)
+        next["chat"] = Self.chatProgressToday(defaults: defaults)
+        next["random_a"] = 1.0
+        next["random_b"] = 1.0
+        next["random_c"] = 1.0
+        for (taskId, value) in next {
+            updateProgress(taskId: taskId, value: value)
+        }
     }
 
     deinit {
         if let obs = growthObserver { NotificationCenter.default.removeObserver(obs) }
+        if let obs = chatObserver { NotificationCenter.default.removeObserver(obs) }
     }
 
     /// 进入前台或跨日时调用：新周期会清空翻面状态。
@@ -214,11 +230,9 @@ final class GrowthDailyTasksViewModel: ObservableObject {
         revealedRandomTaskIds = GrowthRandomCardFlipStore.syncPeriodAndLoadRevealedIds()
         GrowthTaskCompletionAnimStore.debugClearSeen()
         xpGrantedTaskIds = []
-        var next = progressByTaskId
-        for d in definitions {
-            next[d.id] = Self.placeholderProgress(for: d.id)
+        Task { @MainActor [weak self] in
+            await self?.refreshProgress()
         }
-        progressByTaskId = next
     }
 
     /// 调试：完成下一个未完成的任务（按 definitions 顺序）。
@@ -238,11 +252,31 @@ final class GrowthDailyTasksViewModel: ObservableObject {
         progressByTaskId = next
     }
 
+    private static func chatProgressToday(defaults: UserDefaults) -> Double {
+        let turns = ChatHistoryStore.load(from: defaults)
+        let todayStart = Calendar.current.startOfDay(for: Date())
+        let todayUserTurns = turns.filter { $0.role == "user" && $0.createdAt >= todayStart }
+        return todayUserTurns.isEmpty ? 0 : 1
+    }
+
+    nonisolated private static func queryWalkProgress(store: HKHealthStore) async -> Double {
+        guard HKHealthStore.isHealthDataAvailable(),
+              let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return 0 }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: Date())
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
+        let totalSteps: Double = await withCheckedContinuation { continuation in
+            let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, stats, _ in
+                continuation.resume(returning: stats?.sumQuantity()?.doubleValue(for: .count()) ?? 0)
+            }
+            store.execute(query)
+        }
+        return min(1.0, max(0.0, totalSteps / 5000.0))
+    }
+
     private static func placeholderProgress(for id: String) -> Double {
         switch id {
-        case "walk": return 0.42
-        case "chat": return 0.18
-        case "random_a", "random_b", "random_c": return 0
+        case "random_a", "random_b", "random_c": return 1
         default: return 0
         }
     }

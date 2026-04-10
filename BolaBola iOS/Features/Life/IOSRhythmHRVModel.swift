@@ -33,7 +33,6 @@ final class IOSRhythmHRVModel: ObservableObject {
             phase = .unavailable
             return
         }
-
         let types: Set<HKObjectType> = [hrvType]
         await requestAuthorization(types: types)
 

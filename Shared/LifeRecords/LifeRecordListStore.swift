@@ -7,6 +7,7 @@ import Foundation
 public extension Notification.Name {
     /// 生活记录卡组被恢复为默认（仅天气）后发出；`IOSLifeContainerView` 等可据此刷新内存中的列表。
     static let bolaLifeRecordsDidReset = Notification.Name("bolaLifeRecordsDidReset")
+    static let bolaLifeRecordsDidChange = Notification.Name("bolaLifeRecordsDidChange")
 }
 
 public enum LifeRecordListStore {
@@ -26,6 +27,9 @@ public enum LifeRecordListStore {
         let ordered = ensureWeatherFirst(records)
         guard let data = try? encoder.encode(ordered) else { return }
         defaults.set(data, forKey: LifeRecordStorageKeys.recordsJSON)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .bolaLifeRecordsDidChange, object: nil)
+        }
     }
 
     /// 将卡组恢复为默认（仅保留「天气」卡），并主线程发出 `bolaLifeRecordsDidReset`。

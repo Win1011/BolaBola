@@ -16,6 +16,7 @@ struct IOSSettingsListView: View {
     @State private var confirmResetLifeRecords = false
     @State private var confirmResetGrowth = false
     @State private var growthSummary: String = ""
+    @State private var selectedPersonality = BolaPersonalitySelectionStore.validated()
 
     var body: some View {
         List {
@@ -88,19 +89,24 @@ struct IOSSettingsListView: View {
                     BolaXPEngine.completeMilestone(.companion100)
                     refreshGrowthSummary()
                 }
+                Button("等级 +1（调试）") {
+                    debugLevelUpOnce()
+                }
                 Button("解锁所有称号词条") {
                     var state = BolaGrowthStore.load()
                     // 临时设高 XP + 所有里程碑，触发解锁
                     state.totalXP = max(state.totalXP, BolaLevelFormula.cumulativeXP(forLevel: 20))
                     state.completedMilestones = BolaGrowthMilestone.allCases.map(\.rawValue)
-                    state.personalityType = BolaPersonalityType.energetic.rawValue
+                    state.personalityType = BolaPersonalityType.tsundere.rawValue
                     BolaGrowthStore.save(state)
                     TitleUnlockManager.refreshUnlocks(
                         state: state,
                         currentCompanionValue: 100,
                         maxEverCompanionValue: 100
                     )
+                    BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
                     refreshGrowthSummary()
+                    refreshPersonalitySelection()
                 }
                 // 任务调试
                 Button("一键完成所有每日任务") {
@@ -118,6 +124,28 @@ struct IOSSettingsListView: View {
                 Text("仅供调试，不影响真实健康数据。里程碑奖励为一次性，重置后可再次触发。")
             }
             .onAppear { refreshGrowthSummary() }
+
+            Section {
+                HStack {
+                    Text("当前人格")
+                    Spacer()
+                    Text(personalityStatusText)
+                        .foregroundStyle(.secondary)
+                }
+
+                Picker("人格", selection: $selectedPersonality) {
+                    Text(BolaPersonalitySelection.default.displayName).tag(BolaPersonalitySelection.default as BolaPersonalitySelection)
+                    Text(BolaPersonalitySelection.tsundere.displayName).tag(BolaPersonalitySelection.tsundere as BolaPersonalitySelection)
+                }
+                .pickerStyle(.segmented)
+                .disabled(!isTsundereUnlocked)
+            } header: {
+                Text("人格")
+            } footer: {
+                Text(isTsundereUnlocked
+                     ? "已解锁傲娇人格。默认保持现在的 Bola 风格，切到傲娇后会同步影响 iPhone 与手表对话。"
+                     : "Lv.5 解锁傲娇人格。解锁前会保持当前默认风格。")
+            }
 
             Section {
                 HStack {
@@ -152,9 +180,18 @@ struct IOSSettingsListView: View {
         }
         .task {
             await refreshNotificationStatus()
+            refreshPersonalitySelection()
         }
         .onAppear {
             Task { await refreshNotificationStatus() }
+            refreshPersonalitySelection()
+        }
+        .onChange(of: selectedPersonality) { _, newValue in
+            applyPersonalitySelection(newValue)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaGrowthStateDidChange)) { _ in
+            refreshGrowthSummary()
+            refreshPersonalitySelection()
         }
         .confirmationDialog(
             "将删除除「天气」外的所有生活卡片，且无法撤销。",
@@ -173,7 +210,10 @@ struct IOSSettingsListView: View {
         ) {
             Button("清零等级与 XP", role: .destructive) {
                 BolaGrowthStore.save(BolaGrowthState())
+                BolaPersonalitySelectionStore.save(.default)
+                BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
                 refreshGrowthSummary()
+                refreshPersonalitySelection()
             }
             Button("取消", role: .cancel) {}
         }
@@ -184,6 +224,44 @@ struct IOSSettingsListView: View {
         let (lvl, rem) = BolaLevelFormula.levelAndRemainder(fromTotalXP: state.totalXP)
         let next = BolaLevelFormula.xpRequired(forLevel: lvl)
         growthSummary = "Lv.\(lvl)  \(rem)/\(next) XP  (总\(state.totalXP))"
+    }
+
+    private func debugLevelUpOnce() {
+        var state = BolaGrowthStore.load()
+        let currentLevel = BolaLevelFormula.levelAndRemainder(fromTotalXP: state.totalXP).level
+        let targetLevel = min(currentLevel + 1, BolaLevelFormula.maxLevel)
+        guard targetLevel > currentLevel else { return }
+
+        state.totalXP = max(state.totalXP, BolaLevelFormula.cumulativeXP(forLevel: targetLevel))
+        if targetLevel >= 5, state.personalityType == nil {
+            state.personalityType = BolaPersonalityType.tsundere.rawValue
+        }
+        BolaGrowthStore.save(state)
+        TitleUnlockManager.refreshUnlocks(state: state, currentCompanionValue: 0)
+        BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
+        refreshGrowthSummary()
+        refreshPersonalitySelection()
+    }
+
+    private var isTsundereUnlocked: Bool {
+        BolaPersonalitySelectionStore.isTsundereUnlocked()
+    }
+
+    private var personalityStatusText: String {
+        isTsundereUnlocked ? selectedPersonality.displayName : "未解锁"
+    }
+
+    private func refreshPersonalitySelection() {
+        selectedPersonality = BolaPersonalitySelectionStore.validated()
+    }
+
+    private func applyPersonalitySelection(_ selection: BolaPersonalitySelection) {
+        BolaPersonalitySelectionStore.save(selection)
+        let stored = BolaPersonalitySelectionStore.validated()
+        if selectedPersonality != stored {
+            selectedPersonality = stored
+        }
+        BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
     }
 
     private var notificationStatusLabel: String {

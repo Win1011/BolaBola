@@ -31,11 +31,15 @@ final class IOSWeatherLocationModel: NSObject, ObservableObject {
         authorizationStatus = manager.authorizationStatus
     }
 
-    func requestAndFetch() {
+    func requestAndFetch(requestAuthorizationIfNeeded: Bool = false) {
         lastError = nil
         switch manager.authorizationStatus {
         case .notDetermined:
-            manager.requestWhenInUseAuthorization()
+            if requestAuthorizationIfNeeded {
+                manager.requestWhenInUseAuthorization()
+            } else {
+                lastError = "开启位置权限后可显示当地天气。"
+            }
         case .authorizedAlways, .authorizedWhenInUse:
             fetchLocationThenWeather()
         case .denied, .restricted:

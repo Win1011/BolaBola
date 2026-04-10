@@ -119,6 +119,7 @@ struct IOSLifeContainerView: View {
     @State private var newRecordTitle: String = ""
     @State private var newRecordSubtitle: String = ""
     @State private var newRecordIconEmoji: String = ""
+    @State private var selectedBubbleRecord: LifeRecordCard?
 
     /// 半圆节奏进度（0...1）：优先用当前小时 HRV，若当前小时无样本则回退今日均值。
     private var rhythmArcProgress: Double {
@@ -136,16 +137,27 @@ struct IOSLifeContainerView: View {
         ZStack(alignment: .top) {
             lifePageBackground
                 .ignoresSafeArea(edges: [.top, .bottom])
-            lifeScroll
+            if bubbleMode {
+                lifeBubbleBoard
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            } else {
+                lifeScroll
+                    .transition(.opacity)
+            }
         }
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: bubbleMode)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
+            lifeRecords = LifeRecordListStore.load()
             reloadDigest()
             weather.requestAndFetch()
             Task { await rhythm.refresh() }
         }
         .task {
-            await healthHabits.refresh()
+            await healthHabits.refresh(requestIfNeeded: true)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaLifeRecordsDidChange)) { _ in
+            lifeRecords = LifeRecordListStore.load()
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaLifeRecordsDidReset)) { _ in
             lifeRecords = LifeRecordListStore.load()
@@ -156,11 +168,30 @@ struct IOSLifeContainerView: View {
         .sheet(isPresented: $showAddRecordSheet) {
             addLifeRecordSheet
         }
+        .sheet(item: $selectedBubbleRecord) { record in
+            LifeRecordBubbleDetailSheet(record: record)
+        }
         .alert("节奏条", isPresented: $showRhythmInfo) {
             Button("好的", role: .cancel) {}
         } message: {
             Text("基于今日心率变异性（HRV）样本按小时汇总，仅作状态参考，非医疗诊断。")
         }
+    }
+
+    private var lifeBubbleBoard: some View {
+        LifeBubbleView(
+            records: lifeRecords,
+            onAdd: {
+                addKind = .event
+                newRecordTitle = ""
+                newRecordSubtitle = ""
+                newRecordIconEmoji = ""
+                showAddRecordSheet = true
+            },
+            onSelect: { record in
+                selectedBubbleRecord = record
+            }
+        )
     }
 
     // MARK: - 滚动主体
@@ -190,7 +221,7 @@ struct IOSLifeContainerView: View {
             reloadDigest()
             weather.requestAndFetch()
             await rhythm.refresh()
-            await healthHabits.refresh()
+            await healthHabits.refresh(requestIfNeeded: true)
         }
     }
 
@@ -725,6 +756,7 @@ struct IOSLifeContainerView: View {
                             kind: addKind,
                             title: newRecordTitle.isEmpty ? defaultTitle(for: addKind) : newRecordTitle,
                             subtitle: newRecordSubtitle.isEmpty ? nil : newRecordSubtitle,
+                            detailNote: newRecordSubtitle.isEmpty ? nil : newRecordSubtitle,
                             iconEmoji: lifeRecordFirstGrapheme(from: newRecordIconEmoji)
                         )
                         lifeRecords.append(card)
@@ -811,4 +843,248 @@ struct IOSLifeContainerView: View {
         guard let ch = t.first else { return nil }
         return String(ch)
     }
+}
+
+private struct LifeBubbleView: View {
+    let records: [LifeRecordCard]
+    let onAdd: () -> Void
+    let onSelect: (LifeRecordCard) -> Void
+
+    private var visibleRecords: [LifeRecordCard] {
+        records.sorted { lhs, rhs in
+            if lhs.kind == .weather { return true }
+            if rhs.kind == .weather { return false }
+            return lhs.createdAt > rhs.createdAt
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = geo.size
+            ZStack {
+                ForEach(Array(visibleRecords.enumerated()), id: \.element.id) { index, record in
+                    let diameter = bubbleDiameter(at: index, in: size)
+                    Button {
+                        onSelect(record)
+                    } label: {
+                        bubble(record, diameter: diameter)
+                    }
+                    .buttonStyle(.plain)
+                    .position(bubblePosition(at: index, diameter: diameter, in: size))
+                    .transition(.scale.combined(with: .opacity))
+                }
+
+                if visibleRecords.isEmpty {
+                    VStack(spacing: 12) {
+                        Text("还没有生活泡泡")
+                            .font(.headline)
+                        Text("和 Bola 聊聊今天，或先手动添加一张生活卡片。")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button("添加第一张") {
+                            onAdd()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .padding(24)
+                }
+
+                VStack {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("生活泡泡")
+                                .font(.title3.weight(.bold))
+                            Text("轻点一个泡泡，回看今天的小片段")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button {
+                            onAdd()
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(BolaTheme.onAccentForeground)
+                                .frame(width: 34, height: 34)
+                                .background(Circle().fill(BolaTheme.accent))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("添加生活卡片")
+                    }
+                    .padding(.horizontal, BolaTheme.paddingHorizontal)
+                    .padding(.top, 18)
+                    Spacer()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func bubble(_ record: LifeRecordCard, diameter: CGFloat) -> some View {
+        VStack(spacing: 6) {
+            Text(record.iconEmoji ?? defaultEmoji(for: record.kind))
+                .font(.system(size: max(28, diameter * 0.28)))
+            Text(record.title)
+                .font(.system(size: max(12, diameter * 0.12), weight: .semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.76)
+            if let subtitle = record.subtitle, !subtitle.isEmpty, diameter > 116 {
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .padding(.horizontal, diameter * 0.12)
+        .frame(width: diameter, height: diameter)
+        .background(
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [bubbleColor(for: record.kind).opacity(0.95), bubbleColor(for: record.kind).opacity(0.56)],
+                        center: .topLeading,
+                        startRadius: 8,
+                        endRadius: diameter
+                    )
+                )
+        )
+        .overlay(alignment: .topLeading) {
+            Circle()
+                .fill(.white.opacity(0.55))
+                .frame(width: max(14, diameter * 0.16), height: max(14, diameter * 0.16))
+                .offset(x: diameter * 0.2, y: diameter * 0.18)
+        }
+        .overlay(
+            Circle()
+                .stroke(.white.opacity(0.58), lineWidth: 1)
+        )
+        .shadow(color: bubbleColor(for: record.kind).opacity(0.28), radius: 18, y: 10)
+    }
+
+    private func bubbleDiameter(at index: Int, in size: CGSize) -> CGFloat {
+        let base = min(size.width, size.height)
+        let variants: [CGFloat] = [0.35, 0.28, 0.31, 0.24, 0.29, 0.22, 0.26]
+        return min(148, max(86, base * variants[index % variants.count]))
+    }
+
+    private func bubblePosition(at index: Int, diameter: CGFloat, in size: CGSize) -> CGPoint {
+        let positions: [(CGFloat, CGFloat)] = [
+            (0.30, 0.28), (0.70, 0.24), (0.52, 0.43), (0.25, 0.55),
+            (0.76, 0.58), (0.46, 0.72), (0.18, 0.78), (0.82, 0.82)
+        ]
+        let anchor = positions[index % positions.count]
+        let cycle = CGFloat(index / positions.count)
+        let xNudge = (cycle.truncatingRemainder(dividingBy: 2) == 0 ? 1 : -1) * min(28, cycle * 8)
+        let yNudge = min(46, cycle * 18)
+        let safeTop = diameter / 2 + 86
+        let safeBottom = max(safeTop, size.height - diameter / 2 - 26)
+        let x = min(max(size.width * anchor.0 + xNudge, diameter / 2 + 12), size.width - diameter / 2 - 12)
+        let y = min(max(size.height * anchor.1 + yNudge, safeTop), safeBottom)
+        return CGPoint(x: x, y: y)
+    }
+
+    private func bubbleColor(for kind: LifeRecordKind) -> Color {
+        switch kind {
+        case .weather: return Color(red: 0.64, green: 0.86, blue: 1.0)
+        case .event: return Color(red: 1.0, green: 0.86, blue: 0.42)
+        case .habitTodo: return Color(red: 0.72, green: 0.94, blue: 0.55)
+        case .food: return Color(red: 1.0, green: 0.64, blue: 0.42)
+        case .travel: return Color(red: 0.66, green: 0.78, blue: 1.0)
+        case .fitness: return Color(red: 0.53, green: 0.92, blue: 0.72)
+        case .movie: return Color(red: 0.84, green: 0.72, blue: 1.0)
+        case .shopping: return Color(red: 1.0, green: 0.72, blue: 0.86)
+        }
+    }
+
+    private func defaultEmoji(for kind: LifeRecordKind) -> String {
+        switch kind {
+        case .event: return "⭐️"
+        case .habitTodo: return "✅"
+        case .weather: return "🌤️"
+        case .food: return "🍜"
+        case .travel: return "✈️"
+        case .fitness: return "🏃"
+        case .movie: return "🎬"
+        case .shopping: return "🛍️"
+        }
+    }
+}
+
+private struct LifeRecordBubbleDetailSheet: View {
+    let record: LifeRecordCard
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(record.iconEmoji ?? defaultEmoji(for: record.kind))
+                    .font(.system(size: 52))
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(record.title)
+                        .font(.title2.weight(.bold))
+                    Text(Self.dateFormatter.string(from: record.createdAt))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let detail = record.detailNote ?? record.subtitle, !detail.isEmpty {
+                    Text(detail)
+                        .font(.body)
+                        .lineSpacing(5)
+                } else {
+                    Text("这是一张还没写详情的小卡片。")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .navigationTitle(kindLabel(for: record.kind))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private func kindLabel(for kind: LifeRecordKind) -> String {
+        switch kind {
+        case .weather: return "天气"
+        case .event: return "事件"
+        case .habitTodo: return "习惯"
+        case .food: return "美食"
+        case .travel: return "出行"
+        case .fitness: return "运动"
+        case .movie: return "观影"
+        case .shopping: return "购物"
+        }
+    }
+
+    private func defaultEmoji(for kind: LifeRecordKind) -> String {
+        switch kind {
+        case .event: return "⭐️"
+        case .habitTodo: return "✅"
+        case .weather: return "🌤️"
+        case .food: return "🍜"
+        case .travel: return "✈️"
+        case .fitness: return "🏃"
+        case .movie: return "🎬"
+        case .shopping: return "🛍️"
+        }
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "M月d日 HH:mm"
+        return formatter
+    }()
 }
