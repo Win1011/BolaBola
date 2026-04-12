@@ -9,6 +9,15 @@ import SwiftUI
 // MARK: - 列表摘要文案（与 model 同步）
 
 enum IOSHealthHabitSnapshot {
+    private static func latestSleepValue(_ model: IOSHealthHabitAnalysisModel) -> Double {
+        let cal = Calendar.current
+        let todayValue = model.sleepHoursWeek.first(where: { cal.isDateInToday($0.date) })?.value ?? 0
+        if todayValue > 0.01 {
+            return todayValue
+        }
+        return model.sleepHoursWeek.last(where: { $0.value > 0.01 })?.value ?? 0
+    }
+
     static func intString(from value: Double) -> String {
         let f = NumberFormatter()
         f.numberStyle = .decimal
@@ -45,11 +54,9 @@ enum IOSHealthHabitSnapshot {
     }
 
     static func sleepSubtitle(_ model: IOSHealthHabitAnalysisModel) -> String {
-        let cal = Calendar.current
-        let v = model.sleepHoursWeek.first(where: { cal.isDateInToday($0.date) })?.value
-            ?? model.sleepHoursWeek.last(where: { $0.value > 0 })?.value
-        if let v, v > 0 {
-            return "昨夜约 \(String(format: "%.1f", v)) 小时（估算）"
+        let value = latestSleepValue(model)
+        if value > 0.01 {
+            return "昨夜约 \(String(format: "%.1f", value)) 小时（估算）"
         }
         return "近 7 日睡眠时长趋势"
     }
@@ -67,9 +74,7 @@ enum IOSHealthHabitSnapshot {
     }
 
     private static func ringSleep(_ model: IOSHealthHabitAnalysisModel) -> Double {
-        let cal = Calendar.current
-        return model.sleepHoursWeek.first(where: { cal.isDateInToday($0.date) })?.value
-            ?? model.sleepHoursWeek.last(where: { $0.value > 0 })?.value ?? 0
+        latestSleepValue(model)
     }
 
     // MARK: - 分析页网格卡片可视化（0…1 进度等）
@@ -80,6 +85,18 @@ enum IOSHealthHabitSnapshot {
             ?? model.stepsWeek.last?.value ?? 0
     }
 
+    static func todayMoveEnergyValue(_ model: IOSHealthHabitAnalysisModel) -> Double {
+        let cal = Calendar.current
+        return model.activeEnergyWeek.first(where: { cal.isDateInToday($0.date) })?.value
+            ?? model.activeEnergyWeek.last?.value ?? 0
+    }
+
+    static func todayExerciseMinutesValue(_ model: IOSHealthHabitAnalysisModel) -> Double {
+        let cal = Calendar.current
+        return model.exerciseMinutesWeek.first(where: { cal.isDateInToday($0.date) })?.value
+            ?? model.exerciseMinutesWeek.last?.value ?? 0
+    }
+
     static func todayStandMinutesValue(_ model: IOSHealthHabitAnalysisModel) -> Double {
         let cal = Calendar.current
         return model.standMinutesWeek.first(where: { cal.isDateInToday($0.date) })?.value
@@ -87,9 +104,7 @@ enum IOSHealthHabitSnapshot {
     }
 
     static func todaySleepHoursValue(_ model: IOSHealthHabitAnalysisModel) -> Double {
-        let cal = Calendar.current
-        return model.sleepHoursWeek.first(where: { cal.isDateInToday($0.date) })?.value
-            ?? model.sleepHoursWeek.last(where: { $0.value > 0 })?.value ?? 0
+        latestSleepValue(model)
     }
 
     static func todayHeartRateValue(_ model: IOSHealthHabitAnalysisModel) -> Double? {
@@ -102,6 +117,14 @@ enum IOSHealthHabitSnapshot {
 
     static func stepsGoalProgress(_ model: IOSHealthHabitAnalysisModel) -> Double {
         min(1, max(0, todayStepsValue(model) / IOSHealthRingGoals.stepsPerDay))
+    }
+
+    static func moveGoalProgress(_ model: IOSHealthHabitAnalysisModel) -> Double {
+        min(1, max(0, todayMoveEnergyValue(model) / IOSHealthRingGoals.moveKilocaloriesPerDay))
+    }
+
+    static func exerciseGoalProgress(_ model: IOSHealthHabitAnalysisModel) -> Double {
+        min(1, max(0, todayExerciseMinutesValue(model) / IOSHealthRingGoals.exerciseMinutesPerDay))
     }
 
     static func standGoalProgress(_ model: IOSHealthHabitAnalysisModel) -> Double {
@@ -232,7 +255,7 @@ struct IOSHealthSummaryDetailView: View {
 
                 ringsBlock
 
-                Text("圆环为今日相对内置目标的完成度（步数 1 万、站立 180 分、睡眠 8 小时），仅作习惯参考，非医疗指标。")
+                Text("圆环为今日相对内置目标的完成度（Move 400 kcal、Exercise 30 分、Stand 180 分），仅作习惯参考，非医疗指标。")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -247,18 +270,18 @@ struct IOSHealthSummaryDetailView: View {
     private var ringsBlock: some View {
         HStack(alignment: .center, spacing: 18) {
             IOSHealthTodayRingsBlock(
-                stepsProgress: ringProgressSteps,
-                standProgress: ringProgressStand,
-                sleepProgress: ringProgressSleep
+                moveProgress: ringProgressMove,
+                exerciseProgress: ringProgressExercise,
+                standProgress: ringProgressStand
             )
-            .animation(.easeOut(duration: 0.5), value: ringProgressSteps)
+            .animation(.easeOut(duration: 0.5), value: ringProgressMove)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("今日数据")
                     .font(.subheadline.weight(.semibold))
-                ringRow("步数", IOSHealthHabitSnapshot.intString(from: todaySteps), "步", "\(Int(IOSHealthRingGoals.stepsPerDay)) 步")
+                ringRow("Move", IOSHealthHabitSnapshot.intString(from: todayMove), "kcal", "\(Int(IOSHealthRingGoals.moveKilocaloriesPerDay)) kcal")
+                ringRow("Exercise", "\(Int(todayExercise))", "分钟", "\(Int(IOSHealthRingGoals.exerciseMinutesPerDay)) 分")
                 ringRow("站立", "\(Int(todayStand))", "分钟", "\(Int(IOSHealthRingGoals.standMinutesPerDay)) 分")
-                ringRow("睡眠", ringSleep > 0 ? String(format: "%.1f", ringSleep) : "—", ringSleep > 0 ? "小时" : "", "\(Int(IOSHealthRingGoals.sleepHoursTarget)) 小时")
             }
             Spacer(minLength: 0)
         }
@@ -292,10 +315,12 @@ struct IOSHealthSummaryDetailView: View {
         }
     }
 
-    private var todaySteps: Double {
-        let cal = Calendar.current
-        return model.stepsWeek.first(where: { cal.isDateInToday($0.date) })?.value
-            ?? model.stepsWeek.last?.value ?? 0
+    private var todayMove: Double {
+        IOSHealthHabitSnapshot.todayMoveEnergyValue(model)
+    }
+
+    private var todayExercise: Double {
+        IOSHealthHabitSnapshot.todayExerciseMinutesValue(model)
     }
 
     private var todayStand: Double {
@@ -304,23 +329,16 @@ struct IOSHealthSummaryDetailView: View {
             ?? model.standMinutesWeek.last?.value ?? 0
     }
 
-    private var ringSleep: Double {
-        let cal = Calendar.current
-        return model.sleepHoursWeek.first(where: { cal.isDateInToday($0.date) })?.value
-            ?? model.sleepHoursWeek.last(where: { $0.value > 0 })?.value ?? 0
+    private var ringProgressMove: Double {
+        min(1, todayMove / IOSHealthRingGoals.moveKilocaloriesPerDay)
     }
 
-    private var ringProgressSteps: Double {
-        min(1, todaySteps / IOSHealthRingGoals.stepsPerDay)
+    private var ringProgressExercise: Double {
+        min(1, todayExercise / IOSHealthRingGoals.exerciseMinutesPerDay)
     }
 
     private var ringProgressStand: Double {
         min(1, todayStand / IOSHealthRingGoals.standMinutesPerDay)
-    }
-
-    private var ringProgressSleep: Double {
-        guard ringSleep > 0 else { return 0 }
-        return min(1, ringSleep / IOSHealthRingGoals.sleepHoursTarget)
     }
 }
 

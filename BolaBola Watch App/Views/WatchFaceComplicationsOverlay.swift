@@ -60,6 +60,11 @@ struct WatchFaceComplicationsOverlay: View {
         case .heartRate: return "heart.fill"
         case .weather: return "cloud.sun.fill"
         case .steps: return "figure.walk"
+        case .stickerApple: return "apple.logo"
+        case .stickerBottle: return "waterbottle.fill"
+        case .stickerHeart: return "heart.circle.fill"
+        case .stickerBola: return "face.smiling.inverse"
+        case .stickerBadge: return "seal.fill"
         }
     }
 
@@ -69,6 +74,8 @@ struct WatchFaceComplicationsOverlay: View {
         case .heartRate: return viewModel.latestHeartRateText
         case .weather: return "—"
         case .steps: return "—"
+        case .stickerApple, .stickerBottle, .stickerHeart, .stickerBola, .stickerBadge:
+            return " "
         }
     }
 }

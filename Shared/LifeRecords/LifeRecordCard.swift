@@ -55,7 +55,10 @@ public struct LifeRecordCard: Identifiable, Codable, Equatable, Sendable {
         subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
         detailNote = try container.decodeIfPresent(String.self, forKey: .detailNote)
         iconEmoji = try container.decodeIfPresent(String.self, forKey: .iconEmoji)
-        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        // Older persisted life cards may not have a timestamp yet. Falling back to
+        // "now" makes historical cards incorrectly appear in today's section, so we
+        // keep them out of date-scoped views unless they carry an explicit day.
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? .distantPast
     }
 }
 

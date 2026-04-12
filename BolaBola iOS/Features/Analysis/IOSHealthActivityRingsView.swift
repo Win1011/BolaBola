@@ -35,12 +35,12 @@ struct IOSHealthSingleRing: View {
     }
 }
 
-/// 三环同心圆：外→内 步数 / 站立 / 睡眠（配色接近健身 App 红、绿、青蓝层次，但略作区分以免与商标完全一致）。
+/// 三环同心圆：外→内 Move / Exercise / Stand，交互语言更接近系统健身圆环。
 struct IOSHealthTodayRingsBlock: View {
     /// 相对各自目标的 0…1
-    var stepsProgress: Double
+    var moveProgress: Double
+    var exerciseProgress: Double
     var standProgress: Double
-    var sleepProgress: Double
 
     private let outerDiameter: CGFloat = 120
     private let midDiameter: CGFloat = 98
@@ -52,7 +52,7 @@ struct IOSHealthTodayRingsBlock: View {
     var body: some View {
         ZStack {
             IOSHealthSingleRing(
-                progress: stepsProgress,
+                progress: moveProgress,
                 lineWidth: lineOuter,
                 trackColor: Color.primary.opacity(0.07),
                 progressColors: [
@@ -63,7 +63,7 @@ struct IOSHealthTodayRingsBlock: View {
             .frame(width: outerDiameter, height: outerDiameter)
 
             IOSHealthSingleRing(
-                progress: standProgress,
+                progress: exerciseProgress,
                 lineWidth: lineMid,
                 trackColor: Color.primary.opacity(0.07),
                 progressColors: [
@@ -74,12 +74,12 @@ struct IOSHealthTodayRingsBlock: View {
             .frame(width: midDiameter, height: midDiameter)
 
             IOSHealthSingleRing(
-                progress: sleepProgress,
+                progress: standProgress,
                 lineWidth: lineInner,
                 trackColor: Color.primary.opacity(0.07),
                 progressColors: [
-                    Color(red: 0.2, green: 0.78, blue: 0.92),
-                    Color(red: 0.45, green: 0.88, blue: 0.98)
+                    Color(red: 0.18, green: 0.82, blue: 0.96),
+                    Color(red: 0.39, green: 0.92, blue: 0.99)
                 ]
             )
             .frame(width: innerDiameter, height: innerDiameter)
@@ -91,6 +91,8 @@ struct IOSHealthTodayRingsBlock: View {
 
 enum IOSHealthRingGoals {
     /// 与「健身」常见默认量级同数量级，仅作可视化目标，非医疗建议。
+    static let moveKilocaloriesPerDay: Double = 400
+    static let exerciseMinutesPerDay: Double = 30
     static let stepsPerDay: Double = 10_000
     /// 站立时间（分钟）日汇总，偏保守目标。
     static let standMinutesPerDay: Double = 180

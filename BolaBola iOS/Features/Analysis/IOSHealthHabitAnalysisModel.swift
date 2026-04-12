@@ -20,6 +20,8 @@ final class IOSHealthHabitAnalysisModel: ObservableObject {
     }
 
     @Published private(set) var authPhase: AuthPhase = .idle
+    @Published private(set) var activeEnergyWeek: [IOSHealthKitWeekQueries.DayValue] = []
+    @Published private(set) var exerciseMinutesWeek: [IOSHealthKitWeekQueries.DayValue] = []
     @Published private(set) var stepsWeek: [IOSHealthKitWeekQueries.DayValue] = []
     @Published private(set) var standMinutesWeek: [IOSHealthKitWeekQueries.DayValue] = []
     @Published private(set) var heartRateWeek: [IOSHealthKitWeekQueries.DayValue] = []
@@ -30,7 +32,9 @@ final class IOSHealthHabitAnalysisModel: ObservableObject {
 
     /// 近 7 日是否至少有一项 HealthKit 读数大于 0（用于空状态说明）。
     var hasAnyChartData: Bool {
-        stepsWeek.contains { $0.value > 0 }
+        activeEnergyWeek.contains { $0.value > 0 }
+            || exerciseMinutesWeek.contains { $0.value > 0 }
+            || stepsWeek.contains { $0.value > 0 }
             || standMinutesWeek.contains { $0.value > 0 }
             || heartRateWeek.contains { $0.value > 0 }
             || sleepHoursWeek.contains { $0.value > 0.01 }
@@ -42,6 +46,8 @@ final class IOSHealthHabitAnalysisModel: ObservableObject {
 
     private static var readTypes: Set<HKObjectType> {
         var s = Set<HKObjectType>()
+        if let t = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) { s.insert(t) }
+        if let t = HKQuantityType.quantityType(forIdentifier: .appleExerciseTime) { s.insert(t) }
         if let t = HKQuantityType.quantityType(forIdentifier: .stepCount) { s.insert(t) }
         if let t = HKQuantityType.quantityType(forIdentifier: .heartRate) { s.insert(t) }
         if let t = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) { s.insert(t) }
@@ -124,12 +130,16 @@ final class IOSHealthHabitAnalysisModel: ObservableObject {
         let end = range.end
 
         do {
+            async let m = fetchMoveWeek(start: start, end: end)
+            async let e = fetchExerciseWeek(start: start, end: end)
             async let s = fetchStepsWeek(start: start, end: end)
             async let st = fetchStandWeek(start: start, end: end)
             async let h = fetchHeartWeek(start: start, end: end)
             async let sl = fetchSleepWeek(start: start, end: end)
-            let (sVal, stVal, hVal, slVal) = try await (s, st, h, sl)
+            let (mVal, eVal, sVal, stVal, hVal, slVal) = try await (m, e, s, st, h, sl)
 
+            activeEnergyWeek = IOSHealthKitWeekQueries.mergeIntoWeek(partial: mVal, start: start, end: end)
+            exerciseMinutesWeek = IOSHealthKitWeekQueries.mergeIntoWeek(partial: eVal, start: start, end: end)
             stepsWeek = IOSHealthKitWeekQueries.mergeIntoWeek(partial: sVal, start: start, end: end)
             standMinutesWeek = IOSHealthKitWeekQueries.mergeIntoWeek(partial: stVal, start: start, end: end)
             heartRateWeek = IOSHealthKitWeekQueries.mergeIntoWeek(partial: hVal, start: start, end: end)
@@ -151,6 +161,14 @@ final class IOSHealthHabitAnalysisModel: ObservableObject {
             start: start,
             end: end
         )
+    }
+
+    private func fetchMoveWeek(start: Date, end: Date) async throws -> [IOSHealthKitWeekQueries.DayValue] {
+        try await IOSHealthKitWeekQueries.dailyMoveEnergy(store: store, start: start, end: end)
+    }
+
+    private func fetchExerciseWeek(start: Date, end: Date) async throws -> [IOSHealthKitWeekQueries.DayValue] {
+        try await IOSHealthKitWeekQueries.dailyExerciseMinutes(store: store, start: start, end: end)
     }
 
     private func fetchStandWeek(start: Date, end: Date) async throws -> [IOSHealthKitWeekQueries.DayValue] {
@@ -180,6 +198,8 @@ final class IOSHealthHabitAnalysisModel: ObservableObject {
     }
 
     private func clearSeries() {
+        activeEnergyWeek = []
+        exerciseMinutesWeek = []
         stepsWeek = []
         standMinutesWeek = []
         heartRateWeek = []

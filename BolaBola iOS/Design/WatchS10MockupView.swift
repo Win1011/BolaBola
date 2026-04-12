@@ -34,6 +34,8 @@ struct WatchS10MockupView: View {
     var showScreenCenterCrosshair: Bool = false
     /// 绘制三角槽外接正方形（青色虚线，调试用）。
     var showComplicationSlotsBoundingRect: Bool = false
+    /// 绘制三枚槽位圆圈（调位置 / 尺寸时用）。
+    var showComplicationSlotGuideCircles: Bool = false
     /// 叠加绘制与 `.mask` 同形状、同位置的圆角矩形描边（调试对照）；默认关。
     var showScreenMaskOutline: Bool = false
 
@@ -51,6 +53,10 @@ struct WatchS10MockupView: View {
     /// 三槽整体：相对表镜中心的平移（表镜局部 pt）。
     var complicationSlotsOffsetX: CGFloat = 0
     var complicationSlotsOffsetY: CGFloat = 0
+    /// 三槽内容整体放大倍数（图标/文案/槽位直径一起变）。
+    var complicationContentScale: CGFloat = 1.12
+    /// 调试圆圈相对槽位直径的放大倍数。
+    var complicationGuideCircleScale: CGFloat = 1.14
 
     /// 表镜内时间：字号（无 AM/PM）。
     var timeLabelFontSize: CGFloat = 17
@@ -63,6 +69,7 @@ struct WatchS10MockupView: View {
     var timeLabelOffsetY: CGFloat = 8
     /// `true`：三槽显示圆圈并接受拖放（编辑表盘）；`false`：仅展示已放置内容，无空槽圆圈。
     var isEditingSlots: Bool = false
+    var onTapPlacedSlot: ((WatchFaceSlotPosition, WatchFaceComplicationKind) -> Void)? = nil
 
     var body: some View {
         Image("WatchS10Full")
@@ -235,12 +242,29 @@ struct WatchS10MockupView: View {
 
     private func cornerSlot(position: WatchFaceSlotPosition) -> some View {
         let kind = slots.kind(at: position)
-        let d = WatchS10PreviewGeometry.complicationSlotCellWidth
-        let iconSize: CGFloat = kind == .weather ? 11 : 12
+        let d = WatchS10PreviewGeometry.complicationSlotCellWidth * complicationContentScale
+        let guideD = d * complicationGuideCircleScale
+        let iconSize: CGFloat = (kind == .weather ? 11 : 12) * complicationContentScale
+        let stickerImageSize = 29 * complicationContentScale * kind.stickerSlotScaleMultiplier
 
-        let filledContent = VStack(spacing: 1) {
+        let filledContent = VStack(spacing: kind == .stickerHeart ? 2 : 1) {
+            if kind == .stickerHeart {
+                Text(heartRateText)
+                    .font(.system(size: max(7, 6 * complicationContentScale), weight: .bold))
+                    .foregroundStyle(Color.red.opacity(0.72))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .offset(y: 6)
+            }
+
             Group {
-                if kind == .weather, !weatherSystemImageName.isEmpty {
+                if let stickerAssetName = kind.stickerAssetName {
+                    Image(stickerAssetName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: stickerImageSize, height: stickerImageSize)
+                } else if kind == .weather, !weatherSystemImageName.isEmpty {
                     Image(systemName: weatherSystemImageName)
                         .font(.system(size: iconSize, weight: .semibold))
                 } else {
@@ -249,15 +273,17 @@ struct WatchS10MockupView: View {
                 }
             }
             .foregroundStyle(Color.white.opacity(0.92))
-            Text(valueLine(for: kind))
-                .font(.system(size: 6, weight: .medium))
-                .foregroundStyle(.white.opacity(0.6))
-                .lineLimit(1)
-                .minimumScaleFactor(0.35)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: d - 8)
+            if kind.stickerAssetName == nil {
+                Text(valueLine(for: kind))
+                    .font(.system(size: 6, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.35)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: d - 8)
+            }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, kind == .stickerHeart ? 2 : 4)
 
         return Group {
             if isEditingSlots {
@@ -280,8 +306,31 @@ struct WatchS10MockupView: View {
                     return true
                 }
             } else if kind != .none {
-                filledContent
-                    .frame(width: d, height: d)
+                ZStack {
+                    if showComplicationSlotGuideCircles {
+                        Circle()
+                            .stroke(Color.cyan.opacity(0.9), lineWidth: 1.5)
+                            .background(
+                                Circle()
+                                    .fill(Color.cyan.opacity(0.08))
+                            )
+                            .frame(width: guideD, height: guideD)
+                    }
+                    filledContent
+                }
+                .frame(width: d, height: d)
+                .contentShape(Circle())
+                .onTapGesture {
+                    onTapPlacedSlot?(position, kind)
+                }
+            } else if showComplicationSlotGuideCircles {
+                Circle()
+                    .stroke(Color.cyan.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                    .background(
+                        Circle()
+                            .fill(Color.cyan.opacity(0.06))
+                    )
+                    .frame(width: guideD, height: guideD)
             } else {
                 EmptyView()
             }
@@ -294,6 +343,8 @@ struct WatchS10MockupView: View {
         case .heartRate: return heartRateText
         case .weather: return weatherTempText
         case .steps: return stepsText
+        case .stickerApple, .stickerBottle, .stickerHeart, .stickerBola, .stickerBadge:
+            return " "
         }
     }
 
@@ -303,6 +354,8 @@ struct WatchS10MockupView: View {
         case .heartRate: return "heart.fill"
         case .weather: return "cloud.sun.fill"
         case .steps: return "figure.walk"
+        case .stickerApple, .stickerBottle, .stickerHeart, .stickerBola, .stickerBadge:
+            return "circle.fill"
         }
     }
 }

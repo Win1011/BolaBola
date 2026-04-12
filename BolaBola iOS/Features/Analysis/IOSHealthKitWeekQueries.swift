@@ -117,6 +117,40 @@ enum IOSHealthKitWeekQueries {
         }
     }
 
+    static func dailyMoveEnergy(
+        store: HKHealthStore,
+        start: Date,
+        end: Date
+    ) async throws -> [DayValue] {
+        guard let t = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else {
+            return []
+        }
+        return try await dailySum(
+            store: store,
+            quantityType: t,
+            unit: .kilocalorie(),
+            start: start,
+            end: end
+        )
+    }
+
+    static func dailyExerciseMinutes(
+        store: HKHealthStore,
+        start: Date,
+        end: Date
+    ) async throws -> [DayValue] {
+        guard let t = HKQuantityType.quantityType(forIdentifier: .appleExerciseTime) else {
+            return []
+        }
+        return try await dailySum(
+            store: store,
+            quantityType: t,
+            unit: .minute(),
+            start: start,
+            end: end
+        )
+    }
+
     /// 按入睡日汇总「实际睡眠」时长（小时），与系统睡眠分析分类一致。
     static func sleepHoursByDay(
         store: HKHealthStore,

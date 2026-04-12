@@ -11,6 +11,11 @@ public enum WatchFaceComplicationKind: String, Codable, CaseIterable, Sendable {
     case heartRate
     case weather
     case steps
+    case stickerApple
+    case stickerBottle
+    case stickerHeart
+    case stickerBola
+    case stickerBadge
 
     public var displayName: String {
         switch self {
@@ -18,11 +23,38 @@ public enum WatchFaceComplicationKind: String, Codable, CaseIterable, Sendable {
         case .heartRate: return "心率"
         case .weather: return "天气"
         case .steps: return "步数"
+        case .stickerApple: return "苹果"
+        case .stickerBottle: return "水瓶"
+        case .stickerHeart: return "爱心"
+        case .stickerBola: return "Bola"
+        case .stickerBadge: return "徽章"
         }
     }
 
     public static var paletteKinds: [WatchFaceComplicationKind] {
-        [.heartRate, .weather, .steps]
+        [.stickerApple, .stickerBottle, .stickerHeart, .stickerBola, .stickerBadge]
+    }
+
+    public var stickerAssetName: String? {
+        switch self {
+        case .stickerApple: return "sticker_apple"
+        case .stickerBottle: return "sticker_bottle"
+        case .stickerHeart: return "sticker_heart"
+        case .stickerBola: return "sticker_gathxr"
+        case .stickerBadge: return "sticker_gathxr11"
+        default: return nil
+        }
+    }
+
+    public var stickerSlotScaleMultiplier: CGFloat {
+        switch self {
+        case .stickerApple: return 1.00
+        case .stickerBottle: return 1.00
+        case .stickerHeart: return 1.02
+        case .stickerBola: return 1.08
+        case .stickerBadge: return 1.18
+        default: return 1.00
+        }
     }
 }
 

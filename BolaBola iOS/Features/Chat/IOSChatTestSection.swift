@@ -75,6 +75,7 @@ struct IOSChatTestSection: View {
     @State private var showHistoryCalendar = false
     @State private var selectedHistoryDate = Date()
     @State private var voiceWavePhase = false
+    @State private var hasPerformedInitialLoad = false
 
     private var canUseChatControls: Bool {
         dialogueCaps.canDialogue && isLLMConfigured && !isLoading
@@ -193,6 +194,8 @@ struct IOSChatTestSection: View {
             dismissKeyboard()
         }
         .onAppear {
+            guard !hasPerformedInitialLoad else { return }
+            hasPerformedInitialLoad = true
             refreshLLMConfiguration()
             reloadFromStore()
         }

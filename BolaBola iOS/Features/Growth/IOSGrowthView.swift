@@ -12,6 +12,7 @@ struct IOSGrowthView: View {
     @StateObject private var dailyTasksVM = GrowthDailyTasksViewModel.shared
     @StateObject private var levelVM = GrowthLevelViewModel.shared
     @State private var showLevelInfo = false
+    @State private var hasPerformedInitialLoad = false
 
     private var topRowDefinitions: [GrowthDailyTaskCardDefinition] {
         Array(dailyTasksVM.definitions.prefix(2))
@@ -85,6 +86,8 @@ struct IOSGrowthView: View {
             }
         }
         .task {
+            guard !hasPerformedInitialLoad else { return }
+            hasPerformedInitialLoad = true
             await dailyTasksVM.refreshProgress()
         }
         .sheet(isPresented: $showLevelInfo) {
@@ -332,6 +335,7 @@ private struct GrowthDailyTasksSection: View {
     let topRow: [GrowthDailyTaskCardDefinition]
     let bottomRow: [GrowthDailyTaskCardDefinition]
     private let rowSpacing: CGFloat = 10
+    @State private var showAnimatedStar = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -343,15 +347,23 @@ private struct GrowthDailyTasksSection: View {
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(.primary)
                             .fixedSize()
-                        LottieView(animation: LottieAnimation.named("GrowthDailyTasksStar"))
-                            .configure { $0.contentMode = .scaleAspectFill }
-                            .playing(loopMode: .loop)
-                            .resizable()
-                            .frame(width: 28, height: 28)
-                            .clipped()
-                            .scaleEffect(x: -1, y: 1)
-                            .offset(x: -6, y: -6)
-                            .accessibilityHidden(true)
+                        Group {
+                            if showAnimatedStar {
+                                LottieView(animation: LottieAnimation.named("GrowthDailyTasksStar"))
+                                    .configure { $0.contentMode = .scaleAspectFill }
+                                    .playing(loopMode: .loop)
+                                    .resizable()
+                            } else {
+                                Image(systemName: "sparkle")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(BolaTheme.accent)
+                            }
+                        }
+                        .frame(width: 28, height: 28)
+                        .clipped()
+                        .scaleEffect(x: -1, y: 1)
+                        .offset(x: -6, y: -6)
+                        .accessibilityHidden(true)
                     }
                     Text("今日 \(viewModel.completedCount)/\(viewModel.definitions.count) 完成")
                         .font(.system(size: 13, weight: .regular))
@@ -379,6 +391,11 @@ private struct GrowthDailyTasksSection: View {
         }
         .onAppear {
             viewModel.refreshRandomFlipStateIfNeeded()
+            guard !showAnimatedStar else { return }
+            Task { @MainActor in
+                await Task.yield()
+                showAnimatedStar = true
+            }
         }
     }
 }
@@ -997,6 +1014,7 @@ private struct GrowthRewardGallerySection: View {
         (false, nil), (false, nil), (true, "✨"),
         (false, nil), (false, nil), (false, nil)
     ]
+    @State private var showGiftLottie = false
 
     var body: some View {
         GrowthGroupedSection {
@@ -1008,14 +1026,22 @@ private struct GrowthRewardGallerySection: View {
                         Text("完成任务解锁更多奖励")
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(.primary)
-                        LottieView(animation: LottieAnimation.named("GrowthRewardGiftPremium"))
-                            .configure { $0.contentMode = .scaleAspectFill }
-                            .playing(loopMode: .loop)
-                            .resizable()
-                            .frame(width: 28, height: 28)
-                            .clipped()
-                            .offset(y: -3)
-                            .accessibilityHidden(true)
+                        Group {
+                            if showGiftLottie {
+                                LottieView(animation: LottieAnimation.named("GrowthRewardGiftPremium"))
+                                    .configure { $0.contentMode = .scaleAspectFill }
+                                    .playing(loopMode: .loop)
+                                    .resizable()
+                            } else {
+                                Image(systemName: "gift.fill")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(BolaTheme.accent)
+                            }
+                        }
+                        .frame(width: 28, height: 28)
+                        .clipped()
+                        .offset(y: -3)
+                        .accessibilityHidden(true)
                     }
                     Text("加油完成任务，解锁更多奖励吧！")
                         .font(.system(size: 13, weight: .regular))
@@ -1027,6 +1053,13 @@ private struct GrowthRewardGallerySection: View {
                         GrowthRewardCell(unlocked: cells[i].unlocked, emoji: cells[i].emoji)
                     }
                 }
+            }
+        }
+        .onAppear {
+            guard !showGiftLottie else { return }
+            Task { @MainActor in
+                await Task.yield()
+                showGiftLottie = true
             }
         }
     }

@@ -15,6 +15,8 @@ struct IOSRemindersSectionView: View {
         case standard
         /// Figma 生活页：白卡圆角 20、小粒「+添加」
         case figmaLife
+        /// 仪表板横向紧凑版：用于可编辑 dashboard 中的提醒摘要卡
+        case dashboardCompact
     }
 
     @Binding var reminders: [BolaReminder]
@@ -59,6 +61,8 @@ struct IOSRemindersSectionView: View {
     private var content: some View {
         if style == .figmaLife {
             figmaLifeCardBody
+        } else if style == .dashboardCompact {
+            dashboardCompactCardBody
         } else {
             standardCardBody
         }
@@ -175,6 +179,81 @@ struct IOSRemindersSectionView: View {
                 }
             }
         }
+    }
+
+    private var dashboardCompactCardBody: some View {
+        let primaryReminder = reminders.first
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Label("提醒", systemImage: "bell.badge.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                Text("\(reminders.count) 条")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            if let reminder = primaryReminder {
+                HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: (reminder.kind ?? .custom).systemImageName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(BolaTheme.listRowIcon)
+                        .frame(width: 18)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(reminder.title)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Text(reminder.scheduleSummary())
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    if reminders.count > 1 {
+                        Text("+\(reminders.count - 1)")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color(uiColor: .secondarySystemBackground)))
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    activeEditor = EditorSheetState(mode: .edit(reminder))
+                }
+            } else {
+                Button {
+                    activeEditor = EditorSheetState(mode: .create)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundStyle(BolaTheme.accent)
+                        Text("添加第一条提醒")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous)
+                .fill(BolaTheme.surfaceBubble)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous)
+                .stroke(Color(uiColor: .separator).opacity(0.25), lineWidth: 1)
+        )
     }
 
     private func rowTitleLine(for r: BolaReminder) -> String {

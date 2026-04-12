@@ -21,8 +21,10 @@ struct IOSMainHomeView: View {
     @State private var titleWordIdB = BolaTitleSelectionStore.load().wordIdB
     @State private var unlockedTitleIds: Set<String> = TitleUnlockStore.loadUnlockedIds()
     @State private var showCompanionInfo = false
-    /// 为 true 时表盘显示三槽圆圈并允许拖放；「清空」亦仅在此模式下显示。
-    @State private var isWatchFaceEditing = false
+    @State private var selectedPlacedStickerPosition: WatchFaceSlotPosition?
+    @State private var selectedPlacedStickerKind: WatchFaceComplicationKind = .none
+    @State private var hasPerformedInitialLoad = false
+    @State private var showHeavyWatchPreview = false
 
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
@@ -76,7 +78,13 @@ struct IOSMainHomeView: View {
             .scrollIndicators(.hidden)
         }
         .onAppear {
+            guard !hasPerformedInitialLoad else { return }
+            hasPerformedInitialLoad = true
             refreshWatchInstallHint()
+            Task { @MainActor in
+                await Task.yield()
+                showHeavyWatchPreview = true
+            }
             healthPreview.refresh()
             weather.requestAndFetch()
         }
@@ -115,22 +123,60 @@ struct IOSMainHomeView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .confirmationDialog(
+            selectedPlacedStickerPosition == nil ? "贴纸操作" : "处理 \(selectedPlacedStickerKind.displayName)",
+            isPresented: Binding(
+                get: { selectedPlacedStickerPosition != nil },
+                set: { if !$0 { selectedPlacedStickerPosition = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let position = selectedPlacedStickerPosition {
+                Button("移除贴纸", role: .destructive) {
+                    slotsConfig.set(position, kind: .none)
+                    selectedPlacedStickerPosition = nil
+                }
+            }
+            Button("取消", role: .cancel) {
+                selectedPlacedStickerPosition = nil
+            }
+        }
     }
 
     private var watchPreviewBlock: some View {
-        WatchS10MockupView(
-            slots: $slotsConfig,
-            heartRateText: healthPreview.heartRateText,
-            stepsText: healthPreview.stepsText,
-            weatherSystemImageName: weatherSymbol,
-            weatherTempText: weatherTempLine,
-            maxHeight: 318,
-            horizontalNudgePoints: 1.5,
-            screenContentNudgeX: -6,
-            screenContentNudgeY: 9,
-            showScreenMaskOutline: false,
-            isEditingSlots: isWatchFaceEditing
-        )
+        Group {
+            if showHeavyWatchPreview {
+                WatchS10MockupView(
+                    slots: $slotsConfig,
+                    heartRateText: healthPreview.heartRateText,
+                    stepsText: healthPreview.stepsText,
+                    weatherSystemImageName: weatherSymbol,
+                    weatherTempText: weatherTempLine,
+                    maxHeight: 318,
+                    horizontalNudgePoints: 1.5,
+                    screenContentNudgeX: -6,
+                    screenContentNudgeY: 9,
+                    showComplicationSlotGuideCircles: true,
+                    showScreenMaskOutline: false,
+                    complicationSlotsRadialScale: 1.08,
+                    complicationContentScale: 1.56,
+                    complicationGuideCircleScale: 1.18,
+                    isEditingSlots: false,
+                    onTapPlacedSlot: { position, kind in
+                        selectedPlacedStickerPosition = position
+                        selectedPlacedStickerKind = kind
+                    }
+                )
+            } else {
+                RoundedRectangle(cornerRadius: 36, style: .continuous)
+                    .fill(Color.white.opacity(0.52))
+                    .overlay(
+                        ProgressView()
+                            .tint(.secondary)
+                    )
+                    .frame(width: 250, height: 318)
+            }
+        }
         .frame(maxWidth: .infinity)
     }
 
@@ -167,53 +213,6 @@ struct IOSMainHomeView: View {
         }
     }
 
-    /// 可拖入表盘三处圆圈的组件池；仅在「编辑表盘」模式下可拖拽，「清空」亦同。
-    private var watchPaletteRow: some View {
-        HStack(spacing: 14) {
-            ForEach(WatchFaceComplicationKind.paletteKinds, id: \.self) { k in
-                paletteChip(kind: k, label: nil, systemImage: nil, draggable: isWatchFaceEditing)
-            }
-            if isWatchFaceEditing {
-                paletteChip(kind: .none, label: "清空", systemImage: "xmark.circle.fill", draggable: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func paletteChip(
-        kind: WatchFaceComplicationKind,
-        label: String? = nil,
-        systemImage: String? = nil,
-        draggable: Bool
-    ) -> some View {
-        VStack(spacing: 4) {
-            Group {
-                let icon = Image(systemName: systemImage ?? paletteSymbol(kind))
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 48, height: 48)
-                    .background(Circle().fill(Color.white))
-                if draggable {
-                    icon.draggable(kind.rawValue)
-                } else {
-                    icon
-                }
-            }
-            Text(label ?? kind.displayName)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func paletteSymbol(_ kind: WatchFaceComplicationKind) -> String {
-        switch kind {
-        case .none: return "plus"
-        case .heartRate: return "heart.fill"
-        case .weather: return "cloud.sun.fill"
-        case .steps: return "figure.walk"
-        }
-    }
-
     private var companionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
@@ -230,63 +229,118 @@ struct IOSMainHomeView: View {
                 Spacer(minLength: 0)
             }
 
-            GeometryReader { geo in
-                let w = geo.size.width
-                let p = max(0, min(1, companion / 100.0))
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color(uiColor: .tertiarySystemFill))
-                    Capsule()
-                        .fill(BolaTheme.accent)
-                        .frame(width: max(8, w * p))
-                }
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(Int(companion.rounded()))")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(.primary)
+                    .contentTransition(.numericText())
+                Text("/ 100")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Text(companionTierLabel)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(BolaTheme.onAccentForeground)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(BolaTheme.accent.opacity(0.88)))
             }
-            .frame(height: 12)
+
+            CompanionAccelerationBar(
+                progress: max(0, min(1, companion / 100.0)),
+                isAccelerating: isGrowthAccelerating
+            )
+            .frame(height: isGrowthAccelerating ? 16 : 12)
             .accessibilityLabel("陪伴值 \(Int(companion.rounded()))，满分一百")
         }
     }
 
     /// 自定义表盘说明 + 组件池，浅灰分区底。
     private var customWatchFaceAndPaletteGroup: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            customWatchFaceSection
-            watchPaletteRow
+        NavigationLink {
+            WatchStickerLibraryPage(slotsConfig: $slotsConfig)
+        } label: {
+            VStack(alignment: .leading, spacing: 12) {
+                customWatchFaceSection
+                watchStickerPreviewRow
+                    .opacity(0)
+                    .allowsHitTesting(false)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 140, alignment: .topLeading)
+            .background {
+                ZStack {
+                    RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
+                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                    Image("sticker_panel_bg")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous))
+                }
+            }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
-        }
+        .buttonStyle(.plain)
     }
 
     private var customWatchFaceSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("自定义表盘")
-                    .font(.headline)
-                Spacer(minLength: 0)
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isWatchFaceEditing.toggle()
-                    }
-                } label: {
-                    Text(isWatchFaceEditing ? "完成" : "编辑表盘")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(BolaTheme.onAccentForeground)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Capsule().fill(BolaTheme.accent))
-                }
-                .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("表盘贴纸")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.primary)
+
+                Text("快来装饰你的表盘吧")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(BolaTheme.figmaMutedBody.opacity(0.68))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 2)
             }
-            Text("编辑表盘将下方图标拖到表盘上对应位置")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var watchStickerPreviewRow: some View {
+        HStack(spacing: 10) {
+            ForEach(WatchFaceComplicationKind.paletteKinds, id: \.self) { kind in
+                stickerPreviewCard(kind)
+            }
+        }
+    }
+
+    private func stickerPreviewCard(_ kind: WatchFaceComplicationKind) -> some View {
+        Menu {
+            Button("放到左上") { assignSticker(kind, to: .topLeft) }
+            Button("放到左下") { assignSticker(kind, to: .bottomLeft) }
+            Button("放到右下") { assignSticker(kind, to: .bottomRight) }
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white.opacity(0.82))
+                if let assetName = kind.stickerAssetName {
+                    Image(assetName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 38, height: 38)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 66)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color(uiColor: .separator).opacity(0.22), lineWidth: 1.3)
+            )
+            .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
+        .menuStyle(.borderlessButton)
     }
 
     /// 称号 + 滚轮，外层浅灰分区底。
@@ -302,11 +356,21 @@ struct IOSMainHomeView: View {
 
     private var titleSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("称号")
-                .font(.headline)
-            Text(titleLine)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
+            HStack(spacing: 5) {
+                Text("称号")
+                    .font(.system(size: 20, weight: .semibold))
+                Image(systemName: "seal.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color(uiColor: .secondaryLabel).opacity(0.8))
+                    .offset(y: -1)
+            }
+            HStack {
+                Spacer(minLength: 0)
+                TitleBadgeFrame(text: titleLine)
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 2)
+            .padding(.bottom, 2)
 
             if titleUnlocked {
                 HStack(spacing: 0) {
@@ -390,6 +454,25 @@ struct IOSMainHomeView: View {
         watchInstallability = BolaWCSessionCoordinator.shared.watchInstallabilityStatus()
     }
 
+    private var companionTierLabel: String {
+        let tier = CompanionTier.value(for: Int(companion.rounded()))
+        switch tier {
+        case 0: return "危险"
+        case 1, 2: return "疏远"
+        case 3, 4: return "熟悉"
+        case 5: return "亲密"
+        default: return "超亲密"
+        }
+    }
+
+    private var isGrowthAccelerating: Bool {
+        companion >= 80
+    }
+
+    private func assignSticker(_ kind: WatchFaceComplicationKind, to position: WatchFaceSlotPosition) {
+        slotsConfig.set(position, kind: kind)
+    }
+
     @MainActor
     private func performWatchSync() async {
         isSyncing = true
@@ -403,5 +486,243 @@ struct IOSMainHomeView: View {
         }
         healthPreview.refresh()
         weather.requestAndFetch()
+    }
+}
+
+private struct TitleBadgeFrame: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color(uiColor: .secondaryLabel).opacity(0.72))
+            Text(text)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Image(systemName: "sparkles")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color(uiColor: .secondaryLabel).opacity(0.72))
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.96),
+                            BolaTheme.surfaceElevated.opacity(0.98)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+        )
+        .overlay(
+            Capsule()
+                .stroke(Color(uiColor: .separator).opacity(0.32), lineWidth: 1.6)
+        )
+        .overlay(
+            Capsule()
+                .inset(by: 4)
+                .stroke(Color.white.opacity(0.84), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 4)
+    }
+}
+
+private struct WatchStickerLibraryPage: View {
+    @Binding var slotsConfig: WatchFaceSlotsConfiguration
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10)
+    ]
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(WatchFaceComplicationKind.paletteKinds, id: \.self) { kind in
+                    stickerCard(kind)
+                }
+            }
+            .padding(BolaTheme.paddingHorizontal)
+            .padding(.top, 12)
+            .padding(.bottom, 28)
+        }
+        .background(BolaLifeAmbientBackground().ignoresSafeArea())
+        .navigationTitle("表盘贴纸")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func stickerCard(_ kind: WatchFaceComplicationKind) -> some View {
+        Menu {
+            Button("左上") { slotsConfig.set(.topLeft, kind: kind) }
+            Button("左下") { slotsConfig.set(.bottomLeft, kind: kind) }
+            Button("右下") { slotsConfig.set(.bottomRight, kind: kind) }
+        } label: {
+            VStack(spacing: 7) {
+                if let assetName = kind.stickerAssetName {
+                    Image(assetName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 30)
+                }
+                Text(kind.displayName)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white.opacity(0.84))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color(uiColor: .separator).opacity(0.22), lineWidth: 1.3)
+            )
+        }
+        .menuStyle(.borderlessButton)
+    }
+}
+
+private struct CompanionAccelerationBar: View {
+    let progress: Double
+    let isAccelerating: Bool
+
+    private var acceleratedDeepTint: Color {
+        Color(
+            UIColor(blendedTowardsLabel: UIColor(BolaTheme.accent), fraction: 0.32)
+        )
+    }
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: isAccelerating ? 1.0 / 30.0 : 1.0 / 8.0)) { context in
+            let phase = context.date.timeIntervalSinceReferenceDate
+            let pulse = 0.84 + 0.16 * ((sin(phase * 2.8) + 1) / 2)
+
+            GeometryReader { geo in
+                let width = geo.size.width
+                let height = geo.size.height
+                let clamped = max(0, min(1, progress))
+                let fillWidth = max(height, width * clamped)
+                let shimmerWidth = max(26, width * 0.2)
+                let shimmerTravel = width + shimmerWidth * 2
+                let shimmerX = -shimmerWidth + shimmerTravel * CGFloat((phase / 1.8).truncatingRemainder(dividingBy: 1))
+
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color(uiColor: .tertiarySystemFill))
+
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: isAccelerating
+                                    ? [
+                                        BolaTheme.accent.opacity(0.82),
+                                        BolaTheme.accent,
+                                        BolaTheme.accent.opacity(0.76)
+                                    ]
+                                    : [
+                                        BolaTheme.accent.opacity(0.78),
+                                        BolaTheme.accent
+                                    ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: fillWidth)
+                        .shadow(
+                            color: isAccelerating ? BolaTheme.accent.opacity(0.24 * pulse) : .clear,
+                            radius: isAccelerating ? 10 : 0,
+                            x: 0,
+                            y: 0
+                        )
+                        .overlay(alignment: .leading) {
+                            if isAccelerating {
+                                Capsule()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                .white.opacity(0),
+                                                .white.opacity(0.16),
+                                                .white.opacity(0.42),
+                                                .white.opacity(0.12),
+                                                .white.opacity(0)
+                                            ],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(width: shimmerWidth)
+                                    .offset(x: shimmerX)
+                                    .blendMode(.screen)
+                            }
+                        }
+                        .mask(alignment: .leading) {
+                            Capsule()
+                                .frame(width: fillWidth)
+                        }
+
+                    if isAccelerating {
+                        Capsule()
+                            .stroke(BolaTheme.accent.opacity(0.20 + 0.16 * pulse), lineWidth: 1)
+                    }
+                }
+                .overlay(alignment: .leading) {
+                    if isAccelerating {
+                        Circle()
+                            .fill(Color.white.opacity(0.42))
+                            .frame(width: height * 0.68, height: height * 0.68)
+                            .blur(radius: 2)
+                            .offset(x: max(2, fillWidth - height * 0.9))
+                    }
+                }
+                .overlay {
+                    if isAccelerating {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 9, weight: .bold))
+                            Text("成长加速中")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .foregroundStyle(acceleratedDeepTint)
+                        .padding(.horizontal, 10)
+                        .shadow(color: .white.opacity(0.18), radius: 1, x: 0, y: 0)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private extension UIColor {
+    convenience init(blendedTowardsLabel base: UIColor, fraction: CGFloat) {
+        let target = UIColor.label
+
+        var r1: CGFloat = 0
+        var g1: CGFloat = 0
+        var b1: CGFloat = 0
+        var a1: CGFloat = 0
+        var r2: CGFloat = 0
+        var g2: CGFloat = 0
+        var b2: CGFloat = 0
+        var a2: CGFloat = 0
+
+        base.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        target.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+
+        self.init(
+            red: r1 + (r2 - r1) * fraction,
+            green: g1 + (g2 - g1) * fraction,
+            blue: b1 + (b2 - b1) * fraction,
+            alpha: a1 + (a2 - a1) * fraction
+        )
     }
 }
