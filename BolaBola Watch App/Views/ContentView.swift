@@ -1427,6 +1427,12 @@ struct ContentView: View {
         // 底栏贴底；面板与「提醒」相同，用全屏 Sheet + NavigationStack + 完成。
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
+                if viewModel.currentEmotion == .eatingOnce {
+                    Color.green
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                }
+
                 PetAnimationView(viewModel: viewModel)
                     .id(viewModel.currentEmotion)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

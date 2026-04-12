@@ -581,7 +581,7 @@
 				CODE_SIGN_ENTITLEMENTS = Entitlements/BolaBola.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MX4C45DA78;
+				DEVELOPMENT_TEAM = MJ852SN88S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
@@ -603,7 +603,7 @@
 					"$(inherited)",
 					"-ObjC",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -624,7 +624,7 @@
 				CODE_SIGN_ENTITLEMENTS = Entitlements/BolaBola.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MX4C45DA78;
+				DEVELOPMENT_TEAM = MJ852SN88S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
@@ -646,7 +646,7 @@
 					"$(inherited)",
 					"-ObjC",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;

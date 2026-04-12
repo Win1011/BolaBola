@@ -805,13 +805,13 @@ enum PetAnimations {
         )
     )
 
-    /// 吃东西：播一轮 eatapple
+    /// 吃东西：播一轮 eatappletransparent（透明背景版，121帧）
     static let eatingOnce: PetAnimation = PetAnimation(
         emotion: .eatingOnce,
         displayScale: AnimationScale.eatingOnce,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "eatapple", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "eatappletransparent", maxFrames: 121, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 121),
             isLoop: false
         )
     )
