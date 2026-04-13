@@ -276,6 +276,27 @@ struct WatchPanelSheetView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .modifier(WatchGlassRoundedRect12())
 
+                    // Debug: play every animation sequentially
+                    Button {
+                        if viewModel.debugPlayAllMode {
+                            viewModel.debugStopPlayAll()
+                        } else {
+                            viewModel.debugPlayAllAnimations()
+                            dismiss()
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: viewModel.debugPlayAllMode ? "stop.fill" : "play.fill")
+                                .font(.caption2)
+                            Text(viewModel.debugPlayAllMode ? "停止播放全部" : "播放全部动画")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 32)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(viewModel.debugPlayAllMode ? .red : .green)
+                    .controlSize(.mini)
+
                     Button {
                         viewModel.enterEatingState()
                         dismiss()

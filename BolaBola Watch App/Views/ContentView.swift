@@ -42,6 +42,12 @@ final class PetViewModel: ObservableObject {
     // 惊喜播放完（surprisedOne/Two 2轮）后，需要排队再播放一次 jumpTwoOnce。
     private var surpriseJumpTwoQueued: Bool = false
 
+    // MARK: - Debug: Play All Animations
+    @Published private(set) var debugPlayAllMode: Bool = false
+    @Published private(set) var debugPlayAllLabel: String = ""
+    private var debugAnimQueue: [PetEmotion] = []
+    private var debugPlayWorkItem: DispatchWorkItem?
+
     /// 深夜 23:30–次日 03:00 随机插入「睡觉」一轮（`sleepy` 资源）
     private let sleepNightProbability: Double = 0.2
     /// 陪伴值 25–80 随机插入 shake 一轮
@@ -487,6 +493,11 @@ final class PetViewModel: ObservableObject {
                     }
                     currentFrameIndex = 0
                 } else {
+                    // Debug play-all: skip normal completion, advance to next animation
+                    if debugPlayAllMode {
+                        debugAdvanceAnimation()
+                        return
+                    }
                     if isInNightSleepState && currentEmotion == .fallAsleep {
                         finishFallAsleepAnimation()
                         return
@@ -898,6 +909,85 @@ final class PetViewModel: ObservableObject {
     func debugSimulateWaterReminderFire() {
         BolaSharedDefaults.resolved().set(true, forKey: BolaNotificationBridgeKeys.waterReminderTrigger)
         NotificationCenter.default.post(name: .bolaWaterReminderTriggered, object: nil)
+    }
+
+    /// 按顺序播放所有动画，每个播完（非循环）或 2 秒（循环）后自动切下一个
+    func debugPlayAllAnimations() {
+        debugAnimQueue = [
+            .idleOne, .idleTwo, .idleThree, .idleFour, .idleFive, .idleSix,
+            .happyIdle, .happyIdleOnce,
+            .shakeOnce,
+            .happy1, .happy1Once,
+            .blowbubble1, .blowbubble2,
+            .like1, .like1Once, .like2, .like2Once,
+            .speak1, .speak1Once, .speak2, .speak2Once, .speak3, .speak3Once,
+            .question1, .question2, .question3,
+            .thinkOne, .thinkTwo,
+            .surprisedOne, .surprisedTwo,
+            .jump1, .jump1Tap, .jump1Once,
+            .jumpTwo, .jumpTwoTap, .jumpTwoOnce,
+            .letter, .letterOnce,
+            .sad1, .sad2,
+            .unhappy, .unhappyTwo,
+            .angry2, .angry2Once,
+            .hurt,
+            .scale,
+            .die,
+            .sleepy,
+            .eatingWait, .eatingOnce,
+            .idleDrink1, .idleDrink2, .drinkOnce,
+            .fallAsleep, .sleepLoop,
+        ]
+        // reset conflicting state flags
+        isInEatingState = false
+        isInDrinkWaterState = false
+        isInNightSleepState = false
+        isNightSleepAsleep = false
+        tapChainReturnsToRandomIdle = false
+        surpriseJumpTwoQueued = false
+        isTapInteractionAnimating = false
+        debugPlayAllMode = true
+        debugAdvanceAnimation()
+    }
+
+    /// 停止调试播放，回到正常状态
+    func debugStopPlayAll() {
+        debugPlayAllMode = false
+        debugPlayAllLabel = ""
+        debugPlayWorkItem?.cancel()
+        debugPlayWorkItem = nil
+        debugAnimQueue = []
+        selectDefaultEmotion()
+        applyDefaultEmotionDisplay()
+        currentFrameIndex = 0
+    }
+
+    private func debugAdvanceAnimation() {
+        debugPlayWorkItem?.cancel()
+        guard debugPlayAllMode, !debugAnimQueue.isEmpty else {
+            // finished the whole list
+            debugPlayAllMode = false
+            debugPlayAllLabel = ""
+            selectDefaultEmotion()
+            applyDefaultEmotionDisplay()
+            currentFrameIndex = 0
+            return
+        }
+        let emotion = debugAnimQueue.removeFirst()
+        currentEmotion = emotion
+        currentFrameIndex = 0
+        debugPlayAllLabel = "\(emotion)"
+
+        // for looping animations, schedule auto-advance after 2 s
+        let anim = currentAnimation
+        switch anim.source {
+        case .frames(_, _, let isLoop) where isLoop:
+            let item = DispatchWorkItem { [weak self] in self?.debugAdvanceAnimation() }
+            debugPlayWorkItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: item)
+        default:
+            break   // non-loop: advanceFrame() intercept will call debugAdvanceAnimation()
+        }
     }
 
     func cycleEmotionOnTap() {
@@ -1427,11 +1517,9 @@ struct ContentView: View {
         // 底栏贴底；面板与「提醒」相同，用全屏 Sheet + NavigationStack + 完成。
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
-                if viewModel.currentEmotion == .eatingOnce {
-                    Color.green
-                        .ignoresSafeArea()
-                        .transition(.opacity)
-                }
+                // Debug: green background to verify transparent frames. Remove when confirmed.
+                Color.green
+                    .ignoresSafeArea()
 
                 PetAnimationView(viewModel: viewModel)
                     .id(viewModel.currentEmotion)
@@ -1475,6 +1563,22 @@ struct ContentView: View {
                     .zIndex(2)
                     .allowsHitTesting(false)
                     .transition(.scale.combined(with: .opacity))
+                }
+
+                // Debug: animation name label shown during play-all
+                if viewModel.debugPlayAllMode {
+                    VStack(spacing: 4) {
+                        Spacer()
+                        Text(viewModel.debugPlayAllLabel)
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 5))
+                    }
+                    .zIndex(3)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
                 }
             }
             .padding(.horizontal, 8)
