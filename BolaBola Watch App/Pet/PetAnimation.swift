@@ -287,8 +287,8 @@ enum PetAnimations {
         emotion: .idle,
         displayScale: AnimationScale.idle,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idleone", maxFrames: 30),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idleone", maxFrames: 90),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: true
         )
     )
@@ -298,8 +298,8 @@ enum PetAnimations {
         emotion: .shakeOnce,
         displayScale: AnimationScale.shakeOnce,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idleone", maxFrames: 30),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idleone", maxFrames: 90),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: false
         )
     )
@@ -311,8 +311,8 @@ enum PetAnimations {
         // watchOS 上 VideoPlayer 会展示原生播放控制 UI，影响交互体验。
         // 直接使用 idleone 帧序列来渲染，避免播放器控件出现。
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idleone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idleone", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: true
         )
     )
@@ -322,8 +322,8 @@ enum PetAnimations {
         emotion: .idleTwo,
         displayScale: AnimationScale.idleTwo,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idletwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idletwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: true
         )
     )
@@ -333,8 +333,8 @@ enum PetAnimations {
         emotion: .idleThree,
         displayScale: AnimationScale.idleThree,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idlethree", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idlethree", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: true
         )
     )
@@ -343,8 +343,8 @@ enum PetAnimations {
         emotion: .idleFour,
         displayScale: AnimationScale.idleFour,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idlefour", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idlefour", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: true
         )
     )
@@ -353,8 +353,8 @@ enum PetAnimations {
         emotion: .idleFive,
         displayScale: AnimationScale.idleFive,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idlefive", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idlefive", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: true
         )
     )
@@ -363,8 +363,8 @@ enum PetAnimations {
         emotion: .idleSix,
         displayScale: AnimationScale.idleSix,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idlesix", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idlesix", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: true
         )
     )
@@ -373,8 +373,8 @@ enum PetAnimations {
         emotion: .unhappyTwo,
         displayScale: AnimationScale.unhappyTwo,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "unhappytwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "unhappytwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -383,8 +383,8 @@ enum PetAnimations {
         emotion: .happyIdle,
         displayScale: AnimationScale.happyIdle,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "happyidle", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "happyidle", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: true
         )
     )
@@ -394,8 +394,8 @@ enum PetAnimations {
         emotion: .thinkOne,
         displayScale: AnimationScale.thinkOne,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "thinktwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "thinktwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: true
         )
     )
@@ -404,8 +404,8 @@ enum PetAnimations {
         emotion: .thinkTwo,
         displayScale: AnimationScale.thinkTwo,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "thinktwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "thinktwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: true
         )
     )
@@ -416,8 +416,8 @@ enum PetAnimations {
         displayScale: AnimationScale.scale,
         // 同上：改用帧序列，避免 VideoPlayer 控件层。
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "scale", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "scale", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: true
         )
     )
@@ -427,8 +427,8 @@ enum PetAnimations {
         emotion: .die,
         displayScale: AnimationScale.die,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "die", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "die", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: true
         )
     )
@@ -453,8 +453,8 @@ enum PetAnimations {
         emotion: .angry2,
         displayScale: AnimationScale.angry2,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "unhappytwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "unhappytwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -464,8 +464,8 @@ enum PetAnimations {
         emotion: .unhappy,
         displayScale: AnimationScale.unhappy,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "unhappy", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "unhappy", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -475,8 +475,8 @@ enum PetAnimations {
         emotion: .letter,
         displayScale: AnimationScale.letter,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "letter", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "letter", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -485,8 +485,8 @@ enum PetAnimations {
         emotion: .letterOnce,
         displayScale: AnimationScale.letterOnce,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "letter", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "letter", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: false
         )
     )
@@ -496,8 +496,8 @@ enum PetAnimations {
         emotion: .hurt,
         displayScale: AnimationScale.hurt,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "hurt", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "hurt", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -506,8 +506,8 @@ enum PetAnimations {
         emotion: .question1,
         displayScale: AnimationScale.question1,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "questionone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "questionone", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -516,8 +516,8 @@ enum PetAnimations {
         emotion: .question2,
         displayScale: AnimationScale.question2,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "questiontwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "questiontwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -527,8 +527,8 @@ enum PetAnimations {
         emotion: .question3,
         displayScale: AnimationScale.question3,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "questionone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "questionone", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -537,8 +537,8 @@ enum PetAnimations {
         emotion: .speak1,
         displayScale: AnimationScale.speak1,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speakone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speakone", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -547,8 +547,8 @@ enum PetAnimations {
         emotion: .speak2,
         displayScale: AnimationScale.speak2,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speaktwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speaktwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -557,8 +557,8 @@ enum PetAnimations {
         emotion: .speak3,
         displayScale: AnimationScale.speak3,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speakthree", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speakthree", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -567,8 +567,8 @@ enum PetAnimations {
         emotion: .speak1Once,
         displayScale: AnimationScale.speak1Once,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speakone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speakone", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: false
         )
     )
@@ -577,8 +577,8 @@ enum PetAnimations {
         emotion: .speak2Once,
         displayScale: AnimationScale.speak2Once,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speaktwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speaktwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: false
         )
     )
@@ -587,8 +587,8 @@ enum PetAnimations {
         emotion: .speak3Once,
         displayScale: AnimationScale.speak3Once,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speakthree", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "speakthree", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: false
         )
     )
@@ -597,8 +597,8 @@ enum PetAnimations {
         emotion: .blowbubble1,
         displayScale: AnimationScale.blowbubble1,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "blowbubbleone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "blowbubbleone", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -607,8 +607,8 @@ enum PetAnimations {
         emotion: .blowbubble2,
         displayScale: AnimationScale.blowbubble2,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "blowbubbletwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "blowbubbletwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -617,8 +617,8 @@ enum PetAnimations {
         emotion: .like1,
         displayScale: AnimationScale.like1,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "likeone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "likeone", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -627,8 +627,8 @@ enum PetAnimations {
         emotion: .like2,
         displayScale: AnimationScale.like2,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "liketwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "liketwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -638,8 +638,8 @@ enum PetAnimations {
         emotion: .surprisedOne,
         displayScale: AnimationScale.surprisedOne,
         source: .frames(
-            frameNames: loopTwiceFrames(prefix: "surprisedone", maxFrames: 30),
-            fps: effectiveFPS(baseFPS: 10, maxFrames: 30),
+            frameNames: loopTwiceFrames(prefix: "surprisedone", maxFrames: 90),
+            fps: effectiveFPS(baseFPS: 30, maxFrames: 90),
             isLoop: false
         )
     )
@@ -649,8 +649,8 @@ enum PetAnimations {
         emotion: .surprisedTwo,
         displayScale: AnimationScale.surprisedTwo,
         source: .frames(
-            frameNames: loopTwiceFrames(prefix: "surprisedone", maxFrames: 30),
-            fps: effectiveFPS(baseFPS: 10, maxFrames: 30),
+            frameNames: loopTwiceFrames(prefix: "surprisedone", maxFrames: 90),
+            fps: effectiveFPS(baseFPS: 30, maxFrames: 90),
             isLoop: false
         )
     )
@@ -659,8 +659,8 @@ enum PetAnimations {
         emotion: .sad1,
         displayScale: AnimationScale.sad1,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sadone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sadone", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -669,8 +669,8 @@ enum PetAnimations {
         emotion: .sad2,
         displayScale: AnimationScale.sad2,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sadtwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sadtwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -680,8 +680,8 @@ enum PetAnimations {
         emotion: .jumpTwo,
         displayScale: AnimationScale.jumpTwo,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "jumptwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 10, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "jumptwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 30, maxFrames: 90),
             isLoop: true
         )
     )
@@ -691,8 +691,8 @@ enum PetAnimations {
         emotion: .jumpTwoOnce,
         displayScale: AnimationScale.jumpTwo,
         source: .frames(
-            frameNames: loopTwiceFrames(prefix: "jumptwo", maxFrames: 30),
-            fps: effectiveFPS(baseFPS: 10, maxFrames: 30),
+            frameNames: loopTwiceFrames(prefix: "jumptwo", maxFrames: 90),
+            fps: effectiveFPS(baseFPS: 30, maxFrames: 90),
             isLoop: false
         )
     )
@@ -702,8 +702,8 @@ enum PetAnimations {
         emotion: .jumpTwoTap,
         displayScale: AnimationScale.jumpTwo,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "jumptwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 10, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "jumptwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 30, maxFrames: 90),
             isLoop: false
         )
     )
@@ -713,8 +713,8 @@ enum PetAnimations {
         emotion: .happy1,
         displayScale: AnimationScale.happy1,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "happyone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "happyone", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -724,8 +724,8 @@ enum PetAnimations {
         emotion: .jump1,
         displayScale: AnimationScale.jump1,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "jumpone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 10, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "jumpone", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 30, maxFrames: 90),
             isLoop: true
         )
     )
@@ -735,8 +735,8 @@ enum PetAnimations {
         emotion: .jump1Once,
         displayScale: AnimationScale.jump1,
         source: .frames(
-            frameNames: loopTwiceFrames(prefix: "jumpone", maxFrames: 30),
-            fps: effectiveFPS(baseFPS: 10, maxFrames: 30),
+            frameNames: loopTwiceFrames(prefix: "jumpone", maxFrames: 90),
+            fps: effectiveFPS(baseFPS: 30, maxFrames: 90),
             isLoop: false
         )
     )
@@ -746,8 +746,8 @@ enum PetAnimations {
         emotion: .jump1Tap,
         displayScale: AnimationScale.jump1,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "jumpone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 10, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "jumpone", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 30, maxFrames: 90),
             isLoop: false
         )
     )
@@ -757,8 +757,8 @@ enum PetAnimations {
         emotion: .happy1Once,
         displayScale: AnimationScale.happy1,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "happyone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "happyone", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: false
         )
     )
@@ -768,8 +768,8 @@ enum PetAnimations {
         emotion: .like2Once,
         displayScale: AnimationScale.like2,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "liketwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "liketwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: false
         )
     )
@@ -779,8 +779,8 @@ enum PetAnimations {
         emotion: .angry2Once,
         displayScale: AnimationScale.angry2,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "unhappytwo", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "unhappytwo", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: false
         )
     )
@@ -790,8 +790,8 @@ enum PetAnimations {
         emotion: .happyIdleOnce,
         displayScale: AnimationScale.happyIdleOnce,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "happyidle", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 7, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "happyidle", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 21, maxFrames: 90),
             isLoop: false
         )
     )
@@ -801,8 +801,8 @@ enum PetAnimations {
         emotion: .like1Once,
         displayScale: AnimationScale.like1Once,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "likeone", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "likeone", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: false
         )
     )
@@ -812,8 +812,8 @@ enum PetAnimations {
         emotion: .eatingWait,
         displayScale: AnimationScale.eatingWait,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idleapple", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idleapple", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -834,8 +834,8 @@ enum PetAnimations {
         emotion: .idleDrink1,
         displayScale: AnimationScale.idleDrink1,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idledrink1", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idledrink1", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -845,8 +845,8 @@ enum PetAnimations {
         emotion: .idleDrink2,
         displayScale: AnimationScale.idleDrink2,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idledrink2", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "idledrink2", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -856,8 +856,8 @@ enum PetAnimations {
         emotion: .drinkOnce,
         displayScale: AnimationScale.drinkOnce,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "drink", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "drink", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: false
         )
     )
@@ -866,8 +866,8 @@ enum PetAnimations {
         emotion: .sleepy,
         displayScale: AnimationScale.sleepy,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleepy", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleepy", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -877,8 +877,8 @@ enum PetAnimations {
         emotion: .sleep,
         displayScale: AnimationScale.sleep,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleepy", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleepy", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: false
         )
     )
@@ -888,8 +888,8 @@ enum PetAnimations {
         emotion: .nightSleepWait,
         displayScale: AnimationScale.nightSleepWait,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleepy", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleepy", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )
@@ -899,8 +899,8 @@ enum PetAnimations {
         emotion: .fallAsleep,
         displayScale: AnimationScale.fallAsleep,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "fallasleep", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "fallasleep", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: false
         )
     )
@@ -910,8 +910,8 @@ enum PetAnimations {
         emotion: .sleepLoop,
         displayScale: AnimationScale.sleepLoop,
         source: .frames(
-            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleeploop", maxFrames: 30, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
-            fps: effectiveFPS(baseFPS: 8, maxFrames: 30),
+            frameNames: PetAnimationLoader.loadFrameNames(prefix: "sleeploop", maxFrames: 90, maxUniqueFrames: AnimationLimits.maxUniqueFrames),
+            fps: effectiveFPS(baseFPS: 24, maxFrames: 90),
             isLoop: true
         )
     )

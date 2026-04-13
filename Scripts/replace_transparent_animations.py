@@ -26,7 +26,7 @@ ASSETS = REPO / "BolaBola Watch App" / "Assets.xcassets"
 DONE_DIR = Path.home() / "documents" / "BolaWatchVideo" / "DONE"
 BACKUP_DIR = REPO / "Scripts" / "animation_originals"
 
-TARGET_FRAMES = 30
+TARGET_FRAMES = 90
 TARGET_WIDTH   = 400
 
 # (done_folder_name, xcassets_folder_name, asset_prefix)
