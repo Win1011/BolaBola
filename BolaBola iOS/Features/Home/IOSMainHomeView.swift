@@ -124,7 +124,7 @@ struct IOSMainHomeView: View {
             .presentationDragIndicator(.visible)
         }
         .confirmationDialog(
-            selectedPlacedStickerPosition == nil ? "贴纸操作" : "处理 \(selectedPlacedStickerKind.displayName)",
+            selectedPlacedStickerPosition == nil ? "贴纸操作" : "处理此贴纸",
             isPresented: Binding(
                 get: { selectedPlacedStickerPosition != nil },
                 set: { if !$0 { selectedPlacedStickerPosition = nil } }
@@ -152,11 +152,11 @@ struct IOSMainHomeView: View {
                     stepsText: healthPreview.stepsText,
                     weatherSystemImageName: weatherSymbol,
                     weatherTempText: weatherTempLine,
-                    maxHeight: 318,
+                    maxHeight: 292,
                     horizontalNudgePoints: 1.5,
                     screenContentNudgeX: -6,
                     screenContentNudgeY: 9,
-                    showComplicationSlotGuideCircles: true,
+                    showComplicationSlotGuideCircles: false,
                     showScreenMaskOutline: false,
                     complicationSlotsRadialScale: 1.08,
                     complicationContentScale: 1.56,
@@ -174,7 +174,7 @@ struct IOSMainHomeView: View {
                         ProgressView()
                             .tint(.secondary)
                     )
-                    .frame(width: 250, height: 318)
+                    .frame(width: 230, height: 292)
             }
         }
         .frame(maxWidth: .infinity)

@@ -29,9 +29,10 @@ private enum LifeMiddleCardMetrics {
         healthCardRowHeight * 2 + healthStackSpacing
     }
 
-    static let compactHealthCardRowHeight: CGFloat = 76
-    static let wideReminderCardHeight: CGFloat = 118
-    static let featuredReminderCardHeight: CGFloat = 178
+    static let compactHealthCardRowHeight: CGFloat = 68
+    static let wideReminderCardHeight: CGFloat = 178
+    /// 竖形态提醒卡固定高度 = 两张标准健康卡 + 间距。
+    static let featuredReminderCardHeight: CGFloat = 308
     static let dashboardHeaderSpacing: CGFloat = 12
     static let activityRingsBaseSize: CGFloat = 120
     static let featuredActivityRingsSize: CGFloat = 54
@@ -246,38 +247,39 @@ struct IOSLifeContainerView: View {
 
     private var lifeScroll: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                dashboardDateStrip
-                    .padding(.top, 6)
+            ZStack(alignment: .topLeading) {
+                // 编辑模式背景点击层：只有穿透到这里的点击才退出编辑
+                if isEditingDashboard {
+                    Color.black.opacity(0.001)
+                        .onTapGesture {
+                            endDashboardEditing()
+                        }
+                }
 
-                // 1. 全宽半圆弧主视觉（负 padding 出血到屏边）
-                heroArcSection
-                    .padding(.top, 18)
-                    .padding(.horizontal, -BolaTheme.paddingHorizontal)
+                VStack(alignment: .leading, spacing: 0) {
+                    dashboardDateStrip
+                        .padding(.top, 6)
 
-                dashboardSectionHeader
-                    .padding(.top, 22)
+                    // 1. 全宽半圆弧主视觉（负 padding 出血到屏边）
+                    heroArcSection
+                        .padding(.top, 18)
+                        .padding(.horizontal, -BolaTheme.paddingHorizontal)
 
-                // 2. 可编辑仪表板
-                middleDashboardSection
-                    .padding(.top, 14)
+                    // 2. 可编辑仪表板
+                    middleDashboardSection
+                        .padding(.top, 22)
 
-                // 3. 今日生活记录
-                lifeRecordsFigma
-                    .padding(.top, 28)
+                    // 3. 今日生活记录
+                    lifeRecordsFigma
+                        .padding(.top, 28)
+                }
+                .padding(.horizontal, BolaTheme.paddingHorizontal)
+                .padding(.top, 0)
+                .padding(.bottom, 28)
             }
-            .padding(.horizontal, BolaTheme.paddingHorizontal)
-            .padding(.top, 0)
-            .padding(.bottom, 28)
         }
         .background(Color.clear)
         .scrollIndicators(.hidden)
-        .simultaneousGesture(
-            TapGesture().onEnded {
-                guard isEditingDashboard else { return }
-                endDashboardEditing()
-            }
-        )
         .refreshable {
             reloadDigest()
             weather.requestAndFetch()
@@ -451,43 +453,6 @@ struct IOSLifeContainerView: View {
         )
     }
 
-    private var dashboardSectionHeader: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("仪表板")
-                    .font(.system(size: 20, weight: .bold))
-                Text(isEditingDashboard ? "长按卡片拖拽换位置，拖右下角手柄缩放" : "把提醒和身体数据排成你喜欢的样子")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-            Button {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
-                    if isEditingDashboard {
-                        endDashboardEditing()
-                    } else {
-                        isEditingDashboard = true
-                    }
-                }
-            } label: {
-                Text(isEditingDashboard ? "完成" : "编辑仪表板")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isEditingDashboard ? BolaTheme.onAccentForeground : .primary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(isEditingDashboard ? BolaTheme.accent : BolaTheme.surfaceBubble)
-                    )
-                    .overlay(
-                        Capsule()
-                            .stroke(Color(uiColor: .separator).opacity(isEditingDashboard ? 0 : 0.3), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
     private var middleDashboardSection: some View {
         VStack(spacing: 12) {
             Group {
@@ -508,20 +473,20 @@ struct IOSLifeContainerView: View {
         dashboardVariant(for: .reminders) == .featured
     }
 
-    private var splitDashboardColumnHeight: CGFloat {
-        dashboardTileHeight(for: .sleep) + LifeMiddleCardMetrics.healthStackSpacing + dashboardTileHeight(for: .activity)
-    }
-
     private var splitDashboardLayout: some View {
-        HStack(alignment: .top, spacing: 12) {
+        let fixedHeight = LifeMiddleCardMetrics.featuredReminderCardHeight
+
+        return HStack(alignment: .top, spacing: 12) {
+            // 左列：提醒卡固定高度
             dashboardTileContainer(kind: .reminders) {
                 IOSRemindersSectionView(reminders: $reminders, style: .figmaLife)
                     .frame(maxWidth: .infinity)
-                    .frame(height: splitDashboardColumnHeight, alignment: .topLeading)
+                    .frame(height: fixedHeight, alignment: .topLeading)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: splitDashboardColumnHeight, alignment: .topLeading)
+            .frame(height: fixedHeight, alignment: .topLeading)
 
+            // 右列：健康卡各自独立高度，顶部对齐
             VStack(spacing: LifeMiddleCardMetrics.healthStackSpacing) {
                 dashboardTileContainer(kind: .sleep) {
                     compactSleepCardContent(compact: dashboardVariant(for: .sleep) == .compact)
@@ -533,8 +498,7 @@ struct IOSLifeContainerView: View {
                 }
                 .frame(height: dashboardTileHeight(for: .activity))
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: splitDashboardColumnHeight, alignment: .top)
+            .frame(maxWidth: .infinity, alignment: .top)
         }
     }
 
@@ -626,7 +590,7 @@ struct IOSLifeContainerView: View {
             dashboardTileContainer(kind: .reminders) {
                 IOSRemindersSectionView(
                     reminders: $reminders,
-                    style: tile.variant == .featured ? .figmaLife : .dashboardCompact
+                    style: .figmaLife
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
@@ -681,29 +645,42 @@ struct IOSLifeContainerView: View {
         ZStack(alignment: .bottomTrailing) {
             content()
                 .allowsHitTesting(!isEditingDashboard)
-                .opacity(draggedDashboardKind == kind ? 0.78 : 1)
-                .scaleEffect(draggedDashboardKind == kind ? 0.985 : 1)
+                .opacity(draggedDashboardKind == kind ? 0.55 : 1)
+                .scaleEffect(draggedDashboardKind == kind ? 0.97 : 1)
                 .rotationEffect(.degrees(isEditingDashboard ? (dashboardJigglePhase ? wiggleAngle(for: kind) : -wiggleAngle(for: kind)) : 0))
 
             if isEditingDashboard {
-                LifeDashboardResizeHandle(
+                // 编辑态边框
+                RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous)
+                    .stroke(Color.primary.opacity(0.16), lineWidth: 2)
+                    .allowsHitTesting(false)
+
+                LifeDashboardResizeButton(
                     variant: dashboardVariant(for: kind),
-                    onPreviewVariant: { preview in
-                        previewDashboardVariant(preview, for: kind)
-                    },
-                    onCommitVariant: { variant in
-                        commitDashboardVariant(variant, for: kind)
-                    },
-                    onCancelPreview: {
-                        previewDashboardVariant(nil, for: kind)
+                    onToggle: {
+                        let current = dashboardVariant(for: kind)
+                        let target: LifeDashboardTileVariant = current == .featured ? .compact : .featured
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        commitDashboardVariant(target, for: kind)
                     }
                 )
-                .offset(x: 10, y: 10)
+                .offset(x: 4, y: 4)
             }
         }
-        .contentShape(RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous))
+        .contentShape(.dragPreview, RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous))
+        .contentShape(.interaction, RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous))
         .onDrag {
-            guard isEditingDashboard else { return NSItemProvider() }
+            if !isEditingDashboard {
+                // 长按触发：进入编辑模式，取消本次拖拽
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                DispatchQueue.main.async {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
+                        isEditingDashboard = true
+                    }
+                }
+                return NSItemProvider()
+            }
             draggedDashboardKind = kind
             return NSItemProvider(object: NSString(string: kind.rawValue))
         }
@@ -745,14 +722,14 @@ struct IOSLifeContainerView: View {
                     valueText: hasData ? "\(String(format: "%.1f", hours)) 小时" : "暂无数据",
                     valueStyle: hasData ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)
                 ) {
-                    VStack(alignment: .trailing, spacing: 7) {
+                    VStack(alignment: .trailing, spacing: 4) {
                         Text(hasData ? "目标 8h" : "同步中")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.tertiary)
                         ZStack(alignment: .leading) {
                             Capsule()
                                 .fill(Color.indigo.opacity(0.13))
-                                .frame(width: 72, height: 7)
+                                .frame(height: 5)
                             Capsule()
                                 .fill(
                                     LinearGradient(
@@ -761,10 +738,11 @@ struct IOSLifeContainerView: View {
                                         endPoint: .trailing
                                     )
                                 )
-                                .frame(width: max(0, 72 * fraction), height: 7)
+                                .frame(width: max(0, 80 * fraction), height: 5)
                         }
+                        .frame(width: 80)
                     }
-                    .frame(width: 72, alignment: .trailing)
+                    .frame(width: 80, alignment: .trailing)
                 }
             )
         }
@@ -838,12 +816,8 @@ struct IOSLifeContainerView: View {
                         exerciseProgress: exerciseProgress,
                         standProgress: standProgress
                     )
-                    .scaleEffect(LifeMiddleCardMetrics.compactActivityRingsSize / LifeMiddleCardMetrics.activityRingsBaseSize)
-                    .frame(
-                        width: LifeMiddleCardMetrics.compactActivityRingsSize,
-                        height: LifeMiddleCardMetrics.compactActivityRingsSize
-                    )
-                    .frame(width: 72, alignment: .trailing)
+                    .scaleEffect(42.0 / LifeMiddleCardMetrics.activityRingsBaseSize)
+                    .frame(width: 42, height: 42)
                 }
             )
         }
@@ -857,16 +831,16 @@ struct IOSLifeContainerView: View {
                 footerText: hasData ? "锻炼 \(Int(exercise)) 分 · 站立 \(Int(stand)) 分" : "等待运动数据同步",
                 footerStyle: hasData ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary)
             ) {
-                IOSHealthTodayRingsBlock(
-                    moveProgress: moveProgress,
-                    exerciseProgress: exerciseProgress,
-                    standProgress: standProgress
-                )
-                .scaleEffect(LifeMiddleCardMetrics.featuredActivityRingsSize / LifeMiddleCardMetrics.activityRingsBaseSize)
-                .frame(
-                    width: LifeMiddleCardMetrics.featuredActivityRingsSize,
-                    height: LifeMiddleCardMetrics.featuredActivityRingsSize
-                )
+                HStack {
+                    Spacer()
+                    IOSHealthTodayRingsBlock(
+                        moveProgress: moveProgress,
+                        exerciseProgress: exerciseProgress,
+                        standProgress: standProgress
+                    )
+                    .scaleEffect(72.0 / LifeMiddleCardMetrics.activityRingsBaseSize)
+                    .frame(width: 72, height: 72)
+                }
             }
         )
     }
@@ -928,23 +902,25 @@ struct IOSLifeContainerView: View {
         valueStyle: AnyShapeStyle,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
                 Label(title, systemImage: systemImage)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.primary)
+                    .labelStyle(.titleAndIcon)
                 Text(valueText)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(valueStyle)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
 
             Spacer(minLength: 0)
 
             trailing()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .frame(maxHeight: .infinity, alignment: .center)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
@@ -1161,10 +1137,12 @@ struct IOSLifeContainerView: View {
     }
 
     private func previewDashboardVariant(_ variant: LifeDashboardTileVariant?, for kind: LifeDashboardTileKind) {
-        if let variant {
-            dashboardResizePreview[kind] = variant
-        } else {
-            dashboardResizePreview.removeValue(forKey: kind)
+        withAnimation(.interactiveSpring(response: 0.25, dampingFraction: 1.0, blendDuration: 0.05)) {
+            if let variant {
+                dashboardResizePreview[kind] = variant
+            } else {
+                dashboardResizePreview.removeValue(forKey: kind)
+            }
         }
     }
 
@@ -1172,6 +1150,15 @@ struct IOSLifeContainerView: View {
         previewDashboardVariant(nil, for: kind)
         withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
             setDashboardVariant(variant, for: kind)
+        }
+        // 布局切换（split ↔ flexible）会重建视图树导致 repeatForever 动画丢失，重新触发
+        if isEditingDashboard {
+            dashboardJigglePhase = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                withAnimation(.easeInOut(duration: 0.14).repeatForever(autoreverses: true)) {
+                    dashboardJigglePhase = true
+                }
+            }
         }
     }
 
@@ -1887,65 +1874,29 @@ private struct LifeDashboardCalendarSheet: View {
     }
 }
 
-private struct LifeDashboardResizeHandle: View {
+/// 编辑态右下角缩放按钮：圆形毛玻璃 + 放大/缩小 icon，点击切换 featured / compact。
+private struct LifeDashboardResizeButton: View {
     let variant: LifeDashboardTileVariant
-    var onPreviewVariant: (LifeDashboardTileVariant?) -> Void
-    var onCommitVariant: (LifeDashboardTileVariant) -> Void
-    var onCancelPreview: () -> Void
-
-    @State private var dragOffset: CGSize = .zero
+    var onToggle: () -> Void
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            LifeDashboardCornerHandleShape(inset: 0)
-                .stroke(Color.primary.opacity(0.22), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
-                .frame(width: 18, height: 18)
+        Button(action: onToggle) {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 30, height: 30)
+                    .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
 
-            LifeDashboardCornerHandleShape(inset: 5)
-                .stroke(Color.primary.opacity(0.16), style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
-                .frame(width: 18, height: 18)
-        }
-        .frame(width: 32, height: 32)
-        .background(Color.clear.contentShape(Rectangle()))
-        .offset(dragOffset)
-        .gesture(
-            DragGesture(minimumDistance: 1)
-                .onChanged { value in
-                    let translation = value.translation
-                    dragOffset = CGSize(
-                        width: max(-10, min(12, translation.width * 0.26)),
-                        height: max(-10, min(12, translation.height * 0.26))
-                    )
-                    onPreviewVariant(previewVariant(for: translation))
-                }
-                .onEnded { value in
-                    defer { dragOffset = .zero }
-                    let preview = previewVariant(for: value.translation) ?? variant
-                    if preview != variant {
-                        onCommitVariant(preview)
-                    } else {
-                        onCancelPreview()
-                    }
-                }
-        )
-    }
-
-    private func previewVariant(for translation: CGSize) -> LifeDashboardTileVariant? {
-        let compactThreshold: CGFloat = 18
-        let featuredThreshold: CGFloat = 18
-
-        switch variant {
-        case .featured:
-            if translation.width < -compactThreshold || translation.height > compactThreshold {
-                return .compact
+                Image(systemName: variant == .featured
+                      ? "arrow.down.right.and.arrow.up.left"
+                      : "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.secondary)
             }
-            return .featured
-        case .compact:
-            if translation.width > featuredThreshold || translation.height < -featuredThreshold {
-                return .featured
-            }
-            return .compact
+            .frame(width: 44, height: 44)
+            .contentShape(Circle())
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -1993,6 +1944,12 @@ private struct LifeDashboardTileDropDelegate: DropDelegate {
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {}
+}
+? {
         DropProposal(operation: .move)
     }
 
