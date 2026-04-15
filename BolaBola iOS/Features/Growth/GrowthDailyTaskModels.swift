@@ -173,12 +173,28 @@ final class GrowthDailyTasksViewModel: ObservableObject {
         let defaults = BolaSharedDefaults.resolved()
         next["walk"] = await Self.queryWalkProgress(store: healthStore)
         next["chat"] = Self.chatProgressToday(defaults: defaults)
-        next["random_a"] = 1.0
-        next["random_b"] = 1.0
-        next["random_c"] = 1.0
-        for (taskId, value) in next {
-            updateProgress(taskId: taskId, value: value)
+        next["random_a"] = Self.placeholderProgress(for: "random_a")
+        next["random_b"] = Self.placeholderProgress(for: "random_b")
+        next["random_c"] = Self.placeholderProgress(for: "random_c")
+        // 批量写入：单次 Dictionary 赋值只触发一次 objectWillChange，
+        // 避免逐条 updateProgress() 造成多次 re-render。
+        applyProgressBatch(next)
+    }
+
+    /// 一次性更新全部进度并处理 XP 发放，仅触发一次 objectWillChange。
+    private func applyProgressBatch(_ next: [String: Double]) {
+        var updated = progressByTaskId
+        for (taskId, rawValue) in next {
+            let clamped = min(1, max(0, rawValue))
+            let wasDone = (updated[taskId] ?? 0) >= 1.0
+            updated[taskId] = clamped
+            if clamped >= 1.0 && !wasDone && !xpGrantedTaskIds.contains(taskId) {
+                BolaXPEngine.grantTaskXP()
+                xpGrantedTaskIds.insert(taskId)
+                TitleUnlockManager.refreshUnlocks()
+            }
         }
+        progressByTaskId = updated  // 单次赋值 → 单次 objectWillChange
     }
 
     deinit {
@@ -276,7 +292,7 @@ final class GrowthDailyTasksViewModel: ObservableObject {
 
     private static func placeholderProgress(for id: String) -> Double {
         switch id {
-        case "random_a", "random_b", "random_c": return 1
+        case "random_a", "random_b", "random_c": return 0
         default: return 0
         }
     }
@@ -344,9 +360,9 @@ enum GrowthDailyTaskModels {
             id: "random_a",
             tag: "随机",
             illustrationAssetName: nil,
-            placeholderSystemImage: "sparkles",
-            detailLine1: "随机任务",
-            detailLine2: "轻点翻面查看",
+            placeholderSystemImage: "heart.text.square.fill",
+            detailLine1: "给我一句夸夸",
+            detailLine2: "翻开后对我说出来",
             isFlippable: true,
             surfaceKind: .accentMuted
         ),
@@ -354,9 +370,9 @@ enum GrowthDailyTaskModels {
             id: "random_b",
             tag: "随机",
             illustrationAssetName: nil,
-            placeholderSystemImage: "sparkles",
-            detailLine1: "随机任务",
-            detailLine2: "轻点翻面查看",
+            placeholderSystemImage: "drop.fill",
+            detailLine1: "喝一大口水",
+            detailLine2: "回来告诉我完成啦",
             isFlippable: true,
             surfaceKind: .accentMuted
         ),
@@ -364,9 +380,9 @@ enum GrowthDailyTaskModels {
             id: "random_c",
             tag: "随机",
             illustrationAssetName: nil,
-            placeholderSystemImage: "sparkles",
-            detailLine1: "随机任务",
-            detailLine2: "轻点翻面查看",
+            placeholderSystemImage: "sparkles.rectangle.stack.fill",
+            detailLine1: "整理一个角落",
+            detailLine2: "桌面或床头都可以",
             isFlippable: true,
             surfaceKind: .accentMuted
         )

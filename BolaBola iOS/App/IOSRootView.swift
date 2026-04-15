@@ -24,11 +24,24 @@ struct IOSRootView: View {
     @State private var showOnboarding = !BolaOnboardingState.isCompleted
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
+    // 提前在根视图创建，避免 Life tab 首次显示时在主线程同步初始化 HealthKit / CoreLocation 导致卡顿
+    @StateObject private var lifeRhythm = IOSRhythmHRVModel()
+    @StateObject private var lifeWeather = IOSWeatherLocationModel()
+    @StateObject private var lifeHealthHabits = IOSHealthHabitAnalysisModel()
+
+    // 与 Life tab 同理：提前在根视图初始化，避免成长 tab 首次点击时在主线程同步创建
+    @StateObject private var growthDailyTasksVM = GrowthDailyTasksViewModel.shared
+    @StateObject private var growthLevelVM = GrowthLevelViewModel.shared
+    @State private var growthTabPrewarmed = false
+
     private var lifeTabRoot: some View {
         NavigationStack {
             IOSLifeContainerView(
                 bubbleMode: $lifeBubbleMode,
                 reminders: $reminders,
+                rhythm: lifeRhythm,
+                weather: lifeWeather,
+                healthHabits: lifeHealthHabits,
                 onRequestChat: { selectedTab = .chat }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -48,6 +61,8 @@ struct IOSRootView: View {
                 .toolbar { growthNavigationToolbar }
         }
         .tint(Color(UIColor.label))
+        .environmentObject(growthDailyTasksVM)
+        .environmentObject(growthLevelVM)
     }
 
     private var mineTabRoot: some View {
@@ -79,32 +94,38 @@ struct IOSRootView: View {
     }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            /// `TabSection` 与独立「对话」Tab 之间间距与三格胶囊宽度由系统绘制，无公开微调 API。
-            TabSection {
-                Tab(value: IOSRootTab.mine) {
-                    mineTabRoot
-                } label: {
-                    Label("主界面", systemImage: "triangle.fill")
+        ZStack {
+            TabView(selection: $selectedTab) {
+                /// `TabSection` 与独立「对话」Tab 之间间距与三格胶囊宽度由系统绘制，无公开微调 API。
+                TabSection {
+                    Tab(value: IOSRootTab.mine) {
+                        mineTabRoot
+                    } label: {
+                        Label("主界面", systemImage: "triangle.fill")
+                    }
+
+                    Tab(value: IOSRootTab.status) {
+                        statusTabRoot
+                    } label: {
+                        Label("成长", systemImage: "circle.fill")
+                    }
+
+                    Tab(value: IOSRootTab.life) {
+                        lifeTabRoot
+                    } label: {
+                        Label("生活", systemImage: "diamond.fill")
+                    }
                 }
 
-                Tab(value: IOSRootTab.status) {
-                    statusTabRoot
+                Tab(value: IOSRootTab.chat, role: .search) {
+                    chatTabRoot
                 } label: {
-                    Label("成长", systemImage: "circle.fill")
-                }
-
-                Tab(value: IOSRootTab.life) {
-                    lifeTabRoot
-                } label: {
-                    Label("生活", systemImage: "diamond.fill")
+                    Label("对话", systemImage: "bubble.left.and.bubble.right.fill")
                 }
             }
 
-            Tab(value: IOSRootTab.chat, role: .search) {
-                chatTabRoot
-            } label: {
-                Label("对话", systemImage: "bubble.left.and.bubble.right.fill")
+            if !growthTabPrewarmed, selectedTab != .status {
+                growthTabRootPrewarmHost
             }
         }
         .bolaIOS26TabBarMinimizeOnScroll()
@@ -171,6 +192,21 @@ struct IOSRootView: View {
             await DailyDigestUNScheduler.sync(config: digest)
             await DailyDigestRefresh.regenerateIfNeeded(companionValue: Int(companion.rounded()))
         }
+    }
+
+    /// 提前实例化一次成长页子树，把首个 session 的视图构建成本从“第一次点成长 tab”
+    /// 挪到根视图空闲时完成，减少用户首次切 tab 的卡顿。
+    private var growthTabRootPrewarmHost: some View {
+        statusTabRoot
+            .frame(width: 1, height: 1)
+            .clipped()
+            .opacity(0.01)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .task {
+                await Task.yield()
+                growthTabPrewarmed = true
+            }
     }
 
     @ToolbarContentBuilder

@@ -64,12 +64,6 @@ public enum LifeDashboardLayoutStore {
             seen.insert(item.kind)
         }
 
-        for kind in LifeDashboardTileKind.allCases where !seen.contains(kind) {
-            let fallback = defaultLayout().first(where: { $0.kind == kind })
-                ?? LifeDashboardTileLayout(kind: kind, variant: .featured)
-            result.append(fallback)
-        }
-
         return result
     }
 }

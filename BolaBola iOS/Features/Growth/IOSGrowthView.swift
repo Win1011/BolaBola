@@ -704,6 +704,7 @@ private struct GrowthFlippableTaskCard: View {
     let onReveal: () -> Void
 
     @State private var flipDegrees: Double
+    @State private var isFlipping = false
 
     init(
         definition: GrowthDailyTaskCardDefinition,
@@ -721,26 +722,35 @@ private struct GrowthFlippableTaskCard: View {
     var body: some View {
         Button {
             guard !isRevealed else { return }
+            isFlipping = true
             withAnimation(.spring(response: 0.52, dampingFraction: 0.82)) {
                 flipDegrees = 0
+            } completion: {
+                isFlipping = false
             }
             onReveal()
         } label: {
-            ZStack {
-                GrowthPortraitTaskCard(definition: definition, progress: progress)
-                    .opacity(flipDegrees < 90 ? 1 : 0)
+            if isFlipping {
+                ZStack {
+                    GrowthPortraitTaskCard(definition: definition, progress: progress)
+                        .opacity(flipDegrees < 90 ? 1 : 0)
 
+                    GrowthTaskCardBack()
+                        .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                        .opacity(flipDegrees < 90 ? 0 : 1)
+                }
+                .rotation3DEffect(
+                    .degrees(flipDegrees),
+                    axis: (x: 0, y: 1, z: 0),
+                    anchor: .center,
+                    anchorZ: 0,
+                    perspective: 0.52
+                )
+            } else if isRevealed {
+                GrowthPortraitTaskCard(definition: definition, progress: progress)
+            } else {
                 GrowthTaskCardBack()
-                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-                    .opacity(flipDegrees < 90 ? 0 : 1)
             }
-            .rotation3DEffect(
-                .degrees(flipDegrees),
-                axis: (x: 0, y: 1, z: 0),
-                anchor: .center,
-                anchorZ: 0,
-                perspective: 0.52
-            )
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(.isButton)

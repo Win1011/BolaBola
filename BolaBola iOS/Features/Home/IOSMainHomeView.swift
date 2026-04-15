@@ -185,9 +185,9 @@ struct IOSMainHomeView: View {
         case .ready:
             return nil
         case .notPaired:
-            return "当前 iPhone 还没有配对 Apple Watch，所以 BolaBola 暂时无法把数据同步到手表。先完成手表配对，之后再打开一次 App 就可以继续联动。"
+            return "当前 iPhone 未配对 Apple Watch，暂时无法进行数据同步。请先完成手表配对后再打开一次 App 继续联动。"
         case .appNotInstalled:
-            return "系统显示已配对的手表上尚未安装 BolaBola，手机暂时无法下发数据。请在 iPhone 的「Watch」App →「我的手表」里找到 BolaBola 并安装；安装后在手表上打开一次本应用。"
+            return "系统显示已配对的手表上尚未安装 BolaBola。请在 iPhone 的「Watch」App →「我的手表」里找到 BolaBola 并安装；安装后在手表上打开一次本应用。"
         }
     }
 
@@ -269,17 +269,33 @@ struct IOSMainHomeView: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: 140, alignment: .topLeading)
-            .background {
-                ZStack {
-                    RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
-                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
-                    Image("sticker_panel_bg")
+                .background {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
+                            .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                        Image("sticker_panel_bg")
                         .resizable()
                         .scaledToFill()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipShape(RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .clipShape(RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous))
+                    }
                 }
-            }
+                .overlay(alignment: .topTrailing) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(Color.black.opacity(0.22))
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                        )
+                        .padding(.top, 16)
+                        .padding(.trailing, 16)
+                }
         }
         .buttonStyle(.plain)
     }
@@ -296,11 +312,6 @@ struct IOSMainHomeView: View {
                     .foregroundStyle(BolaTheme.figmaMutedBody.opacity(0.68))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.tertiary)
-                    .padding(.top, 2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -356,14 +367,8 @@ struct IOSMainHomeView: View {
 
     private var titleSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 5) {
-                Text("称号")
-                    .font(.system(size: 20, weight: .semibold))
-                Image(systemName: "seal.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color(uiColor: .secondaryLabel).opacity(0.8))
-                    .offset(y: -1)
-            }
+            Text("称号")
+                .font(.system(size: 20, weight: .semibold))
             HStack {
                 Spacer(minLength: 0)
                 TitleBadgeFrame(text: titleLine)
@@ -699,6 +704,16 @@ private struct CompanionAccelerationBar: View {
                 }
             }
         }
+    }
+}
+
+#Preview("Home") {
+    NavigationStack {
+        IOSMainHomeView(
+            companion: .constant(68),
+            refreshSignal: .constant(0),
+            isSyncing: .constant(false)
+        )
     }
 }
 
