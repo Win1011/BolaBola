@@ -23,6 +23,9 @@ struct WatchS10MockupView: View {
     var weatherSystemImageName: String
     var weatherTempText: String
 
+    /// 当前正在播放的宠物动画帧前缀（如 "idleone"），由 BolaWCSessionCoordinator 从手表同步而来。
+    var petAnimationPrefix: String = "idleone"
+
     var maxHeight: CGFloat = 310
     /// 表冠在右侧时视觉会偏一侧；正值向右、负值向左（与导航标题对齐时可微调）。
     var horizontalNudgePoints: CGFloat = 0
@@ -120,6 +123,11 @@ struct WatchS10MockupView: View {
 
     private var screenLabels: some View {
         ZStack {
+            // 宠物动画层（最底层，位于时间/麦克风/槽位之下）
+            PetFramePlayer(prefix: petAnimationPrefix)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+
             if showScreenCenterCrosshair {
                 screenCenterCrosshairLayer
                     .allowsHitTesting(false)

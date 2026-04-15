@@ -502,7 +502,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch App/BolaBola Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MX4C45DA78;
+				DEVELOPMENT_TEAM = MJ852SN88S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
@@ -511,14 +511,14 @@
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 把你的语音转成文字，再生成回复。";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 需要发送喝水、活动等本地提醒。";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.gathxr.BolaBola;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.GathXRTeam.BolaBola;
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola.Watch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -541,7 +541,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch App/BolaBola Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MX4C45DA78;
+				DEVELOPMENT_TEAM = MJ852SN88S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
@@ -550,14 +550,14 @@
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 把你的语音转成文字，再生成回复。";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 需要发送喝水、活动等本地提醒。";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.gathxr.BolaBola;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.GathXRTeam.BolaBola;
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola.Watch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -668,7 +668,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch WidgetExtension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MX4C45DA78;
+				DEVELOPMENT_TEAM = MJ852SN88S;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "BolaBola Watch Widget/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "BolaBola Watch Widget";
@@ -680,7 +680,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola.watchkitapp.WidgetExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola.Watch.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -702,7 +702,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch WidgetExtension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MX4C45DA78;
+				DEVELOPMENT_TEAM = MJ852SN88S;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "BolaBola Watch Widget/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "BolaBola Watch Widget";
@@ -714,7 +714,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gathxr.BolaBola.watchkitapp.WidgetExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola.Watch.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;

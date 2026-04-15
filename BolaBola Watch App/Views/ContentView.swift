@@ -13,7 +13,11 @@ import WidgetKit
 // MARK: - ViewModel（简单状态机雏形）
 
 final class PetViewModel: ObservableObject {
-    @Published var currentEmotion: PetEmotion = .idle
+    @Published var currentEmotion: PetEmotion = .idle {
+        didSet {
+            pushPetStateSnapshotIfPrefixChanged()
+        }
+    }
     @Published var currentFrameIndex: Int = 0
     @Published var companionValue: Double = 50
     // 内部陪伴值允许小数（用于 5 分钟级别的 +/-0.1/-0.1 平滑），对外与状态机使用“四舍五入后的整数值”。
@@ -92,6 +96,13 @@ final class PetViewModel: ObservableObject {
     @Published var dialogueLine: String = ""
     private var dialogueDismissWorkItem: DispatchWorkItem?
     private var dialogueGeneration: UInt = 0
+
+    /// 已推送给 iPhone 的最近一次动画前缀，避免重复推送。
+    private var lastPushedAnimationPrefix: String = ""
+    /// `init` 未完成时不向 WC 推送（避免半构造状态下触发回调链）。
+    private var isPetStateSyncReady: Bool = false
+    /// iPhone → 手表指令订阅。
+    private var petCommandObserver: NSObjectProtocol?
 
     /// 每次普通点击跳跃 +1 陪伴时刷新，供界面播放「+1」泡泡动效
     @Published var tapBonusToken: UUID?
@@ -176,6 +187,27 @@ final class PetViewModel: ObservableObject {
         startMilestoneTimer()
         startProactiveChatTimer()
         maybeTriggerSurpriseIfNeeded()
+
+        #if os(watchOS)
+        petCommandObserver = NotificationCenter.default.addObserver(
+            forName: .bolaPetCommandReceived,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self else { return }
+            guard let kind = note.userInfo?[PetCommandNotificationKey.kind] as? String else { return }
+            self.handleRemotePetCommand(kind)
+        }
+        #endif
+
+        isPetStateSyncReady = true
+        lastPushedAnimationPrefix = currentAnimationPrefix
+    }
+
+    deinit {
+        if let petCommandObserver {
+            NotificationCenter.default.removeObserver(petCommandObserver)
+        }
     }
 
     private func applyRemoteCompanionValue(_ v: Double) {
@@ -202,15 +234,70 @@ final class PetViewModel: ObservableObject {
         let gen = dialogueGeneration
         dialogueLine = trimmed
         playDialogueHaptic()
+        pushPetStateSnapshotNow()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             if self.dialogueGeneration == gen {
                 self.dialogueLine = ""
+                self.pushPetStateSnapshotNow()
             }
         }
         dialogueDismissWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: work)
     }
+
+    /// `currentEmotion.didSet` 回调：若动画前缀变化则把新状态推送给 iPhone。
+    private func pushPetStateSnapshotIfPrefixChanged() {
+        guard isPetStateSyncReady else { return }
+        #if os(watchOS)
+        let prefix = currentAnimationPrefix
+        if prefix != lastPushedAnimationPrefix {
+            lastPushedAnimationPrefix = prefix
+            BolaWCSessionCoordinator.shared.pushPetStateSnapshot(
+                animationPrefix: prefix,
+                dialogueLine: dialogueLine,
+                dialogueGeneration: Int(dialogueGeneration)
+            )
+        }
+        #endif
+    }
+
+    /// `showDialogue` 入口与关闭时调用：立刻把当前前缀 + 气泡文本同步给 iPhone。
+    private func pushPetStateSnapshotNow() {
+        guard isPetStateSyncReady else { return }
+        #if os(watchOS)
+        lastPushedAnimationPrefix = currentAnimationPrefix
+        BolaWCSessionCoordinator.shared.pushPetStateSnapshot(
+            animationPrefix: currentAnimationPrefix,
+            dialogueLine: dialogueLine,
+            dialogueGeneration: Int(dialogueGeneration)
+        )
+        #endif
+    }
+
+    #if os(watchOS)
+    /// 来自 iPhone 的指令：`tap` 通过 `cycleEmotionOnTap` 分发，其余映射到具体 wait-state 点击处理。
+    private func handleRemotePetCommand(_ kind: String) {
+        switch kind {
+        case PetCommandKind.tap:
+            cycleEmotionOnTap()
+        case PetCommandKind.eat:
+            if isInEatingState, currentEmotion == .eatingWait {
+                handleEatingTap()
+            }
+        case PetCommandKind.drink:
+            if isInDrinkWaterState, currentEmotion == .idleDrink1 || currentEmotion == .idleDrink2 {
+                handleDrinkWaterTap()
+            }
+        case PetCommandKind.sleep:
+            if isInNightSleepState, !isNightSleepAsleep, currentEmotion == .nightSleepWait {
+                handleNightSleepWaitTap()
+            }
+        default:
+            break
+        }
+    }
+    #endif
 
     /// 视图出现或需要一次性初始化提醒时调用（由 ContentView `onAppear` 触发）
     /// +1 泡泡动效播完后由视图调用，清除 token
@@ -476,6 +563,13 @@ final class PetViewModel: ObservableObject {
         }
     }
 
+    /// 当前动画的帧前缀（如 "idleone"），从首帧名称去掉末尾数字得到，用于同步到 iPhone。
+    var currentAnimationPrefix: String {
+        guard case .frames(let names, _, _) = currentAnimation.source,
+              let first = names.first else { return "idleone" }
+        return String(first.prefix(while: { !$0.isNumber }))
+    }
+
     /// 推进一帧（由外部定时器控制节奏）
     func advanceFrame() {
         switch currentAnimation.source {
@@ -717,11 +811,18 @@ final class PetViewModel: ObservableObject {
         currentFrameIndex = 0
     }
 
-    /// 每日总结：展示正文并播 `letterOnce`
+    /// 每日总结：展示正文并播 `letterOnce`；同时把正文写入本机 + 经 WC 推送到 iPhone 的聊天记录。
     func playDailyDigestLetter(body: String) {
         showDialogue(body, duration: 12)
         currentEmotion = .letterOnce
         currentFrameIndex = 0
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            let turn = ChatHistoryStore.appendAssistantOnly(trimmed)
+            #if os(watchOS)
+            BolaWCSessionCoordinator.shared.pushChatDelta([turn])
+            #endif
+        }
     }
 
     // MARK: - 吃东西
@@ -1208,7 +1309,7 @@ final class PetViewModel: ObservableObject {
         #if os(watchOS)
         WidgetCenter.shared.reloadAllTimelines()
         if pushToPhone {
-            BolaWCSessionCoordinator.shared.pushCompanionValue(companionValueInternal)
+            BolaWCSessionCoordinator.shared.pushCompanionValue(companionValueInternal, animationPrefix: currentAnimationPrefix)
             BolaWCSessionCoordinator.shared.schedulePushCompanionGameStateSnapshotToPhoneDebounced()
         }
         #endif

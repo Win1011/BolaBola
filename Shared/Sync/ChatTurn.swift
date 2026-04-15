@@ -16,6 +16,19 @@ public extension Notification.Name {
     static let bolaCompanionStateDidMergeFromWatch = Notification.Name("bolaCompanionStateDidMergeFromWatch")
     static let bolaOpenSettingsRequested = Notification.Name("bolaOpenSettingsRequested")
     static let bolaLLMConfigurationDidChange = Notification.Name("bolaLLMConfigurationDidChange")
+    /// 手表端：收到 iPhone 经 WC 发来的宠物交互指令（`tap`/`eat`/`drink`/`sleep`）。
+    static let bolaPetCommandReceived = Notification.Name("bolaPetCommandReceived")
+}
+
+public enum PetCommandNotificationKey {
+    public static let kind = "kind"
+}
+
+public enum PetCommandKind {
+    public static let tap = "tap"
+    public static let eat = "eat"
+    public static let drink = "drink"
+    public static let sleep = "sleep"
 }
 
 public struct ChatTurn: Codable, Equatable, Identifiable, Sendable {
@@ -53,6 +66,20 @@ public enum ChatHistoryStore {
         let trimmed = Array(turns.suffix(maxTurns))
         guard let data = try? encoder.encode(trimmed) else { return }
         defaults.set(data, forKey: ChatHistoryKeys.turnsJSON)
+    }
+
+    /// 仅追加一条 assistant 角色的 turn（用于镜像手表侧自主台词，如每日信件）。
+    @discardableResult
+    public static func appendAssistantOnly(
+        _ text: String,
+        defaults: UserDefaults = BolaSharedDefaults.resolved()
+    ) -> ChatTurn {
+        let turn = ChatTurn(role: "assistant", content: text)
+        var t = load(from: defaults)
+        t.append(turn)
+        save(t, to: defaults)
+        bolaChatStoreLog.info("appendAssistantOnly id=\(turn.id.uuidString, privacy: .public) localTurns=\(t.count, privacy: .public)")
+        return turn
     }
 
     @discardableResult

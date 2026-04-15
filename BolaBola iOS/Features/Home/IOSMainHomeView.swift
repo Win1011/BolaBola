@@ -15,6 +15,7 @@ struct IOSMainHomeView: View {
 
     @StateObject private var healthPreview = IOSWatchFaceHealthPreviewModel()
     @StateObject private var weather = IOSWeatherLocationModel()
+    @ObservedObject private var coordinator = BolaWCSessionCoordinator.shared
     @State private var watchInstallability = BolaWCSessionCoordinator.shared.watchInstallabilityStatus()
     @State private var slotsConfig = WatchFaceSlotsStore.load()
     @State private var titleWordIdA = BolaTitleSelectionStore.load().wordIdA
@@ -143,7 +144,90 @@ struct IOSMainHomeView: View {
         }
     }
 
+    private var petDialogueBubble: some View {
+        Group {
+            if !coordinator.currentPetDialogueLine.isEmpty {
+                Text(coordinator.currentPetDialogueLine)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.yellow.opacity(0.22))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.yellow.opacity(0.85), lineWidth: 1.5)
+                    )
+                    .frame(maxWidth: 260)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: coordinator.currentPetDialogueLine)
+    }
+
+    private var petActionBar: some View {
+        let prefix = coordinator.currentPetAnimationPrefix
+        let showFeed = prefix.hasPrefix("idleapple") || prefix.hasPrefix("eatingwait")
+        let showDrink = prefix.hasPrefix("idledrink")
+        let showSleep = prefix.hasPrefix("sleepy") || prefix.hasPrefix("nightsleepwait")
+        return HStack(spacing: 14) {
+            if showFeed {
+                petActionButton(title: "喂食", systemImage: "leaf.fill", tint: .green) {
+                    BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.eat)
+                }
+            }
+            if showDrink {
+                petActionButton(title: "喝水", systemImage: "drop.fill", tint: .blue) {
+                    BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.drink)
+                }
+            }
+            if showSleep {
+                petActionButton(title: "睡觉", systemImage: "moon.zzz.fill", tint: .purple) {
+                    BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.sleep)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .animation(.easeInOut(duration: 0.18), value: prefix)
+    }
+
+    private func petActionButton(title: String, systemImage: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 14, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundStyle(tint)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                Capsule().fill(tint.opacity(0.14))
+            )
+            .overlay(
+                Capsule().stroke(tint.opacity(0.45), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var watchPreviewBlock: some View {
+        VStack(spacing: 10) {
+            petDialogueBubble
+            watchMockupCore
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.tap)
+                }
+            petActionBar
+        }
+    }
+
+    private var watchMockupCore: some View {
         Group {
             if showHeavyWatchPreview {
                 WatchS10MockupView(
@@ -152,6 +236,7 @@ struct IOSMainHomeView: View {
                     stepsText: healthPreview.stepsText,
                     weatherSystemImageName: weatherSymbol,
                     weatherTempText: weatherTempLine,
+                    petAnimationPrefix: coordinator.currentPetAnimationPrefix,
                     maxHeight: 292,
                     horizontalNudgePoints: 1.5,
                     screenContentNudgeX: -6,
