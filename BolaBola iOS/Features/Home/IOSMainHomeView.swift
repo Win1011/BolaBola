@@ -26,6 +26,7 @@ struct IOSMainHomeView: View {
     @State private var selectedPlacedStickerKind: WatchFaceComplicationKind = .none
     @State private var hasPerformedInitialLoad = false
     @State private var showHeavyWatchPreview = false
+    @State private var petTapFeedbackScale: CGFloat = 1.0
 
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
@@ -219,12 +220,28 @@ struct IOSMainHomeView: View {
         VStack(spacing: 10) {
             petDialogueBubble
             watchMockupCore
+                .scaleEffect(petTapFeedbackScale)
                 .contentShape(Rectangle())
-                .onTapGesture {
-                    BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.tap)
-                }
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        handlePetMockupTap()
+                    }
+                )
             petActionBar
         }
+    }
+
+    private func handlePetMockupTap() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.55)) {
+            petTapFeedbackScale = 0.94
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.65)) {
+                petTapFeedbackScale = 1.0
+            }
+        }
+        BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.tap)
     }
 
     private var watchMockupCore: some View {
