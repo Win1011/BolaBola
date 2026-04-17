@@ -17,20 +17,8 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     /// 主线程：远端较新时写入本机 `BolaSharedDefaults.resolved()` 后调用。
     public var onReceiveCompanionValue: ((Double) -> Void)?
 
-    #if os(iOS)
-    /// 手表当前正在播放的动画帧前缀（如 "idleone"、"happyidle"）；由手表在每次陪伴值同步时一并发送。
-    @Published public var currentPetAnimationPrefix: String = "idleone"
-    /// 手表当前气泡台词（空字符串代表无气泡）。
-    @Published public var currentPetDialogueLine: String = ""
-    /// 手表 `dialogueGeneration` 计数，用于判断更新顺序。
-    @Published public var currentPetDialogueGeneration: Int = 0
-    #endif
-
-    #if os(watchOS)
-    /// 宠物状态快照防抖：限制短时间内重复推送。
-    private var lastPetStateSnapshotSentAt: TimeInterval = 0
-    private let petStateSnapshotMinInterval: TimeInterval = 0.2
-    #endif
+    /// 跨设备同步的宠物核心状态（idle / hungry / thirsty / sleepWait / sleeping）。
+    @Published public var currentPetCoreState: PetCoreState = .idle
 
     #if os(watchOS)
     /// iPhone → 手表指令 id 去重（保留最近 16 个 id）。
@@ -164,31 +152,13 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     }
 
     /// 将当前陪伴值写入本机 defaults 并尽力推到另一端（session 未激活时会排队，激活后发出）。
-    /// - Parameter forcedForWatch: 仅 iPhone 上「同步手表」为 true，避免手表因晚到的 context 被本地较新的 `companionWCUpdatedAt` 拒绝。
-    /// - Parameter animationPrefix: watchOS 专用；当前正在播放的动画帧前缀（如 "idleone"），随陪伴值一并发往 iPhone。
-    public func pushCompanionValue(
-        _ value: Double,
-        forcedForWatch: Bool = false,
-        animationPrefix: String? = nil,
-        dialogueLine: String? = nil,
-        dialogueGeneration: Int? = nil
-    ) {
+    public func pushCompanionValue(_ value: Double, forcedForWatch: Bool = false) {
         let ts = Date().timeIntervalSince1970
         var payload: [String: Any] = [
             WCSyncPayload.companionValue: value,
-            WCSyncPayload.companionValueUpdatedAt: ts
+            WCSyncPayload.companionValueUpdatedAt: ts,
+            WCSyncPayload.petCoreState: currentPetCoreState.rawValue
         ]
-        #if os(watchOS)
-        if let prefix = animationPrefix {
-            payload[WCSyncPayload.currentAnimationPrefix] = prefix
-        }
-        if let line = dialogueLine {
-            payload[WCSyncPayload.currentDialogueLine] = line
-        }
-        if let gen = dialogueGeneration {
-            payload[WCSyncPayload.currentDialogueGeneration] = gen
-        }
-        #endif
         #if os(iOS)
         if forcedForWatch {
             payload[WCSyncPayload.companionSyncForcedFromPhone] = true
@@ -206,10 +176,9 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
                 self.sendPayload(payload, session: session)
                 self.pendingPayload = nil
             } else if session.activationState == .activated {
-                // 对端 App 未装好时先排队，安装配对后会再激活并发送
                 #if os(iOS)
                 if !session.isWatchAppInstalled {
-                    bolaWCChatLog.warning("pushCompanionValue 未发往手表：isWatchAppInstalled=false（系统认定表端未安装 BolaBola）。请在 iPhone「Watch」App 安装表端，或用主 App Scheme 部署到手表后打开一次。")
+                    bolaWCChatLog.warning("pushCompanionValue 未发往手表：isWatchAppInstalled=false")
                 } else if !session.isPaired {
                     bolaWCChatLog.warning("pushCompanionValue 未发往手表：当前未配对 Apple Watch")
                 }
@@ -230,36 +199,37 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         }
     }
 
-    #if os(watchOS)
-    /// 手表端主动把「当前动画前缀 + 气泡台词」同步给 iPhone（不依赖陪伴值变化）。短间隔内会被防抖。
-    public func pushPetStateSnapshot(
-        animationPrefix: String,
-        dialogueLine: String,
-        dialogueGeneration: Int
-    ) {
-        let now = Date().timeIntervalSince1970
-        if now - lastPetStateSnapshotSentAt < petStateSnapshotMinInterval {
-            return
+    /// 推送宠物核心状态变化（附带当前陪伴值，以便对端同步更新）。
+    public func pushPetCoreState(_ state: PetCoreState) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.currentPetCoreState = state
         }
-        lastPetStateSnapshotSentAt = now
         let defaults = BolaSharedDefaults.resolved()
-        let companion: Double
+        let value: Double
         if defaults.object(forKey: CompanionPersistenceKeys.companionValue) != nil {
-            companion = defaults.double(forKey: CompanionPersistenceKeys.companionValue)
+            value = defaults.double(forKey: CompanionPersistenceKeys.companionValue)
         } else {
-            companion = 50
+            value = 50
         }
-        pushCompanionValue(
-            companion,
-            animationPrefix: animationPrefix,
-            dialogueLine: dialogueLine,
-            dialogueGeneration: dialogueGeneration
-        )
+        pushCompanionValue(value)
     }
-    #endif
 
     #if os(iOS)
-    /// 把 iPhone 上的宠物交互指令发给手表。会优先 `sendMessage`（对端可达时即时触发），否则 `transferUserInfo`。
+    /// iPhone 点击宠物时本机直接 +1 陪伴值（乐观更新），并同步到手表。
+    public func incrementCompanionValueLocally(by delta: Double = 1) {
+        let defaults = BolaSharedDefaults.resolved()
+        var v: Double
+        if defaults.object(forKey: CompanionPersistenceKeys.companionValue) != nil {
+            v = defaults.double(forKey: CompanionPersistenceKeys.companionValue)
+        } else {
+            v = 50
+        }
+        v = min(max(v + delta, 0), 100)
+        pushCompanionValue(v)
+    }
+
+    /// 把 iPhone 上的宠物交互指令发给手表（仅 eat/drink/sleep；tap 已改为本机处理）。
     public func sendPetCommand(_ kind: String) {
         guard WCSession.isSupported() else { return }
         let payload: [String: Any] = [
@@ -739,31 +709,9 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         let storedTs = forcedFromPhone ? Date().timeIntervalSince1970 : remoteTs
         defaults.set(storedTs, forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
         onReceiveCompanionValue?(v)
-        #if os(iOS)
-        if let prefix = dict[WCSyncPayload.currentAnimationPrefix] as? String, !prefix.isEmpty {
-            currentPetAnimationPrefix = prefix
-        }
-        if let gen = Self.intValue(dict[WCSyncPayload.currentDialogueGeneration]) {
-            if gen >= currentPetDialogueGeneration {
-                currentPetDialogueGeneration = gen
-                if let line = dict[WCSyncPayload.currentDialogueLine] as? String {
-                    currentPetDialogueLine = line
-                }
-            }
-        } else if let line = dict[WCSyncPayload.currentDialogueLine] as? String {
-            // 允许没有代数的场景（例如清空气泡）。
-            currentPetDialogueLine = line
-        }
-        #endif
-    }
-
-    private static func intValue(_ any: Any?) -> Int? {
-        switch any {
-        case let i as Int: return i
-        case let d as Double: return Int(d)
-        case let n as NSNumber: return n.intValue
-        case let s as String: return Int(s)
-        default: return nil
+        if let raw = dict[WCSyncPayload.petCoreState] as? String,
+           let state = PetCoreState(rawValue: raw) {
+            currentPetCoreState = state
         }
     }
 

@@ -159,9 +159,10 @@ struct IOSMainHomeView: View {
     }
 
     private var petDialogueBubble: some View {
-        Group {
-            if !coordinator.currentPetDialogueLine.isEmpty {
-                Text(coordinator.currentPetDialogueLine)
+        let line = coordinator.currentPetCoreState.localDialogue ?? ""
+        return Group {
+            if !line.isEmpty {
+                Text(line)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
@@ -179,33 +180,30 @@ struct IOSMainHomeView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: coordinator.currentPetDialogueLine)
+        .animation(.easeInOut(duration: 0.18), value: coordinator.currentPetCoreState)
     }
 
     private var petActionBar: some View {
-        let prefix = coordinator.currentPetAnimationPrefix
-        let showFeed = prefix.hasPrefix("idleapple") || prefix.hasPrefix("eatingwait")
-        let showDrink = prefix.hasPrefix("idledrink")
-        let showSleep = prefix.hasPrefix("sleepy") || prefix.hasPrefix("nightsleepwait")
+        let state = coordinator.currentPetCoreState
         return HStack(spacing: 14) {
-            if showFeed {
+            if state == .hungry {
                 petActionButton(title: "喂食", systemImage: "leaf.fill", tint: .green) {
                     BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.eat)
                 }
             }
-            if showDrink {
+            if state == .thirsty {
                 petActionButton(title: "喝水", systemImage: "drop.fill", tint: .blue) {
                     BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.drink)
                 }
             }
-            if showSleep {
+            if state == .sleepWait {
                 petActionButton(title: "睡觉", systemImage: "moon.zzz.fill", tint: .purple) {
                     BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.sleep)
                 }
             }
         }
         .frame(maxWidth: .infinity)
-        .animation(.easeInOut(duration: 0.18), value: prefix)
+        .animation(.easeInOut(duration: 0.18), value: state)
     }
 
     private func petActionButton(title: String, systemImage: String, tint: Color, action: @escaping () -> Void) -> some View {
@@ -254,7 +252,8 @@ struct IOSMainHomeView: View {
                 petTapFeedbackScale = 1.0
             }
         }
-        BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.tap)
+        BolaWCSessionCoordinator.shared.incrementCompanionValueLocally(by: 1)
+        companion = BolaSharedDefaults.resolved().double(forKey: CompanionPersistenceKeys.companionValue)
     }
 
     private var watchMockupCore: some View {
@@ -266,10 +265,10 @@ struct IOSMainHomeView: View {
                     stepsText: healthPreview.stepsText,
                     weatherSystemImageName: weatherSymbol,
                     weatherTempText: weatherTempLine,
-                    petAnimationPrefix: coordinator.currentPetAnimationPrefix,
                     titleText: titleLine,
                     titleFrameAssetName: selectedTitleFrame.assetName,
                     showsTitle: titleShowsOnWatchFace,
+                    petAnimationPrefix: coordinator.currentPetCoreState.animationPrefix(companionValue: companion),
                     maxHeight: 292,
                     horizontalNudgePoints: 1.5,
                     screenContentNudgeX: -6,

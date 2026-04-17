@@ -13,11 +13,7 @@ import WidgetKit
 // MARK: - ViewModel（简单状态机雏形）
 
 final class PetViewModel: ObservableObject {
-    @Published var currentEmotion: PetEmotion = .idle {
-        didSet {
-            pushPetStateSnapshotIfPrefixChanged()
-        }
-    }
+    @Published var currentEmotion: PetEmotion = .idle
     @Published var currentFrameIndex: Int = 0
     @Published var companionValue: Double = 50
     // 内部陪伴值允许小数（用于 5 分钟级别的 +/-0.1/-0.1 平滑），对外与状态机使用“四舍五入后的整数值”。
@@ -97,10 +93,6 @@ final class PetViewModel: ObservableObject {
     private var dialogueDismissWorkItem: DispatchWorkItem?
     private var dialogueGeneration: UInt = 0
 
-    /// 已推送给 iPhone 的最近一次动画前缀，避免重复推送。
-    private var lastPushedAnimationPrefix: String = ""
-    /// `init` 未完成时不向 WC 推送（避免半构造状态下触发回调链）。
-    private var isPetStateSyncReady: Bool = false
     /// iPhone → 手表指令订阅。
     private var petCommandObserver: NSObjectProtocol?
 
@@ -200,8 +192,6 @@ final class PetViewModel: ObservableObject {
         }
         #endif
 
-        isPetStateSyncReady = true
-        lastPushedAnimationPrefix = currentAnimationPrefix
     }
 
     deinit {
@@ -234,53 +224,20 @@ final class PetViewModel: ObservableObject {
         let gen = dialogueGeneration
         dialogueLine = trimmed
         playDialogueHaptic()
-        pushPetStateSnapshotNow()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             if self.dialogueGeneration == gen {
                 self.dialogueLine = ""
-                self.pushPetStateSnapshotNow()
             }
         }
         dialogueDismissWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: work)
     }
 
-    /// `currentEmotion.didSet` 回调：若动画前缀变化则把新状态推送给 iPhone。
-    private func pushPetStateSnapshotIfPrefixChanged() {
-        guard isPetStateSyncReady else { return }
-        #if os(watchOS)
-        let prefix = currentAnimationPrefix
-        if prefix != lastPushedAnimationPrefix {
-            lastPushedAnimationPrefix = prefix
-            BolaWCSessionCoordinator.shared.pushPetStateSnapshot(
-                animationPrefix: prefix,
-                dialogueLine: dialogueLine,
-                dialogueGeneration: Int(dialogueGeneration)
-            )
-        }
-        #endif
-    }
-
-    /// `showDialogue` 入口与关闭时调用：立刻把当前前缀 + 气泡文本同步给 iPhone。
-    private func pushPetStateSnapshotNow() {
-        guard isPetStateSyncReady else { return }
-        #if os(watchOS)
-        lastPushedAnimationPrefix = currentAnimationPrefix
-        BolaWCSessionCoordinator.shared.pushPetStateSnapshot(
-            animationPrefix: currentAnimationPrefix,
-            dialogueLine: dialogueLine,
-            dialogueGeneration: Int(dialogueGeneration)
-        )
-        #endif
-    }
-
     #if os(watchOS)
-    /// 来自 iPhone 的指令：`tap` 通过 `cycleEmotionOnTap` 分发，其余映射到具体 wait-state 点击处理。
+    /// 来自 iPhone 的指令：映射到具体 wait-state 点击处理（tap 已改为本机处理）。
     private func handleRemotePetCommand(_ kind: String) {
         switch kind {
-        case PetCommandKind.tap:
-            cycleEmotionOnTap()
         case PetCommandKind.eat:
             if isInEatingState, currentEmotion == .eatingWait {
                 handleEatingTap()
@@ -836,6 +793,7 @@ final class PetViewModel: ObservableObject {
         currentEmotion = .eatingWait
         currentFrameIndex = 0
         showDialogue("有点饿，想吃东西啦", duration: 120)
+        BolaWCSessionCoordinator.shared.pushPetCoreState(.hungry)
     }
 
     /// 吃东西等待中被点击：播一轮 eatapple
@@ -861,6 +819,7 @@ final class PetViewModel: ObservableObject {
         selectDefaultEmotion()
         applyDefaultEmotionDisplay()
         currentFrameIndex = 0
+        BolaWCSessionCoordinator.shared.pushPetCoreState(.idle)
     }
 
     // MARK: - 喝水
@@ -881,6 +840,7 @@ final class PetViewModel: ObservableObject {
         currentEmotion = Bool.random() ? .idleDrink1 : .idleDrink2
         currentFrameIndex = 0
         showDialogue("有点渴啦", duration: 120)
+        BolaWCSessionCoordinator.shared.pushPetCoreState(.thirsty)
     }
 
     /// 喝水等待中被点击：播一轮 drink
@@ -905,6 +865,7 @@ final class PetViewModel: ObservableObject {
             self.selectDefaultEmotion()
             self.applyDefaultEmotionDisplay()
             self.currentFrameIndex = 0
+            BolaWCSessionCoordinator.shared.pushPetCoreState(.idle)
         }
         drinkWaterFinishWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: work)
@@ -922,6 +883,7 @@ final class PetViewModel: ObservableObject {
         currentEmotion = .nightSleepWait
         currentFrameIndex = 0
         showDialogue("已经很晚了，好想睡觉", duration: 120)
+        BolaWCSessionCoordinator.shared.pushPetCoreState(.sleepWait)
     }
 
     /// 夜间睡眠等待中被点击：播一轮 fallasleep + 过渡台词
@@ -936,6 +898,7 @@ final class PetViewModel: ObservableObject {
         isNightSleepAsleep = true
         currentEmotion = .sleepLoop
         currentFrameIndex = 0
+        BolaWCSessionCoordinator.shared.pushPetCoreState(.sleeping)
     }
 
     /// 叫醒：无论点击叫醒还是清晨自动醒，均回到默认展示
@@ -948,6 +911,7 @@ final class PetViewModel: ObservableObject {
         selectDefaultEmotion()
         applyDefaultEmotionDisplay()
         currentFrameIndex = 0
+        BolaWCSessionCoordinator.shared.pushPetCoreState(.idle)
     }
 
     /// 调试：强制进入夜间睡眠等待状态（模拟到达睡觉时间）
@@ -1309,7 +1273,7 @@ final class PetViewModel: ObservableObject {
         #if os(watchOS)
         WidgetCenter.shared.reloadAllTimelines()
         if pushToPhone {
-            BolaWCSessionCoordinator.shared.pushCompanionValue(companionValueInternal, animationPrefix: currentAnimationPrefix)
+            BolaWCSessionCoordinator.shared.pushCompanionValue(companionValueInternal)
             BolaWCSessionCoordinator.shared.schedulePushCompanionGameStateSnapshotToPhoneDebounced()
         }
         #endif

@@ -25,7 +25,6 @@ public enum PetCommandNotificationKey {
 }
 
 public enum PetCommandKind {
-    public static let tap = "tap"
     public static let eat = "eat"
     public static let drink = "drink"
     public static let sleep = "sleep"

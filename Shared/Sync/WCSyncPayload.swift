@@ -51,14 +51,10 @@ public enum WCSyncPayload {
     /// iPhone -> Watch：提醒列表 `[BolaReminder]` JSON 的 Base64。
     public static let remindersListB64 = "remindersListB64"
 
-    /// Watch → iPhone：当前正在播放的动画帧前缀（如 "idleone"、"happyidle"）。
-    public static let currentAnimationPrefix = "currentAnimationPrefix"
-    /// Watch → iPhone：当前在表盘显示的台词气泡文本（为空字符串代表隐藏）。
-    public static let currentDialogueLine = "currentDialogueLine"
-    /// Watch → iPhone：台词气泡代数计数，用于判断更新顺序。
-    public static let currentDialogueGeneration = "currentDialogueGeneration"
+    /// 双向：宠物核心状态（`PetCoreState.rawValue`，如 `"idle"`、`"hungry"`）。
+    public static let petCoreState = "petCoreState"
 
-    /// iPhone → Watch：宠物交互指令（`"tap"`、`"eat"`、`"drink"`、`"sleep"`）。
+    /// iPhone → Watch：宠物交互指令（`"eat"`、`"drink"`、`"sleep"`；tap 已改为本机处理）。
     public static let petCommandKind = "petCommandKind"
     /// iPhone → Watch：指令的 UUID，用于表端去重。
     public static let petCommandId = "petCommandId"
