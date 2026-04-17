@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct IOSMainHomeView: View {
     @Environment(\.scenePhase) private var scenePhase
@@ -20,7 +21,12 @@ struct IOSMainHomeView: View {
     @State private var slotsConfig = WatchFaceSlotsStore.load()
     @State private var titleWordIdA = BolaTitleSelectionStore.load().wordIdA
     @State private var titleWordIdB = BolaTitleSelectionStore.load().wordIdB
+    @State private var titleFrameId = BolaTitleSelectionStore.load().frameId
+    @State private var titleShowsOnWatchFace = BolaTitleSelectionStore.load().showsOnWatchFace
     @State private var unlockedTitleIds: Set<String> = TitleUnlockStore.loadUnlockedIds()
+    @State private var growthLevel = BolaLevelFormula.levelAndRemainder(
+        fromTotalXP: BolaGrowthStore.load().totalXP
+    ).level
     @State private var showCompanionInfo = false
     @State private var selectedPlacedStickerPosition: WatchFaceSlotPosition?
     @State private var selectedPlacedStickerKind: WatchFaceComplicationKind = .none
@@ -31,7 +37,7 @@ struct IOSMainHomeView: View {
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
     private var titleLine: String {
-        BolaTitleSelection(wordIdA: titleWordIdA, wordIdB: titleWordIdB).resolvedLine()
+        BolaTitleSelection(wordIdA: titleWordIdA, wordIdB: titleWordIdB, frameId: titleFrameId).resolvedLine()
     }
 
     private var unlockedPoolA: [TitleWord] {
@@ -41,10 +47,17 @@ struct IOSMainHomeView: View {
         TitleWordBank.poolB.filter { unlockedTitleIds.contains($0.id) }
     }
 
+    private var unlockedTitleFrames: [TitleFrameDefinition] {
+        TitleFrameBank.unlockedFrames(forLevel: growthLevel)
+    }
+
+    private var selectedTitleFrame: TitleFrameDefinition {
+        TitleFrameBank.frame(id: titleFrameId)
+            ?? TitleFrameBank.highestUnlockedFrame(forLevel: growthLevel)
+    }
+
     private var titleUnlocked: Bool {
-        let level = BolaLevelFormula.levelAndRemainder(
-            fromTotalXP: BolaGrowthStore.load().totalXP).level
-        return level >= 3
+        growthLevel >= 3
     }
 
     private var weatherSymbol: String {
@@ -254,6 +267,9 @@ struct IOSMainHomeView: View {
                     weatherSystemImageName: weatherSymbol,
                     weatherTempText: weatherTempLine,
                     petAnimationPrefix: coordinator.currentPetAnimationPrefix,
+                    titleText: titleLine,
+                    titleFrameAssetName: selectedTitleFrame.assetName,
+                    showsTitle: titleShowsOnWatchFace,
                     maxHeight: 292,
                     horizontalNudgePoints: 1.5,
                     screenContentNudgeX: -6,
@@ -456,7 +472,6 @@ struct IOSMainHomeView: View {
         .menuStyle(.borderlessButton)
     }
 
-    /// 称号 + 滚轮，外层浅灰分区底。
     private var titleSectionGrouped: some View {
         titleSection
             .padding(16)
@@ -467,82 +482,110 @@ struct IOSMainHomeView: View {
             }
     }
 
+    private var titleDetailLink: some View {
+        NavigationLink {
+            TitleLibraryPage(
+                titleUnlocked: titleUnlocked,
+                titleLine: titleLine,
+                selectedTitleFrame: selectedTitleFrame,
+                unlockedTitleFrames: unlockedTitleFrames,
+                unlockedPoolA: unlockedPoolA,
+                unlockedPoolB: unlockedPoolB,
+                titleWordIdA: $titleWordIdA,
+                titleWordIdB: $titleWordIdB,
+                titleFrameId: $titleFrameId
+            )
+        } label: {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(Color.black.opacity(0.22))
+                )
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var titleSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("称号")
-                .font(.system(size: 20, weight: .semibold))
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("称号")
+                        .font(.system(size: 20, weight: .semibold))
+                }
+                Spacer(minLength: 0)
+                titleDetailLink
+            }
+
             HStack {
                 Spacer(minLength: 0)
-                TitleBadgeFrame(text: titleLine)
+                TitleBadgeFrame(text: titleLine, frame: selectedTitleFrame)
                 Spacer(minLength: 0)
             }
             .padding(.top, 2)
             .padding(.bottom, 2)
 
-            if titleUnlocked {
-                HStack(spacing: 0) {
-                    Picker("A", selection: $titleWordIdA) {
-                        ForEach(unlockedPoolA, id: \.id) { w in
-                            Text(w.text).tag(w.id)
-                        }
-                    }
-                    .pickerStyle(.wheel)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
-
-                    Text("·")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-
-                    Picker("B", selection: $titleWordIdB) {
-                        ForEach(unlockedPoolB, id: \.id) { w in
-                            Text(w.text).tag(w.id)
-                        }
-                    }
-                    .pickerStyle(.wheel)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
-                }
-                .frame(height: 120)
-                .padding(.vertical, 8)
-                .padding(.horizontal, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(BolaTheme.surfaceElevated)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(Color(uiColor: .separator).opacity(0.25), lineWidth: 1)
-                )
-            } else {
-                HStack(spacing: 6) {
-                    Image(systemName: "lock.fill")
-                        .foregroundStyle(.secondary)
-                    Text("升到 Lv.3 解锁称号自定义")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 12)
+            HStack(spacing: 10) {
+                Text("显示在我的表盘上")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 0)
+                Toggle("显示", isOn: $titleShowsOnWatchFace)
+                    .labelsHidden()
+                    .tint(BolaTheme.accent)
+                    .disabled(!titleUnlocked)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(BolaTheme.surfaceElevated)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color(uiColor: .separator).opacity(0.18), lineWidth: 1)
+            )
         }
         .onChange(of: titleWordIdA) { _, _ in persistTitle() }
         .onChange(of: titleWordIdB) { _, _ in persistTitle() }
+        .onChange(of: titleFrameId) { _, _ in persistTitle() }
+        .onChange(of: titleShowsOnWatchFace) { _, _ in persistTitle() }
         .onAppear {
-            unlockedTitleIds = TitleUnlockStore.loadUnlockedIds()
-            let validated = BolaTitleSelectionStore.validated()
-            titleWordIdA = validated.wordIdA
-            titleWordIdB = validated.wordIdB
+            refreshTitleSectionState()
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaTitleUnlocksDidChange)) { _ in
             unlockedTitleIds = TitleUnlockStore.loadUnlockedIds()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaGrowthStateDidChange)) { _ in
+            refreshTitleSectionState()
+        }
     }
 
     private func persistTitle() {
-        let sel = BolaTitleSelection(wordIdA: titleWordIdA, wordIdB: titleWordIdB)
+        let sel = BolaTitleSelection(
+            wordIdA: titleWordIdA,
+            wordIdB: titleWordIdB,
+            frameId: titleFrameId,
+            showsOnWatchFace: titleShowsOnWatchFace
+        )
         BolaTitleSelectionStore.save(sel)
         BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
+    }
+
+    private func refreshTitleSectionState() {
+        growthLevel = BolaLevelFormula.levelAndRemainder(fromTotalXP: BolaGrowthStore.load().totalXP).level
+        unlockedTitleIds = TitleUnlockStore.loadUnlockedIds()
+        let validated = BolaTitleSelectionStore.validated()
+        titleWordIdA = validated.wordIdA
+        titleWordIdB = validated.wordIdB
+        titleFrameId = validated.frameId
+        titleShowsOnWatchFace = validated.showsOnWatchFace
     }
 
     private var companionInfoPlainText: String {
@@ -596,48 +639,244 @@ struct IOSMainHomeView: View {
     }
 }
 
+enum TitleBadgeLayout {
+    static func metrics(compact: Bool) -> (fontSize: CGFloat, horizontalPadding: CGFloat, verticalPadding: CGFloat, height: CGFloat, minWidth: CGFloat) {
+        if compact {
+            return (12, 14, 8, 40, 92)
+        }
+        return (14, 18, 10, 56, 180)
+    }
+}
+
 private struct TitleBadgeFrame: View {
     let text: String
+    let frame: TitleFrameDefinition
+    var compact: Bool = false
+
+    private var titleColor: Color {
+        frame.id == "frame_lv_5_10" ? Color(red: 254 / 255, green: 214 / 255, blue: 189 / 255) : .primary
+    }
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color(uiColor: .secondaryLabel).opacity(0.72))
-            Text(text)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Image(systemName: "sparkles")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color(uiColor: .secondaryLabel).opacity(0.72))
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 10)
-        .background(
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.96),
-                            BolaTheme.surfaceElevated.opacity(0.98)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
+        let metrics = TitleBadgeLayout.metrics(compact: compact)
+        ZStack {
+            if let assetName = frame.assetName, UIImage(named: assetName) != nil {
+                Image(assetName)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.96),
+                                BolaTheme.surfaceElevated.opacity(0.98)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
-                )
+                    .overlay(
+                        Capsule()
+                            .stroke(Color(uiColor: .separator).opacity(0.32), lineWidth: 1.6)
+                    )
+                    .overlay(
+                        Capsule()
+                            .inset(by: 4)
+                            .stroke(Color.white.opacity(0.84), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 4)
+            }
+
+            Text(text)
+                .font(.system(size: metrics.fontSize, weight: .semibold, design: .rounded))
+                .foregroundStyle(titleColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.58)
+                .padding(.horizontal, metrics.horizontalPadding)
+                .padding(.vertical, metrics.verticalPadding)
+        }
+        .frame(height: metrics.height)
+        .frame(minWidth: metrics.minWidth)
+        .accessibilityLabel("\(frame.displayName) 称号边框")
+    }
+}
+
+private struct TitleLibraryPage: View {
+    let titleUnlocked: Bool
+    let titleLine: String
+    let selectedTitleFrame: TitleFrameDefinition
+    let unlockedTitleFrames: [TitleFrameDefinition]
+    let unlockedPoolA: [TitleWord]
+    let unlockedPoolB: [TitleWord]
+    @Binding var titleWordIdA: String
+    @Binding var titleWordIdB: String
+    @Binding var titleFrameId: String
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                previewHeader
+
+                if titleUnlocked {
+                    wordPickerSection
+                    frameSection
+                } else {
+                    lockedCard
+                }
+            }
+            .padding(BolaTheme.paddingHorizontal)
+            .padding(.top, 12)
+            .padding(.bottom, 28)
+        }
+        .background(BolaLifeAmbientBackground().ignoresSafeArea())
+        .navigationTitle("称号")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var previewHeader: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Spacer(minLength: 0)
+                TitleBadgeFrame(text: titleLine, frame: selectedTitleFrame)
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.top, 5)
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var frameSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("边框样式")
+                .font(.headline)
+
+            let columns = [
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10)
+            ]
+
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(unlockedTitleFrames) { frame in
+                    Button {
+                        titleFrameId = frame.id
+                    } label: {
+                        VStack(spacing: 8) {
+                            TitleBadgeFrame(
+                                text: frame.displayName,
+                                frame: frame,
+                                compact: true
+                            )
+                            Text(frame.displayName)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(
+                                    titleFrameId == frame.id
+                                        ? BolaTheme.surfaceElevated
+                                        : Color.white.opacity(0.72)
+                                )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(
+                                    titleFrameId == frame.id
+                                        ? BolaTheme.accent.opacity(0.65)
+                                        : Color(uiColor: .separator).opacity(0.30),
+                                    lineWidth: titleFrameId == frame.id ? 1.5 : 1
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
         )
-        .overlay(
-            Capsule()
-                .stroke(Color(uiColor: .separator).opacity(0.32), lineWidth: 1.6)
+    }
+
+    private var wordPickerSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("称号选择")
+                .font(.headline)
+
+            HStack(spacing: 0) {
+                Picker("A", selection: $titleWordIdA) {
+                    ForEach(unlockedPoolA, id: \.id) { w in
+                        Text(w.text).tag(w.id)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(maxWidth: .infinity)
+                .clipped()
+
+                Text("·")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
+
+                Picker("B", selection: $titleWordIdB) {
+                    ForEach(unlockedPoolB, id: \.id) { w in
+                        Text(w.text).tag(w.id)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(maxWidth: .infinity)
+                .clipped()
+            }
+            .frame(height: 120)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(BolaTheme.surfaceElevated)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(Color(uiColor: .separator).opacity(0.25), lineWidth: 1)
+            )
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
         )
-        .overlay(
-            Capsule()
-                .inset(by: 4)
-                .stroke(Color.white.opacity(0.84), lineWidth: 1)
+    }
+
+    private var lockedCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "lock.fill")
+                    .foregroundStyle(.secondary)
+                Text("升到 Lv.3 解锁称号选择和边框样式")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Spacer(minLength: 0)
+                TitleBadgeFrame(text: titleLine, frame: selectedTitleFrame)
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
         )
-        .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 4)
     }
 }
 

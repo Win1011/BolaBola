@@ -22,6 +22,26 @@ struct WatchS10MockupView: View {
     /// WeatherKit / Open-Meteo 的 SF Symbol 名（与系统天气图标体系一致）。
     var weatherSystemImageName: String
     var weatherTempText: String
+    var titleText: String = ""
+    var titleFrameAssetName: String? = nil
+    var showsTitle: Bool = true
+
+    private var titleForegroundColor: Color {
+        switch titleFrameAssetName {
+        case "TitleFrame0to5":
+            return Color.black.opacity(0.68)
+        case "TitleFrame5to10":
+            return Color(red: 254 / 255, green: 214 / 255, blue: 189 / 255)
+        default:
+            return .white.opacity(0.88)
+        }
+    }
+
+    private var watchPreviewTitleBadgeMetrics: (fontSize: CGFloat, horizontalPadding: CGFloat, verticalPadding: CGFloat, height: CGFloat, minWidth: CGFloat) {
+        TitleBadgeLayout.metrics(compact: false)
+    }
+
+    private var watchPreviewTitleBadgeScale: CGFloat { 0.57 }
 
     /// 当前正在播放的宠物动画帧前缀（如 "idleone"），由 BolaWCSessionCoordinator 从手表同步而来。
     var petAnimationPrefix: String = "idleone"
@@ -62,7 +82,7 @@ struct WatchS10MockupView: View {
     var complicationGuideCircleScale: CGFloat = 1.14
 
     /// 表镜内时间：字号（无 AM/PM）。
-    var timeLabelFontSize: CGFloat = 17
+    var timeLabelFontSize: CGFloat = 16
     /// 时间行顶部 inset（表镜局部 pt）。
     var timeLabelTopPadding: CGFloat = 14
     var timeLabelPaddingLeading: CGFloat = 4
@@ -123,7 +143,6 @@ struct WatchS10MockupView: View {
 
     private var screenLabels: some View {
         ZStack {
-            // 宠物动画层（最底层，位于时间/麦克风/槽位之下）
             PetFramePlayer(prefix: petAnimationPrefix)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
@@ -158,7 +177,41 @@ struct WatchS10MockupView: View {
                     .frame(width: 85, height: 85)
                     .accessibilityLabel("麦克风")
                     .padding(.bottom, 0)
-                    .offset(y: -28)
+                    .offset(y: -26)
+            }
+
+            if showsTitle, !titleText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                VStack {
+                    ZStack {
+                        if let titleFrameAssetName {
+                            Image(titleFrameAssetName)
+                                .resizable()
+                                .scaledToFit()
+                        } else {
+                            Capsule()
+                                .fill(Color.black.opacity(0.14))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.white.opacity(0.14), lineWidth: 0.6)
+                                )
+                        }
+
+                        Text(titleText)
+                            .font(.system(size: watchPreviewTitleBadgeMetrics.fontSize * watchPreviewTitleBadgeScale, weight: .semibold, design: .rounded))
+                            .foregroundStyle(titleForegroundColor)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.48)
+                            .padding(.horizontal, watchPreviewTitleBadgeMetrics.horizontalPadding * watchPreviewTitleBadgeScale)
+                            .padding(.vertical, watchPreviewTitleBadgeMetrics.verticalPadding * watchPreviewTitleBadgeScale)
+                    }
+                    .frame(
+                        width: watchPreviewTitleBadgeMetrics.minWidth * watchPreviewTitleBadgeScale,
+                        height: watchPreviewTitleBadgeMetrics.height * watchPreviewTitleBadgeScale
+                    )
+                    .offset(y: 22)
+
+                    Spacer(minLength: 0)
+                }
             }
 
             complicationSlotsAxisLayer

@@ -18,7 +18,7 @@ struct BolaWidgetProvider: TimelineProvider {
     }
 
     private func readCompanionValue() -> Int {
-        let defaults = UserDefaults(suiteName: "group.com.GathXRTeam.BolaBola") ?? .standard
+        let defaults = UserDefaults(suiteName: "group.com.gathxr.BolaBola") ?? .standard
         return defaults.integer(forKey: "bola_companionValue")
     }
 }

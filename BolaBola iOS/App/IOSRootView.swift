@@ -127,7 +127,20 @@ struct IOSRootView: View {
             if !growthTabPrewarmed, selectedTab != .status {
                 growthTabRootPrewarmHost
             }
+
+            if let presentation = growthLevelVM.activeLevelUp {
+                LevelUpCelebrationView(
+                    presentation: presentation,
+                    companionDisplayName: companionChatDisplayName,
+                    onContinue: {
+                        growthLevelVM.dismissLevelUp()
+                    }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                .zIndex(10)
+            }
         }
+        .animation(.spring(response: 0.36, dampingFraction: 0.88), value: growthLevelVM.activeLevelUp?.id)
         .bolaIOS26TabBarMinimizeOnScroll()
         .bolaRootTabScrollEdgeStyles()
         .ignoresSafeArea(.keyboard)

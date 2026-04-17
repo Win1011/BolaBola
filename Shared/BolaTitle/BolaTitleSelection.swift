@@ -34,10 +34,19 @@ public enum BolaTitlePhraseBank: Sendable {
 public struct BolaTitleSelection: Codable, Equatable, Sendable {
     public var wordIdA: String
     public var wordIdB: String
+    public var frameId: String
+    public var showsOnWatchFace: Bool
 
-    public init(wordIdA: String = "a_base_0", wordIdB: String = "b_base_0") {
+    public init(
+        wordIdA: String = "a_base_0",
+        wordIdB: String = "b_base_0",
+        frameId: String = TitleFrameBank.fallbackFrameId,
+        showsOnWatchFace: Bool = true
+    ) {
         self.wordIdA = wordIdA
         self.wordIdB = wordIdB
+        self.frameId = frameId
+        self.showsOnWatchFace = showsOnWatchFace
     }
 
     public func resolvedLine() -> String {
@@ -53,6 +62,8 @@ public struct BolaTitleSelection: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case wordIdA, wordIdB
+        case frameId
+        case showsOnWatchFace
         case indexA, indexB  // 旧键
     }
 
@@ -62,12 +73,18 @@ public struct BolaTitleSelection: Codable, Equatable, Sendable {
            let idB = try? c.decodeIfPresent(String.self, forKey: .wordIdB) {
             wordIdA = idA
             wordIdB = idB
+            frameId = (try? c.decodeIfPresent(String.self, forKey: .frameId))
+                ?? TitleFrameBank.fallbackFrameId
+            showsOnWatchFace = (try? c.decodeIfPresent(Bool.self, forKey: .showsOnWatchFace))
+                ?? true
         } else {
             // 旧格式迁移
             let ia = (try? c.decode(Int.self, forKey: .indexA)) ?? 0
             let ib = (try? c.decode(Int.self, forKey: .indexB)) ?? 0
             wordIdA = BolaTitlePhraseBank.legacyAIdToWordId(ia)
             wordIdB = BolaTitlePhraseBank.legacyBIdToWordId(ib)
+            frameId = TitleFrameBank.fallbackFrameId
+            showsOnWatchFace = true
         }
     }
 
@@ -75,6 +92,8 @@ public struct BolaTitleSelection: Codable, Equatable, Sendable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(wordIdA, forKey: .wordIdA)
         try c.encode(wordIdB, forKey: .wordIdB)
+        try c.encode(frameId, forKey: .frameId)
+        try c.encode(showsOnWatchFace, forKey: .showsOnWatchFace)
     }
 }
 
@@ -106,6 +125,16 @@ public enum BolaTitleSelectionStore {
         let unlocked = TitleUnlockStore.loadUnlockedIds()
         let validA = unlocked.contains(sel.wordIdA) ? sel.wordIdA : "a_base_0"
         let validB = unlocked.contains(sel.wordIdB) ? sel.wordIdB : "b_base_0"
-        return BolaTitleSelection(wordIdA: validA, wordIdB: validB)
+        let level = BolaLevelFormula.levelAndRemainder(fromTotalXP: BolaGrowthStore.load().totalXP).level
+        let unlockedFrames = TitleFrameBank.unlockedFrames(forLevel: level)
+        let validFrameId = unlockedFrames.contains(where: { $0.id == sel.frameId })
+            ? sel.frameId
+            : TitleFrameBank.highestUnlockedFrame(forLevel: level).id
+        return BolaTitleSelection(
+            wordIdA: validA,
+            wordIdB: validB,
+            frameId: validFrameId,
+            showsOnWatchFace: sel.showsOnWatchFace
+        )
     }
 }

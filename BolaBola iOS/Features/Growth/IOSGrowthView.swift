@@ -15,11 +15,11 @@ struct IOSGrowthView: View {
     @State private var hasPerformedInitialLoad = false
 
     private var topRowDefinitions: [GrowthDailyTaskCardDefinition] {
-        Array(dailyTasksVM.definitions.prefix(2))
+        Array(dailyTasksVM.dailyDefinitions.prefix(2))
     }
 
     private var bottomRowDefinitions: [GrowthDailyTaskCardDefinition] {
-        Array(dailyTasksVM.definitions.suffix(3))
+        Array(dailyTasksVM.dailyDefinitions.suffix(3))
     }
 
     private var companionDisplayName: String { CompanionDisplayNameStore.resolved() }
@@ -365,7 +365,7 @@ private struct GrowthDailyTasksSection: View {
                         .offset(x: -6, y: -6)
                         .accessibilityHidden(true)
                     }
-                    Text("今日 \(viewModel.completedCount)/\(viewModel.definitions.count) 完成")
+                    Text("今日 \(viewModel.completedCount)/\(viewModel.dailyDefinitions.count) 完成")
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(BolaTheme.figmaMutedBody.opacity(0.68))
                         .fixedSize()
@@ -375,7 +375,7 @@ private struct GrowthDailyTasksSection: View {
 
                 // 右：五个盖章
                 HStack(spacing: 5) {
-                    ForEach(0 ..< viewModel.definitions.count, id: \.self) { i in
+                    ForEach(0 ..< viewModel.dailyDefinitions.count, id: \.self) { i in
                         GrowthTaskStamp(completed: i < viewModel.completedCount)
                     }
                 }
@@ -686,11 +686,11 @@ private struct GrowthPortraitTaskCard: View {
                     .padding(.top, 3)
 
                 GrowthTaskCompletionBar(progress: progress, taskId: definition.id)
-                    .padding(.top, 8)
+                    .padding(.top, 6)
             }
             .padding(.horizontal, 10)
             .padding(.top, 10)
-            .padding(.bottom, 10)
+            .padding(.bottom, 8)
         }
         .frame(height: height)
         .frame(maxWidth: .infinity)
@@ -944,7 +944,7 @@ private struct GrowthTaskCompletionBar: View {
     private func progressTrackRow(progress visibleProgress: Double, hidden: Bool) -> some View {
         HStack(alignment: .center, spacing: 8) {
             Text("完成度")
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(Color(uiColor: .secondaryLabel))
                 .fixedSize()
 

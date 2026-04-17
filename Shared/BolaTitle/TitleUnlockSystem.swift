@@ -87,6 +87,23 @@ public struct TitleWord: Identifiable, Sendable {
     }
 }
 
+// MARK: - 称号边框模型
+
+public struct TitleFrameDefinition: Identifiable, Hashable, Sendable {
+    public let id: String
+    public let level: Int
+    /// 资源名预留给 Assets.xcassets；图片补齐前可为空，UI 会退回默认样式。
+    public let assetName: String?
+    public let displayName: String
+
+    public init(id: String, level: Int, assetName: String?, displayName: String) {
+        self.id = id
+        self.level = level
+        self.assetName = assetName
+        self.displayName = displayName
+    }
+}
+
 // MARK: - 全量词库
 
 public enum TitleWordBank {
@@ -161,6 +178,33 @@ public enum TitleWordBank {
 
     public static func word(id: String) -> TitleWord? {
         (poolA + poolB).first { $0.id == id }
+    }
+}
+
+public enum TitleFrameBank {
+    /// 等级区间边框：
+    /// 1-4 使用 0-5 级边框；Lv5 起解锁 5-10；之后每 5 级一档，Lv25+ 统一使用最后一档。
+    public static let all: [TitleFrameDefinition] = [
+        TitleFrameDefinition(id: "frame_lv_0_5", level: 1, assetName: "TitleFrame0to5", displayName: "Lv.0-5"),
+        TitleFrameDefinition(id: "frame_lv_5_10", level: 5, assetName: "TitleFrame5to10", displayName: "Lv.5-10"),
+        TitleFrameDefinition(id: "frame_lv_10_15", level: 10, assetName: "TitleFrame10to15", displayName: "Lv.10-15"),
+        TitleFrameDefinition(id: "frame_lv_15_20", level: 15, assetName: "TitleFrame15to20", displayName: "Lv.15-20"),
+        TitleFrameDefinition(id: "frame_lv_20_25", level: 20, assetName: "TitleFrame20to25", displayName: "Lv.20-25"),
+        TitleFrameDefinition(id: "frame_lv_25_30", level: 25, assetName: "TitleFrame25to30", displayName: "Lv.25-30+")
+    ]
+
+    public static let fallbackFrameId = "frame_lv_0_5"
+
+    public static func frame(id: String) -> TitleFrameDefinition? {
+        all.first { $0.id == id }
+    }
+
+    public static func unlockedFrames(forLevel level: Int) -> [TitleFrameDefinition] {
+        all.filter { $0.level <= max(1, level) }
+    }
+
+    public static func highestUnlockedFrame(forLevel level: Int) -> TitleFrameDefinition {
+        unlockedFrames(forLevel: level).last ?? all[0]
     }
 }
 
