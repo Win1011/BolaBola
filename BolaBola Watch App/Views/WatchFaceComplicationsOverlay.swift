@@ -55,7 +55,7 @@ struct WatchFaceComplicationsOverlay: View {
                 }
                 .frame(width: 116, height: 27)
                 .scaleEffect(watchTitleScale)
-                .offset(y: -10)
+                .offset(y: -68)
                 .padding(.top, 2)
             }
 

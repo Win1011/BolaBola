@@ -27,6 +27,8 @@ struct IOSMainHomeView: View {
     @State private var growthLevel = BolaLevelFormula.levelAndRemainder(
         fromTotalXP: BolaGrowthStore.load().totalXP
     ).level
+    @State private var showTitleUnlockSheet = false
+    @State private var showTitleLibraryPage = false
     @State private var showCompanionInfo = false
     @State private var selectedPlacedStickerPosition: WatchFaceSlotPosition?
     @State private var selectedPlacedStickerKind: WatchFaceComplicationKind = .none
@@ -116,6 +118,19 @@ struct IOSMainHomeView: View {
         }
         .onChange(of: refreshSignal) { _, _ in
             Task { await performWatchSync() }
+        }
+        .navigationDestination(isPresented: $showTitleLibraryPage) {
+            TitleLibraryPage(
+                titleUnlocked: titleUnlocked,
+                titleLine: titleLine,
+                selectedTitleFrame: selectedTitleFrame,
+                unlockedTitleFrames: unlockedTitleFrames,
+                unlockedPoolA: unlockedPoolA,
+                unlockedPoolB: unlockedPoolB,
+                titleWordIdA: $titleWordIdA,
+                titleWordIdB: $titleWordIdB,
+                titleFrameId: $titleFrameId
+            )
         }
         .sheet(isPresented: $showCompanionInfo) {
             NavigationStack {
@@ -267,7 +282,7 @@ struct IOSMainHomeView: View {
                     weatherTempText: weatherTempLine,
                     titleText: titleLine,
                     titleFrameAssetName: selectedTitleFrame.assetName,
-                    showsTitle: titleShowsOnWatchFace,
+                    showsTitle: titleUnlocked && titleShowsOnWatchFace,
                     petAnimationPrefix: coordinator.currentPetCoreState.animationPrefix(companionValue: companion),
                     maxHeight: 292,
                     horizontalNudgePoints: 1.5,
@@ -479,36 +494,51 @@ struct IOSMainHomeView: View {
                 RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
                     .fill(Color(uiColor: .secondarySystemGroupedBackground))
             }
-    }
+            .contentShape(RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous))
+            .onTapGesture {
+                guard !titleUnlocked else { return }
+                showTitleUnlockSheet = true
+            }
+            .sheet(isPresented: $showTitleUnlockSheet) {
+                NavigationStack {
+                    VStack(spacing: 18) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundStyle(BolaTheme.accent)
+                            .frame(width: 62, height: 62)
+                            .background(
+                                Circle()
+                                    .fill(BolaTheme.accent.opacity(0.12))
+                            )
 
-    private var titleDetailLink: some View {
-        NavigationLink {
-            TitleLibraryPage(
-                titleUnlocked: titleUnlocked,
-                titleLine: titleLine,
-                selectedTitleFrame: selectedTitleFrame,
-                unlockedTitleFrames: unlockedTitleFrames,
-                unlockedPoolA: unlockedPoolA,
-                unlockedPoolB: unlockedPoolB,
-                titleWordIdA: $titleWordIdA,
-                titleWordIdB: $titleWordIdB,
-                titleFrameId: $titleFrameId
-            )
-        } label: {
-            Image(systemName: "chevron.right")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 28, height: 28)
-                .background(
-                    Circle()
-                        .fill(Color.black.opacity(0.22))
-                )
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
+                        Text("快去升级吧就能解锁称号啦")
+                            .font(.title3.weight(.semibold))
+                            .multilineTextAlignment(.center)
+
+                        Text("升到 Lv.3 之后，就可以进入称号页面选择称号和边框样式。")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+
+                        Button("知道啦") {
+                            showTitleUnlockSheet = false
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(BolaTheme.accent)
+                    }
+                    .padding(24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .background(BolaLifeAmbientBackground().ignoresSafeArea())
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("关闭") { showTitleUnlockSheet = false }
+                        }
+                    }
+                }
+                .presentationDetents([.height(280)])
+                .presentationDragIndicator(.visible)
+            }
     }
 
     private var titleSection: some View {
@@ -519,37 +549,42 @@ struct IOSMainHomeView: View {
                         .font(.system(size: 20, weight: .semibold))
                 }
                 Spacer(minLength: 0)
-                titleDetailLink
+                if titleUnlocked {
+                    Toggle("显示", isOn: $titleShowsOnWatchFace)
+                        .toggleStyle(TitleDisplayToggleStyle(tint: BolaTheme.accent))
+                }
             }
 
-            HStack {
-                Spacer(minLength: 0)
-                TitleBadgeFrame(text: titleLine, frame: selectedTitleFrame)
-                Spacer(minLength: 0)
+            Button {
+                if titleUnlocked {
+                    showTitleLibraryPage = true
+                } else {
+                    showTitleUnlockSheet = true
+                }
+            } label: {
+                HStack {
+                    Spacer(minLength: 0)
+                    TitleBadgeFrame(text: titleLine, frame: selectedTitleFrame)
+                        .blur(radius: titleUnlocked ? 0 : 5)
+                        .overlay {
+                            if !titleUnlocked {
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(.black.opacity(0.78))
+                                    .padding(10)
+                                    .background(
+                                        Circle()
+                                            .fill(BolaTheme.accent.opacity(0.82))
+                                    )
+                            }
+                        }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .padding(.top, 2)
-            .padding(.bottom, 2)
-
-            HStack(spacing: 10) {
-                Text("显示在我的表盘上")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Spacer(minLength: 0)
-                Toggle("显示", isOn: $titleShowsOnWatchFace)
-                    .labelsHidden()
-                    .tint(BolaTheme.accent)
-                    .disabled(!titleUnlocked)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(BolaTheme.surfaceElevated)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color(uiColor: .separator).opacity(0.18), lineWidth: 1)
-            )
+            .padding(.bottom, 15)
         }
         .onChange(of: titleWordIdA) { _, _ in persistTitle() }
         .onChange(of: titleWordIdB) { _, _ in persistTitle() }
@@ -653,7 +688,7 @@ private struct TitleBadgeFrame: View {
     var compact: Bool = false
 
     private var titleColor: Color {
-        frame.id == "frame_lv_5_10" ? Color(red: 254 / 255, green: 214 / 255, blue: 189 / 255) : .primary
+        .white
     }
 
     var body: some View {
@@ -698,6 +733,51 @@ private struct TitleBadgeFrame: View {
         .frame(height: metrics.height)
         .frame(minWidth: metrics.minWidth)
         .accessibilityLabel("\(frame.displayName) 称号边框")
+    }
+}
+
+private struct TitleDisplayToggleStyle: ToggleStyle {
+    let tint: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            ZStack(alignment: configuration.isOn ? .trailing : .leading) {
+                Capsule(style: .continuous)
+                    .fill(configuration.isOn ? tint : Color(uiColor: .systemGray5))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(
+                                configuration.isOn
+                                    ? tint.opacity(0.2)
+                                    : Color.black.opacity(0.06),
+                                lineWidth: 0.6
+                            )
+                    )
+
+                if configuration.isOn {
+                    HStack {
+                        Text("显示")
+                            .font(.system(size: 9.2, weight: .bold))
+                            .foregroundStyle(Color.black.opacity(0.5))
+                            .padding(.leading, 8)
+                        Spacer(minLength: 0)
+                    }
+                }
+
+                Circle()
+                    .fill(.white)
+                    .frame(width: 24, height: 24)
+                    .shadow(color: .black.opacity(0.12), radius: 1.8, x: 0, y: 1)
+                    .padding(2)
+            }
+            .frame(width: 56, height: 28)
+            .animation(.spring(response: 0.25, dampingFraction: 0.86), value: configuration.isOn)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(configuration.isOn ? "显示已开启" : "显示已关闭")
+        .accessibilityValue(configuration.isOn ? "开启" : "关闭")
     }
 }
 

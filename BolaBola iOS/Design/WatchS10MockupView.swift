@@ -43,6 +43,17 @@ struct WatchS10MockupView: View {
 
     private var watchPreviewTitleBadgeScale: CGFloat { 0.57 }
 
+    private var watchPreviewTitleFontSize: CGFloat {
+        if titleText.count < 6 { return 9 }
+        if titleText.count < 8 { return 8.5 }
+        return watchPreviewTitleBadgeMetrics.fontSize * watchPreviewTitleBadgeScale
+    }
+
+    private var watchPreviewTitleTracking: CGFloat {
+        if titleText.count < 6 { return 0.25 }
+        return 0
+    }
+
     /// 当前正在播放的宠物动画帧前缀（如 "idleone"），由 BolaWCSessionCoordinator 从手表同步而来。
     var petAnimationPrefix: String = "idleone"
 
@@ -197,7 +208,8 @@ struct WatchS10MockupView: View {
                         }
 
                         Text(titleText)
-                            .font(.system(size: watchPreviewTitleBadgeMetrics.fontSize * watchPreviewTitleBadgeScale, weight: .semibold, design: .rounded))
+                            .font(.system(size: watchPreviewTitleFontSize, weight: .semibold, design: .rounded))
+                            .tracking(watchPreviewTitleTracking)
                             .foregroundStyle(titleForegroundColor)
                             .lineLimit(1)
                             .minimumScaleFactor(0.48)
@@ -208,7 +220,7 @@ struct WatchS10MockupView: View {
                         width: watchPreviewTitleBadgeMetrics.minWidth * watchPreviewTitleBadgeScale,
                         height: watchPreviewTitleBadgeMetrics.height * watchPreviewTitleBadgeScale
                     )
-                    .offset(y: 22)
+                    .offset(y: 18)
 
                     Spacer(minLength: 0)
                 }

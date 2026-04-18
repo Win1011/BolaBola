@@ -502,7 +502,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch App/BolaBola Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MJ852SN88S;
+				DEVELOPMENT_TEAM = MX4C45DA78;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
@@ -541,7 +541,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch App/BolaBola Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MJ852SN88S;
+				DEVELOPMENT_TEAM = MX4C45DA78;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
@@ -668,7 +668,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch WidgetExtension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MJ852SN88S;
+				DEVELOPMENT_TEAM = MX4C45DA78;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "BolaBola Watch Widget/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "BolaBola Watch Widget";
@@ -702,7 +702,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch WidgetExtension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MJ852SN88S;
+				DEVELOPMENT_TEAM = MX4C45DA78;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "BolaBola Watch Widget/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "BolaBola Watch Widget";
