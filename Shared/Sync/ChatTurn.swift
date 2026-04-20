@@ -16,8 +16,10 @@ public extension Notification.Name {
     static let bolaCompanionStateDidMergeFromWatch = Notification.Name("bolaCompanionStateDidMergeFromWatch")
     static let bolaOpenSettingsRequested = Notification.Name("bolaOpenSettingsRequested")
     static let bolaLLMConfigurationDidChange = Notification.Name("bolaLLMConfigurationDidChange")
-    /// 手表端：收到 iPhone 经 WC 发来的宠物交互指令（`tap`/`eat`/`drink`/`sleep`）。
+    /// 手表端：收到 iPhone 经 WC 发来的宠物交互指令（`tap`/`eat`/`drink`/`sleep`/`feed`）。
     static let bolaPetCommandReceived = Notification.Name("bolaPetCommandReceived")
+    /// 手表端：收到 iPhone 经 WC 发来的餐食配置更新。
+    static let bolaMealSlotsDidUpdate = Notification.Name("bolaMealSlotsDidUpdate")
 }
 
 public enum PetCommandNotificationKey {
@@ -28,6 +30,7 @@ public enum PetCommandKind {
     public static let eat = "eat"
     public static let drink = "drink"
     public static let sleep = "sleep"
+    public static let feed = "feed"
 }
 
 public struct ChatTurn: Codable, Equatable, Identifiable, Sendable {

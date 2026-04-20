@@ -244,7 +244,7 @@ struct IOSMainHomeView: View {
 
     private func triggerEat() {
         interactionController.applyEatCommand()
-        BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.eat)
+        BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.feed)
     }
 
     private func triggerDrink() {
@@ -304,8 +304,6 @@ struct IOSMainHomeView: View {
             }
         }
 
-        // 若此刻处于待触发状态（饿/渴/睡觉），点击表盘即视为喂食/喝水/睡觉指令。
-        // 控制器先本机跑完整条过渡动画，手表那端由 sendPetCommand 异步推进。
         switch coordinator.currentPetCoreState {
         case .hungry:
             triggerEat()
@@ -320,7 +318,6 @@ struct IOSMainHomeView: View {
             break
         }
 
-        // 普通 idle 态点击：本机播一轮随机 jump，并累加陪伴值。
         if interactionController.handleIdleTap() {
             BolaWCSessionCoordinator.shared.incrementCompanionValueLocally(by: 1)
             companion = BolaSharedDefaults.resolved().double(forKey: CompanionPersistenceKeys.companionValue)

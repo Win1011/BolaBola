@@ -51,6 +51,9 @@ public enum WCSyncPayload {
     /// iPhone -> Watch：提醒列表 `[BolaReminder]` JSON 的 Base64。
     public static let remindersListB64 = "remindersListB64"
 
+    /// iPhone -> Watch：餐食配置 `[MealSlot]` JSON 的 Base64。
+    public static let mealSlotsB64 = "mealSlotsB64"
+
     /// 双向：宠物核心状态（`PetCoreState.rawValue`，如 `"idle"`、`"hungry"`）。
     public static let petCoreState = "petCoreState"
     /// 手表 → iPhone（调试日志用）：当前播放的情绪动画标签（`PetEmotion` 的字符串形式）。

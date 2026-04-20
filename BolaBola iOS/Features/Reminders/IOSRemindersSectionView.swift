@@ -11,6 +11,11 @@ struct IOSRemindersSectionView: View {
         let mode: IOSReminderEditorSheet.Mode
     }
 
+    private struct MealEditorSheetState: Identifiable {
+        let id = UUID()
+        let mealSlot: MealSlot?
+    }
+
     enum Style {
         case standard
         /// Figma 生活页：白卡圆角 20、小粒「+添加」
@@ -20,12 +25,14 @@ struct IOSRemindersSectionView: View {
     }
 
     @Binding var reminders: [BolaReminder]
+    @State private var mealSlots: [MealSlot] = MealSlotStore.load()
     var sectionTitle: String = "Bola正在关心的事"
     /// 宠物显示名（生活页标题第一行）；默认读 `CompanionDisplayNameStore`。
     var companionDisplayName: String = CompanionDisplayNameStore.resolved()
     var style: Style = .standard
 
     @State private var activeEditor: EditorSheetState?
+    @State private var activeMealEditor: MealEditorSheetState?
 
     private var figmaRowHeight: CGFloat { 36 }
     private var figmaRowSpacing: CGFloat { 7 }
@@ -51,6 +58,23 @@ struct IOSRemindersSectionView: View {
                         if case .edit(let original) = sheet.mode {
                             reminders.removeAll { $0.id == original.id }
                             persistReminders()
+                        }
+                    }
+                )
+            }
+            .sheet(item: $activeMealEditor) { sheet in
+                IOSMealSlotEditorSheet(
+                    mealSlot: sheet.mealSlot,
+                    onSave: { slot in
+                        if let idx = mealSlots.firstIndex(where: { $0.id == slot.id }) {
+                            mealSlots[idx] = slot
+                        }
+                        persistMealSlots()
+                    },
+                    onDelete: {
+                        if let slot = sheet.mealSlot {
+                            mealSlots.removeAll { $0.id == slot.id }
+                            persistMealSlots()
                         }
                     }
                 )
@@ -94,6 +118,9 @@ struct IOSRemindersSectionView: View {
                             Button("+创建新提醒") {
                                 activeEditor = EditorSheetState(mode: .create)
                             }
+                            Button("+添加餐食") {
+                                addNewMealSlot()
+                            }
                             Section("模板") {
                                 ForEach(ReminderTemplateLibrary.all) { t in
                                     Button(t.title) {
@@ -114,7 +141,7 @@ struct IOSRemindersSectionView: View {
                         .accessibilityLabel("添加提醒")
                     }
 
-                    if reminders.isEmpty {
+                    if reminders.isEmpty && mealSlots.isEmpty {
                         Text("还没有提醒。点「添加」从模板选一条，或自定义时间。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -123,6 +150,9 @@ struct IOSRemindersSectionView: View {
                     } else {
                         ScrollView(.vertical, showsIndicators: true) {
                             LazyVStack(spacing: figmaRowSpacing) {
+                                ForEach(mealSlots) { slot in
+                                    mealSlotRow(slot)
+                                }
                                 ForEach(reminders) { r in
                                     reminderRow(r)
                                 }
@@ -348,6 +378,144 @@ struct IOSRemindersSectionView: View {
         Task {
             await BolaReminderUNScheduler.sync(reminders: reminders)
             BolaWCSessionCoordinator.shared.pushReminderRefreshToWatchIfPossible()
+        }
+    }
+
+    private func persistMealSlots() {
+        MealSlotStore.save(mealSlots)
+        BolaWCSessionCoordinator.shared.pushMealSlotsToWatchIfPossible()
+        BolaDebugLog.shared.log(.meal, "iPhone meal slots saved & pushed count=\(mealSlots.count)")
+    }
+
+    private func addNewMealSlot() {
+        let nextNum = (mealSlots.compactMap { Int($0.id.replacingOccurrences(of: "meal", with: "")) }.max() ?? 0) + 1
+        let newSlot = MealSlot(id: "meal\(nextNum)", hour: 12, minute: 0)
+        activeMealEditor = MealEditorSheetState(mealSlot: newSlot)
+    }
+
+    @ViewBuilder
+    private func mealSlotRow(_ slot: MealSlot) -> some View {
+        HStack(alignment: style == .figmaLife ? .center : .top, spacing: style == .figmaLife ? 8 : 14) {
+            Image(systemName: "fork.knife")
+                .font(style == .figmaLife ? .system(size: 12, weight: .semibold) : .title2)
+                .foregroundStyle(Color.orange)
+                .symbolRenderingMode(.monochrome)
+                .frame(width: style == .figmaLife ? 14 : 36)
+
+            VStack(alignment: .leading, spacing: style == .figmaLife ? 2 : 4) {
+                Text("\(companionDisplayName) · 餐食")
+                    .font(style == .figmaLife ? .system(size: 12, weight: .semibold) : .subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text("每天 \(slot.timeString)")
+                    .font(style == .figmaLife ? .system(size: 10, weight: .regular) : .caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            if style == .figmaLife {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(style == .figmaLife ? EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8) : EdgeInsets(
+            top: BolaTheme.spacingItem,
+            leading: BolaTheme.spacingItem,
+            bottom: BolaTheme.spacingItem,
+            trailing: BolaTheme.spacingItem
+        ))
+        .frame(height: style == .figmaLife ? figmaRowHeight : nil)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: style == .figmaLife ? figmaInnerCardCorner : BolaTheme.cornerCard, style: .continuous)
+                .fill(style == .figmaLife ? Color(uiColor: .secondarySystemBackground) : BolaTheme.surfaceCard)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: style == .figmaLife ? figmaInnerCardCorner : BolaTheme.cornerCard, style: .continuous)
+                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            activeMealEditor = MealEditorSheetState(mealSlot: slot)
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                mealSlots.removeAll { $0.id == slot.id }
+                persistMealSlots()
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
+    }
+}
+
+struct IOSMealSlotEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let mealSlot: MealSlot?
+    let onSave: (MealSlot) -> Void
+    var onDelete: (() -> Void)?
+
+    @State private var hour: Int
+    @State private var minute: Int
+    @State private var isExistingSlot: Bool
+
+    init(mealSlot: MealSlot?, onSave: @escaping (MealSlot) -> Void, onDelete: (() -> Void)? = nil) {
+        self.mealSlot = mealSlot
+        self.onSave = onSave
+        self.onDelete = onDelete
+        _hour = State(initialValue: mealSlot?.hour ?? 12)
+        _minute = State(initialValue: mealSlot?.minute ?? 0)
+        _isExistingSlot = State(initialValue: mealSlot != nil)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("时间") {
+                    DatePicker(
+                        "餐食时间",
+                        selection: Binding(
+                            get: {
+                                let cal = Calendar.current
+                                let today = cal.startOfDay(for: Date())
+                                return cal.date(bySettingHour: hour, minute: minute, second: 0, of: today) ?? Date()
+                            },
+                            set: { date in
+                                hour = Calendar.current.component(.hour, from: date)
+                                minute = Calendar.current.component(.minute, from: date)
+                            }
+                        ),
+                        displayedComponents: [.hourAndMinute]
+                    )
+                    .datePickerStyle(.wheel)
+                }
+
+                if isExistingSlot, onDelete != nil {
+                    Section {
+                        Button(role: .destructive) {
+                            onDelete?()
+                            dismiss()
+                        } label: {
+                            Text("删除此餐食")
+                        }
+                    }
+                }
+            }
+            .navigationTitle(isExistingSlot ? "编辑餐食" : "添加餐食")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        let id = mealSlot?.id ?? "meal\(Date().timeIntervalSince1970)"
+                        onSave(MealSlot(id: id, hour: hour, minute: minute))
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
         }
     }
 }

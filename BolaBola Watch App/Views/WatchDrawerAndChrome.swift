@@ -313,6 +313,23 @@ struct WatchPanelSheetView: View {
                     .controlSize(.mini)
 
                     Button {
+                        viewModel.performMealFeed()
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Image(systemName: "fork.knife")
+                                .font(.caption2)
+                            Text(viewModel.mealEngine.hasFeedableMeal() ? "喂食" : "暂无可喂餐食")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 32)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(viewModel.mealEngine.hasFeedableMeal() ? .green : .gray)
+                    .controlSize(.mini)
+                    .disabled(!viewModel.mealEngine.hasFeedableMeal())
+
+                    Button {
                         viewModel.debugSimulateWaterReminderFire()
                         dismiss()
                     } label: {

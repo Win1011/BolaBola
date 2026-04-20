@@ -282,6 +282,7 @@ struct IOSDebugLogSheet: View {
         case .speech:   return .mint
         case .command:  return .brown
         case .pending:  return .yellow
+        case .meal:     return .green
         case .error:    return .red
         case .info:     return .gray
         }

@@ -83,6 +83,9 @@ final class PetViewModel: ObservableObject {
     /// tap jump 仍由本文件的 `cycleEmotionOnTap` 管理（tap burst 组合是手表独有）。
     let interactionController = PetAnimationController()
 
+    /// 餐食引擎：手表端唯一的喂食调度、饥饿触发、奖励结算权威
+    let mealEngine = MealEngine.shared
+
     /// 夜间睡眠状态机：nightSleepWait → fallAsleep → sleepLoop（循环到 8:30am 或被点醒）
     private(set) var isInNightSleepState: Bool = false
     /// 夜间睡眠：是否已进入 sleepLoop 循环（true 后点击视为叫醒）
@@ -207,6 +210,8 @@ final class PetViewModel: ObservableObject {
             }
         #endif
 
+        configureMealEngine()
+
     }
 
     deinit {
@@ -258,6 +263,8 @@ final class PetViewModel: ObservableObject {
             if isInEatingState, currentEmotion == .eatingWait {
                 handleEatingTap()
             }
+        case PetCommandKind.feed:
+            performMealFeed()
         case PetCommandKind.drink:
             if isInDrinkWaterState, currentEmotion == .idleDrink1 || currentEmotion == .idleDrink2 {
                 handleDrinkWaterTap()
@@ -279,11 +286,11 @@ final class PetViewModel: ObservableObject {
     }
 
     func onViewAppear() {
-        // 冷启动时 `onChange(scenePhase)` 有时不会对初始 `.active` 触发，这里保证「一打开就说一句」
         speakForegroundGreetingIfNeeded()
         consumeDigestNotificationIfNeeded()
         refreshLatestHeartRateForDisplay()
         ReminderScheduler.shared.scheduleDefaultsIfAuthorized()
+        mealEngine.refreshMealState(now: Date())
         HealthKitManager.shared.requestAuthorization { [weak self] ok in
             guard let self else { return }
             self.healthKitReadAuthorized = ok
@@ -910,6 +917,84 @@ final class PetViewModel: ObservableObject {
         interactionController.applyEatCommand()
     }
 
+    // MARK: - 餐食引擎集成
+
+    private func configureMealEngine() {
+        mealEngine.onTriggerHungry = { [weak self] in
+            guard let self else { return }
+            guard !self.isInEatingState, !self.isInDrinkWaterState, !self.isInNightSleepState else { return }
+            BolaDebugLog.shared.log(.meal, "meal engine → trigger hungry")
+            self.enterEatingState()
+        }
+
+        mealEngine.onExitHungry = { [weak self] in
+            guard let self else { return }
+            guard self.isInEatingState else { return }
+            BolaDebugLog.shared.log(.meal, "meal engine → exit hungry (auto-feed)")
+            self.exitHungryStateSilently()
+        }
+
+        mealEngine.refreshMealState(now: Date())
+
+        NotificationCenter.default.addObserver(
+            forName: .bolaMealSlotsDidUpdate,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            BolaDebugLog.shared.log(.meal, "received meal slots update from iPhone")
+            self.mealEngine.loadSlots()
+            self.mealEngine.refreshMealState(now: Date())
+        }
+    }
+
+    func performMealFeed() {
+        guard let result = mealEngine.resolveFeedAction(now: Date()) else {
+            BolaDebugLog.shared.log(.meal, "performMealFeed: no valid meal to feed")
+            return
+        }
+
+        addMealCompanionReward(result.reward)
+
+        switch result.newStatus {
+        case .fedBeforeHungry:
+            BolaDebugLog.shared.log(.meal, "early feed applied: +\(result.reward) companion")
+            isInEatingState = true
+            isTapInteractionAnimating = true
+            interactionController.enterHungry()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                self?.interactionController.applyEatCommand()
+            }
+        case .fedAfterHungry:
+            BolaDebugLog.shared.log(.meal, "hungry feed applied: +\(result.reward) companion")
+            handleEatingTap()
+        default:
+            break
+        }
+    }
+
+    private func addMealCompanionReward(_ amount: Double) {
+        companionValueInternal += amount
+        companionValueInternal = clampCompanionValue(companionValueInternal)
+        companionValue = companionValueInternal.rounded()
+        persistCompanionSnapshot(bolaDefaults)
+        trackCompanionTierSpeechIfNeeded()
+        tapBonusToken = UUID()
+        BolaDebugLog.shared.log(.meal, "companion reward +\(amount) → \(Int(companionValue.rounded()))")
+    }
+
+    private func exitHungryStateSilently() {
+        isInEatingState = false
+        isTapInteractionAnimating = false
+        dialogueDismissWorkItem?.cancel()
+        dialogueLine = ""
+        interactionController.returnToIdle()
+        selectDefaultEmotion()
+        applyDefaultEmotionDisplay()
+        currentFrameIndex = 0
+        BolaWCSessionCoordinator.shared.pushPetCoreState(.idle)
+    }
+
     // MARK: - 喝水
 
     /// 进入喝水提醒等待状态：随机循环 idledrink1 / idledrink2 + 固定台词
@@ -1119,9 +1204,13 @@ final class PetViewModel: ObservableObject {
             return
         }
 
-        // 吃东西等待中：点击触发吃东西动画
+        // 吃东西等待中：点击触发吃东西动画（优先通过餐食引擎结算）
         if isInEatingState && currentEmotion == .eatingWait {
-            handleEatingTap()
+            if mealEngine.hasActiveHungry() {
+                performMealFeed()
+            } else {
+                handleEatingTap()
+            }
             return
         }
 
@@ -1401,6 +1490,7 @@ final class PetViewModel: ObservableObject {
             BolaWCSessionCoordinator.shared.reapplyLatestReceivedContext()
             #endif
             applyWallClockCompanionDeltaFromLastCredit()
+            mealEngine.refreshMealState(now: Date())
             speakForegroundGreetingIfNeeded()
             maybeTriggerSurpriseIfNeeded()
             Task {
@@ -1488,6 +1578,7 @@ final class PetViewModel: ObservableObject {
 
     private func accumulateTimeAndMaybeTrigger() {
         applyWallClockCompanionDeltaFromLastCredit()
+        mealEngine.refreshMealState(now: Date())
         maybeTriggerSurpriseIfNeeded()
     }
 

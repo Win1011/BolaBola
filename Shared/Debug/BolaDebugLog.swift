@@ -19,6 +19,7 @@ public final class BolaDebugLog: ObservableObject {
         case speech     // 语音中继
         case command    // iPhone → Watch 交互指令
         case pending    // 排队 / 重试
+        case meal       // meal slot / record / feed / auto-feed
         case error
         case info
 
@@ -34,6 +35,7 @@ public final class BolaDebugLog: ObservableObject {
             case .speech:   return "SPCH"
             case .command:  return "CMD"
             case .pending:  return "PEND"
+            case .meal:     return "MEAL"
             case .error:    return "ERR"
             case .info:     return "INFO"
             }

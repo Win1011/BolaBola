@@ -458,6 +458,18 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         session.transferUserInfo(payload)
     }
 
+    /// 餐食配置在 iPhone 侧变更后，推送到手表让 MealEngine 重建今日记录。
+    public func pushMealSlotsToWatchIfPossible() {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isPaired, session.isWatchAppInstalled else { return }
+        let slots = MealSlotStore.load()
+        guard let data = try? JSONEncoder().encode(slots) else { return }
+        let payload = [WCSyncPayload.mealSlotsB64: data.base64EncodedString()]
+        session.transferUserInfo(payload)
+        BolaDebugLog.shared.log(.meal, "pushMealSlots → Watch count=\(slots.count)")
+    }
+
     /// 系统是否认为「已配对的 Apple Watch 上已安装本 App」。为 false 时 `updateApplicationContext` 不会送达表端。
     public func shouldShowWatchAppMissingHint() -> Bool {
         watchInstallabilityStatus() == .appNotInstalled
@@ -838,6 +850,9 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         if Self.ingestRemindersIfPresent(dict) {
             return
         }
+        if Self.ingestMealSlotsIfPresent(dict) {
+            return
+        }
         Self.ingestWatchHomeScreenPayloadIfPresent(dict)
         #endif
 
@@ -920,6 +935,17 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         Task { await BolaReminderUNScheduler.sync(reminders: reminders) }
         return true
     }
+
+    @discardableResult
+    private static func ingestMealSlotsIfPresent(_ dict: [String: Any]) -> Bool {
+        guard let b64 = dict[WCSyncPayload.mealSlotsB64] as? String,
+              let data = Data(base64Encoded: b64),
+              let slots = try? JSONDecoder().decode([MealSlot].self, from: data) else { return false }
+        MealSlotStore.save(slots)
+        BolaDebugLog.shared.log(.meal, "ingestMealSlots from iPhone count=\(slots.count)")
+        NotificationCenter.default.post(name: .bolaMealSlotsDidUpdate, object: nil)
+        return true
+    }
     #endif
 
     // MARK: - WCSessionDelegate
@@ -966,6 +992,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             self.pushStoredLLMConfigurationToWatchIfConfigured()
             self.pushLocalCompanionTowardWatchFromDefaults()
             self.pushReminderRefreshToWatchIfPossible()
+            self.pushMealSlotsToWatchIfPossible()
             self.postWatchInstallabilityChanged()
             #endif
             self.flushPendingChatDeltasIfReady(session: session)
@@ -987,6 +1014,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             self.pushStoredLLMConfigurationToWatchIfConfigured()
             self.pushLocalCompanionTowardWatchFromDefaults()
             self.pushReminderRefreshToWatchIfPossible()
+            self.pushMealSlotsToWatchIfPossible()
             self.postWatchInstallabilityChanged()
         }
     }
@@ -1002,6 +1030,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             self.pushStoredLLMConfigurationToWatchIfConfigured()
             self.pushLocalCompanionTowardWatchFromDefaults()
             self.pushReminderRefreshToWatchIfPossible()
+            self.pushMealSlotsToWatchIfPossible()
         }
     }
 
