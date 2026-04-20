@@ -12,6 +12,12 @@ public enum PetCoreState: String, Codable, Sendable {
     case thirsty
     case sleepWait
     case sleeping
+    /// 用户已触发吃东西，手表正在播 eatapple 过渡动画。
+    case eating
+    /// 用户已触发喝水，手表正在播 drink 过渡动画。
+    case drinking
+    /// 用户已触发睡觉，手表正在播 fallasleep 过渡动画（之后会切到 sleeping）。
+    case fallingAsleep
 }
 
 // MARK: - iPhone 侧：从核心状态 + 陪伴值推导动画前缀
@@ -31,17 +37,37 @@ public extension PetCoreState {
             return "sleepy"
         case .sleeping:
             return "sleeploop"
+        case .eating:
+            return "eatappletransparent"
+        case .drinking:
+            return "drink"
+        case .fallingAsleep:
+            return "fallasleep"
         }
     }
 
     /// 返回该核心状态在 iPhone 上应显示的固定台词（若为 nil 则不显示气泡）。
     var localDialogue: String? {
         switch self {
-        case .idle:       return nil
-        case .hungry:     return "有点饿，想吃东西啦"
-        case .thirsty:    return "有点渴啦"
-        case .sleepWait:  return "已经很晚了，好想睡觉"
-        case .sleeping:   return nil
+        case .idle:          return nil
+        case .hungry:        return "有点饿，想吃东西啦"
+        case .thirsty:       return "有点渴啦"
+        case .sleepWait:     return "已经很晚了，好想睡觉"
+        case .sleeping:      return nil
+        case .eating:        return nil
+        case .drinking:      return nil
+        case .fallingAsleep: return nil
+        }
+    }
+
+    /// iPhone 触摸手表时是否应当提交对应指令（而非普通 +1 陪伴值）。
+    /// 返回值与 `PetCommandKind` 的常量保持一致（`eat`/`drink`/`sleep`）。
+    var petCommandForMockupTap: String? {
+        switch self {
+        case .hungry:    return "eat"
+        case .thirsty:   return "drink"
+        case .sleepWait: return "sleep"
+        default:         return nil
         }
     }
 

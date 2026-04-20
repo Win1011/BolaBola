@@ -78,7 +78,10 @@ final class PetViewModel: ObservableObject {
     private(set) var isInEatingState: Bool = false
     /// 喝水状态机：idleDrink → drinkOnce → blowbubble → finished
     private(set) var isInDrinkWaterState: Bool = false
-    private var drinkWaterFinishWorkItem: DispatchWorkItem?
+
+    /// 基础交互（喂/喝/睡）的跨平台触发状态机；与 iPhone 共用相同的定时/变体选择逻辑。
+    /// tap jump 仍由本文件的 `cycleEmotionOnTap` 管理（tap burst 组合是手表独有）。
+    let interactionController = PetAnimationController()
 
     /// 夜间睡眠状态机：nightSleepWait → fallAsleep → sleepLoop（循环到 8:30am 或被点醒）
     private(set) var isInNightSleepState: Bool = false
@@ -165,6 +168,8 @@ final class PetViewModel: ObservableObject {
         }
         // WCSession 已在 `BolaBolaApp.init()` 中激活；此处不再重复 activate，仅绑定回调。
         #endif
+
+        configureInteractionController()
 
         // 初始化：按「会话墙钟」累计陪伴与惊喜；超长离线由 `longAbsenceWithoutForegroundSeconds` 自动检测并扣分。
         hydrateTotalTimeAndSurpriseState()
@@ -549,10 +554,6 @@ final class PetViewModel: ObservableObject {
                         debugAdvanceAnimation()
                         return
                     }
-                    if isInNightSleepState && currentEmotion == .fallAsleep {
-                        finishFallAsleepAnimation()
-                        return
-                    }
                     // 非循环动画播完
                     if surpriseJumpTwoQueued {
                         // 惊喜分两段：surprisedOne/Two 播完（2轮）后，额外再播一次 jump1Once / jumpTwoOnce（随机）。
@@ -561,18 +562,8 @@ final class PetViewModel: ObservableObject {
                         currentFrameIndex = 0
                         return
                     }
-                    if currentEmotion == .eatingOnce {
-                        finishEatingAnimation()
-                        return
-                    }
-                    if currentEmotion == .drinkOnce {
-                        finishDrinkWaterAnimation()
-                        return
-                    }
-                    if isInEatingState && (currentEmotion == .happyIdleOnce || currentEmotion == .like1Once || currentEmotion == .like2Once) {
-                        finishEatingHappyAnimation()
-                        return
-                    }
+                    // 吃 / 喝 / 夜间睡眠的阶段切换由 `PetAnimationController` 的定时器驱动，
+                    // 不再依赖帧序列尾帧 —— 渲染层只负责把当前 `PetEmotion` 播完一轮就停。
                     if tapChainReturnsToRandomIdle {
                         tapChainReturnsToRandomIdle = false
                         isTapInteractionAnimating = false
@@ -782,51 +773,135 @@ final class PetViewModel: ObservableObject {
         }
     }
 
+    // MARK: - 基础交互（吃/喝/睡）— 控制器驱动
+
+    /// 控制器的过渡回调映射到手表本地的 `PetEmotion` + 状态旗标 + 台词 + WC 推送。
+    /// 手表仍然是陪伴值与核心状态的真相源：每个阶段都显式 `pushPetCoreState` 给 iPhone。
+    private func configureInteractionController() {
+        interactionController.onTransition = { [weak self] reason, emotion in
+            guard let self else { return }
+            self.applyInteractionTransition(reason: reason, emotion: emotion)
+        }
+    }
+
+    private func applyInteractionTransition(
+        reason: PetInteractionTransitionReason,
+        emotion: PetInteractionEmotion?
+    ) {
+        switch reason {
+        case .hungryStarted:
+            isInEatingState = true
+            currentEmotion = .eatingWait
+            currentFrameIndex = 0
+            showDialogue("有点饿，想吃东西啦", duration: 120)
+            BolaWCSessionCoordinator.shared.pushPetCoreState(.hungry)
+
+        case .eatingStarted:
+            currentEmotion = .eatingOnce
+            currentFrameIndex = 0
+            dialogueDismissWorkItem?.cancel()
+            dialogueLine = ""
+            BolaWCSessionCoordinator.shared.pushPetCoreState(.eating)
+
+        case .eatingFinisherStarted:
+            switch emotion {
+            case .eatingHappyIdle: currentEmotion = .happyIdleOnce
+            case .eatingLikeOne:   currentEmotion = .like1Once
+            case .eatingLikeTwo:   currentEmotion = .like2Once
+            default: break
+            }
+            currentFrameIndex = 0
+            showDialogue("好吃好吃，你也吃点东西吧!", duration: 5)
+
+        case .eatingCompleted:
+            isInEatingState = false
+            isTapInteractionAnimating = false
+            selectDefaultEmotion()
+            applyDefaultEmotionDisplay()
+            currentFrameIndex = 0
+            BolaWCSessionCoordinator.shared.pushPetCoreState(.idle)
+
+        case .thirstyStarted:
+            isInDrinkWaterState = true
+            switch emotion {
+            case .idleDrinkOne: currentEmotion = .idleDrink1
+            case .idleDrinkTwo: currentEmotion = .idleDrink2
+            default: break
+            }
+            currentFrameIndex = 0
+            showDialogue("有点渴啦", duration: 120)
+            BolaWCSessionCoordinator.shared.pushPetCoreState(.thirsty)
+
+        case .drinkingStarted:
+            currentEmotion = .drinkOnce
+            currentFrameIndex = 0
+            dialogueDismissWorkItem?.cancel()
+            dialogueLine = ""
+            BolaWCSessionCoordinator.shared.pushPetCoreState(.drinking)
+
+        case .drinkingFinisherStarted:
+            switch emotion {
+            case .blowbubbleOne: currentEmotion = .blowbubble1
+            case .blowbubbleTwo: currentEmotion = .blowbubble2
+            default: break
+            }
+            currentFrameIndex = 0
+            showDialogue("你也喝点水吧", duration: 5)
+
+        case .drinkingCompleted:
+            isInDrinkWaterState = false
+            isTapInteractionAnimating = false
+            selectDefaultEmotion()
+            applyDefaultEmotionDisplay()
+            currentFrameIndex = 0
+            BolaWCSessionCoordinator.shared.pushPetCoreState(.idle)
+
+        case .sleepWaitStarted:
+            isInNightSleepState = true
+            isNightSleepAsleep = false
+            currentEmotion = .nightSleepWait
+            currentFrameIndex = 0
+            showDialogue("已经很晚了，好想睡觉", duration: 120)
+            BolaWCSessionCoordinator.shared.pushPetCoreState(.sleepWait)
+
+        case .fallingAsleepStarted:
+            showDialogue("那我睡啦，你也早点睡吧～", duration: 6)
+            currentEmotion = .fallAsleep
+            currentFrameIndex = 0
+            BolaWCSessionCoordinator.shared.pushPetCoreState(.fallingAsleep)
+
+        case .sleepingStarted:
+            isNightSleepAsleep = true
+            currentEmotion = .sleepLoop
+            currentFrameIndex = 0
+            BolaWCSessionCoordinator.shared.pushPetCoreState(.sleeping)
+
+        case .cleared,
+             .tapJumpStarted, .tapJumpCompleted:
+            // tap jumps 由 `cycleEmotionOnTap` 直接驱动（手表独有的 tap burst 组合），
+            // `.cleared` 也在 `wakeUpFromNightSleep` / 显式 reset 里自行处理视觉切换。
+            break
+        }
+    }
+
     // MARK: - 吃东西
 
     /// 进入吃东西等待状态：循环 idleapple + 饿了台词
     func enterEatingState() {
-        drinkWaterFinishWorkItem?.cancel()
         isInDrinkWaterState = false
-        isInEatingState = true
         isTapInteractionAnimating = true
-        currentEmotion = .eatingWait
-        currentFrameIndex = 0
-        showDialogue("有点饿，想吃东西啦", duration: 120)
-        BolaWCSessionCoordinator.shared.pushPetCoreState(.hungry)
+        interactionController.enterHungry()
     }
 
     /// 吃东西等待中被点击：播一轮 eatapple
     private func handleEatingTap() {
-        currentEmotion = .eatingOnce
-        currentFrameIndex = 0
-        dialogueDismissWorkItem?.cancel()
-        dialogueLine = ""
-    }
-
-    /// eatapple 播完：随机播 happyIdleOnce / like1Once / like2Once + 台词
-    private func finishEatingAnimation() {
-        let happyEmotion: PetEmotion = [.happyIdleOnce, .like1Once, .like2Once].randomElement() ?? .happyIdleOnce
-        currentEmotion = happyEmotion
-        currentFrameIndex = 0
-        showDialogue("好吃好吃，你也吃点东西吧!", duration: 5)
-    }
-
-    /// 吃完开心动画播完：回到默认状态
-    private func finishEatingHappyAnimation() {
-        isInEatingState = false
-        isTapInteractionAnimating = false
-        selectDefaultEmotion()
-        applyDefaultEmotionDisplay()
-        currentFrameIndex = 0
-        BolaWCSessionCoordinator.shared.pushPetCoreState(.idle)
+        interactionController.applyEatCommand()
     }
 
     // MARK: - 喝水
 
     /// 进入喝水提醒等待状态：随机循环 idledrink1 / idledrink2 + 固定台词
     func enterDrinkWaterState() {
-        drinkWaterFinishWorkItem?.cancel()
         isInEatingState = false
         isInNightSleepState = false
         isNightSleepAsleep = false
@@ -835,70 +910,27 @@ final class PetViewModel: ObservableObject {
         pendingTierDeferredWorkItem?.cancel()
         pendingTierSpeechAfterTap = nil
         surprisePending = false
-        isInDrinkWaterState = true
         isTapInteractionAnimating = true
-        currentEmotion = Bool.random() ? .idleDrink1 : .idleDrink2
-        currentFrameIndex = 0
-        showDialogue("有点渴啦", duration: 120)
-        BolaWCSessionCoordinator.shared.pushPetCoreState(.thirsty)
+        interactionController.enterThirsty()
     }
 
     /// 喝水等待中被点击：播一轮 drink
     private func handleDrinkWaterTap() {
-        drinkWaterFinishWorkItem?.cancel()
-        currentEmotion = .drinkOnce
-        currentFrameIndex = 0
-        dialogueDismissWorkItem?.cancel()
-        dialogueLine = ""
-    }
-
-    /// drink 播完：随机进入吹泡泡，并提示用户喝水
-    private func finishDrinkWaterAnimation() {
-        currentEmotion = Bool.random() ? .blowbubble1 : .blowbubble2
-        currentFrameIndex = 0
-        showDialogue("你也喝点水吧", duration: 5)
-
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, self.isInDrinkWaterState else { return }
-            self.isInDrinkWaterState = false
-            self.isTapInteractionAnimating = false
-            self.selectDefaultEmotion()
-            self.applyDefaultEmotionDisplay()
-            self.currentFrameIndex = 0
-            BolaWCSessionCoordinator.shared.pushPetCoreState(.idle)
-        }
-        drinkWaterFinishWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: work)
+        interactionController.applyDrinkCommand()
     }
 
     // MARK: - 夜间睡眠
 
     /// 进入夜间睡眠等待：循环 sleepy + 固定台词
     private func enterNightSleepWaitState() {
-        drinkWaterFinishWorkItem?.cancel()
         isInDrinkWaterState = false
-        isInNightSleepState = true
-        isNightSleepAsleep = false
         isTapInteractionAnimating = true
-        currentEmotion = .nightSleepWait
-        currentFrameIndex = 0
-        showDialogue("已经很晚了，好想睡觉", duration: 120)
-        BolaWCSessionCoordinator.shared.pushPetCoreState(.sleepWait)
+        interactionController.enterSleepWait()
     }
 
     /// 夜间睡眠等待中被点击：播一轮 fallasleep + 过渡台词
     private func handleNightSleepWaitTap() {
-        showDialogue("那我睡啦，你也早点睡吧～", duration: 6)
-        currentEmotion = .fallAsleep
-        currentFrameIndex = 0
-    }
-
-    /// fallasleep 播完：进入 sleeploop 循环
-    private func finishFallAsleepAnimation() {
-        isNightSleepAsleep = true
-        currentEmotion = .sleepLoop
-        currentFrameIndex = 0
-        BolaWCSessionCoordinator.shared.pushPetCoreState(.sleeping)
+        interactionController.applySleepCommand()
     }
 
     /// 叫醒：无论点击叫醒还是清晨自动醒，均回到默认展示
@@ -908,6 +940,7 @@ final class PetViewModel: ObservableObject {
         isTapInteractionAnimating = false
         dialogueDismissWorkItem?.cancel()
         dialogueLine = ""
+        interactionController.returnToIdle()
         selectDefaultEmotion()
         applyDefaultEmotionDisplay()
         currentFrameIndex = 0

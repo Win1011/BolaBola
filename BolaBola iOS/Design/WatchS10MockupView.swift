@@ -56,6 +56,11 @@ struct WatchS10MockupView: View {
 
     /// 当前正在播放的宠物动画帧前缀（如 "idleone"），由 BolaWCSessionCoordinator 从手表同步而来。
     var petAnimationPrefix: String = "idleone"
+    /// 帧序列参数；`PetAnimationController` 处于基础交互中时会覆盖默认值，
+    /// 比如 eatappletransparent 需要 121 帧、jumpone/jumptwo 需要 30fps、一次性动画不循环。
+    var petAnimationMaxFrames: Int = 90
+    var petAnimationFPS: Double = 24
+    var petAnimationIsLoop: Bool = true
 
     var maxHeight: CGFloat = 310
     /// 表冠在右侧时视觉会偏一侧；正值向右、负值向左（与导航标题对齐时可微调）。
@@ -154,7 +159,12 @@ struct WatchS10MockupView: View {
 
     private var screenLabels: some View {
         ZStack {
-            PetFramePlayer(prefix: petAnimationPrefix)
+            PetFramePlayer(
+                prefix: petAnimationPrefix,
+                maxFrames: petAnimationMaxFrames,
+                fps: petAnimationFPS,
+                isLoop: petAnimationIsLoop
+            )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
 

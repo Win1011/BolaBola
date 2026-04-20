@@ -9,20 +9,23 @@
 import SwiftUI
 import Combine
 
-/// 循环播放帧前缀为 `prefix` 的动画序列（Asset Catalog 资源名 `\(prefix)0`…`\(prefix)(maxFrames-1)`）。
+/// 帧序列播放器：按 `prefix` + 索引查 Asset（`\(prefix)0`…`\(prefix)(maxFrames-1)`）。
+/// - 当 `isLoop == true` 时循环；当 `isLoop == false` 时播到最后一帧停住（由控制器的定时器决定何时切出）。
 public struct PetFramePlayer: View {
     public let prefix: String
     public var maxFrames: Int = 90
     public var fps: Double = 24
+    public var isLoop: Bool = true
 
     @State private var frameIndex: Int = 0
     @State private var lastUpdate: Date = Date()
     @State private var timerCancellable: AnyCancellable?
 
-    public init(prefix: String, maxFrames: Int = 90, fps: Double = 24) {
+    public init(prefix: String, maxFrames: Int = 90, fps: Double = 24, isLoop: Bool = true) {
         self.prefix = prefix
         self.maxFrames = maxFrames
         self.fps = fps
+        self.isLoop = isLoop
     }
 
     public var body: some View {
@@ -38,6 +41,9 @@ public struct PetFramePlayer: View {
             .onAppear { resetAndStart() }
             .onDisappear { timerCancellable?.cancel() }
             .onChange(of: prefix) { resetAndStart() }
+            .onChange(of: isLoop) { resetAndStart() }
+            .onChange(of: maxFrames) { resetAndStart() }
+            .onChange(of: fps) { resetAndStart() }
     }
 
     private func resetAndStart() {
@@ -45,14 +51,27 @@ public struct PetFramePlayer: View {
         lastUpdate = Date()
         timerCancellable?.cancel()
         let frameDuration = 1.0 / max(fps, 1)
+        let limit = max(maxFrames, 1)
         timerCancellable = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common)
             .autoconnect()
             .sink { now in
                 let elapsed = now.timeIntervalSince(lastUpdate)
-                if elapsed >= frameDuration {
-                    frameIndex = (frameIndex + 1) % max(maxFrames, 1)
-                    lastUpdate = now
+                guard elapsed >= frameDuration else { return }
+                let next = frameIndex + 1
+                if next >= limit {
+                    if isLoop {
+                        frameIndex = 0
+                    } else {
+                        // 一次性动画：停在最后一帧，由外部（PetAnimationController）决定何时切出。
+                        frameIndex = limit - 1
+                        timerCancellable?.cancel()
+                        timerCancellable = nil
+                        return
+                    }
+                } else {
+                    frameIndex = next
                 }
+                lastUpdate = now
             }
     }
 }
