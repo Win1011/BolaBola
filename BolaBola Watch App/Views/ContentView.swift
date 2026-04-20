@@ -787,7 +787,11 @@ final class PetViewModel: ObservableObject {
     // MARK: - 基础交互（吃/喝/睡）— 控制器驱动
 
     /// 控制器的过渡回调映射到手表本地的 `PetEmotion` + 状态旗标 + 台词 + WC 推送。
-    /// 手表仍然是陪伴值与核心状态的真相源：每个阶段都显式 `pushPetCoreState` 给 iPhone。
+    /// 手表仍然是陪伴值与核心状态的真相源。
+    /// 设计原则：只在核心状态（idle/hungry/thirsty/sleepWait/sleeping）变化时推送；
+    /// 交互过渡动画（eating/drinking/fallingAsleep）由本机控制器驱动，不作为核心状态同步。
+    /// 推送时机遵循逻辑结果而非动画完成：交互一开始即推送结果状态（如 hungry→idle、sleepWait→sleeping），
+    /// 本机动画继续播放不受影响；对端收到后立即对齐核心状态，不重放过渡动画。
     private func configureInteractionController() {
         interactionController.onTransition = { [weak self] reason, emotion in
             guard let self else { return }
@@ -812,7 +816,7 @@ final class PetViewModel: ObservableObject {
             currentFrameIndex = 0
             dialogueDismissWorkItem?.cancel()
             dialogueLine = ""
-            BolaWCSessionCoordinator.shared.pushPetCoreState(.eating)
+            BolaWCSessionCoordinator.shared.pushPetCoreState(.idle)
 
         case .eatingFinisherStarted:
             switch emotion {
@@ -830,7 +834,6 @@ final class PetViewModel: ObservableObject {
             selectDefaultEmotion()
             applyDefaultEmotionDisplay()
             currentFrameIndex = 0
-            BolaWCSessionCoordinator.shared.pushPetCoreState(.idle)
 
         case .thirstyStarted:
             isInDrinkWaterState = true
@@ -848,7 +851,7 @@ final class PetViewModel: ObservableObject {
             currentFrameIndex = 0
             dialogueDismissWorkItem?.cancel()
             dialogueLine = ""
-            BolaWCSessionCoordinator.shared.pushPetCoreState(.drinking)
+            BolaWCSessionCoordinator.shared.pushPetCoreState(.idle)
 
         case .drinkingFinisherStarted:
             switch emotion {
@@ -865,7 +868,6 @@ final class PetViewModel: ObservableObject {
             selectDefaultEmotion()
             applyDefaultEmotionDisplay()
             currentFrameIndex = 0
-            BolaWCSessionCoordinator.shared.pushPetCoreState(.idle)
 
         case .sleepWaitStarted:
             isInNightSleepState = true
@@ -879,13 +881,12 @@ final class PetViewModel: ObservableObject {
             showDialogue("那我睡啦，你也早点睡吧～", duration: 6)
             currentEmotion = .fallAsleep
             currentFrameIndex = 0
-            BolaWCSessionCoordinator.shared.pushPetCoreState(.fallingAsleep)
+            BolaWCSessionCoordinator.shared.pushPetCoreState(.sleeping)
 
         case .sleepingStarted:
             isNightSleepAsleep = true
             currentEmotion = .sleepLoop
             currentFrameIndex = 0
-            BolaWCSessionCoordinator.shared.pushPetCoreState(.sleeping)
 
         case .cleared,
              .tapJumpStarted, .tapJumpCompleted:

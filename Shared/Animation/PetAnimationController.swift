@@ -4,11 +4,13 @@
 //
 //  设计原则：
 //  - 只覆盖用户可见的「基础交互」流程，不涉及手表端的默认态轮换、惊喜、语音、日记、档位台词等。
-//  - 网线只搬运 `PetCoreState` + 陪伴值；控制器独立在每台设备本机上运行，两端靠 `PetCoreState` 的过渡事件
-//    对齐（例如：手表 `pushPetCoreState(.hungry)` → iPhone 收到后调用 `enterHungry()`）。
+//  - 网线只搬运核心同步状态（PetCoreState: idle/hungry/thirsty/sleepWait/sleeping）+ 陪伴值；
+//    控制器独立在每台设备本机上运行。交互过渡动画（eating/drinking/fallingAsleep）由本机驱动，
+//    不作为核心状态同步——对端只在结果状态变化时直接对齐，不重放过渡动画。
 //  - 一次性动画（eat/drink/fallAsleep/tap-jump）的过渡由控制器内部的 `DispatchWorkItem` 定时器驱动，
 //    不再依赖渲染层的帧结束回调 —— 两端渲染各自独立，定时器保证流程节拍一致。
 //  - 副作用（台词 / `pushPetCoreState` / 本地 bookkeeping）由平台层通过 `onTransition` 回调处理。
+//    仅在核心状态实际变化时推送（如 hungry→idle、sleepWait→sleeping），过渡中不推送中间态。
 //
 
 import Foundation

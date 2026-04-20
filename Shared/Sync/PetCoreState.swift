@@ -6,18 +6,14 @@
 import Foundation
 
 /// 设备间同步的宠物核心状态。每台设备根据此状态 + companionValue 自行决定播放哪个动画。
+/// 交互过渡动画（eating / drinking / fallingAsleep）由本机 `PetAnimationController` 驱动，
+/// 不作为核心状态同步；对端仅在结果状态变化时更新。
 public enum PetCoreState: String, Codable, Sendable {
     case idle
     case hungry
     case thirsty
     case sleepWait
     case sleeping
-    /// 用户已触发吃东西，手表正在播 eatapple 过渡动画。
-    case eating
-    /// 用户已触发喝水，手表正在播 drink 过渡动画。
-    case drinking
-    /// 用户已触发睡觉，手表正在播 fallasleep 过渡动画（之后会切到 sleeping）。
-    case fallingAsleep
 }
 
 // MARK: - iPhone 侧：从核心状态 + 陪伴值推导动画前缀
@@ -37,12 +33,6 @@ public extension PetCoreState {
             return "sleepy"
         case .sleeping:
             return "sleeploop"
-        case .eating:
-            return "eatappletransparent"
-        case .drinking:
-            return "drink"
-        case .fallingAsleep:
-            return "fallasleep"
         }
     }
 
@@ -54,9 +44,6 @@ public extension PetCoreState {
         case .thirsty:       return "有点渴啦"
         case .sleepWait:     return "已经很晚了，好想睡觉"
         case .sleeping:      return nil
-        case .eating:        return nil
-        case .drinking:      return nil
-        case .fallingAsleep: return nil
         }
     }
 

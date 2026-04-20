@@ -28,6 +28,10 @@ struct IOSDebugLogSheet: View {
                 .padding(.horizontal)
                 .padding(.top, 12)
 
+            debugStateBar
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+
             filterBar
                 .padding(.horizontal)
                 .padding(.vertical, 8)
@@ -131,6 +135,50 @@ struct IOSDebugLogSheet: View {
     }
 
     private func boolBadge(_ b: Bool) -> String { b ? "✓" : "×" }
+
+    // MARK: - Debug State Controls
+
+    private var debugStateBar: some View {
+        HStack(spacing: 8) {
+            Button {
+                BolaDebugLog.shared.log(.command, "[DEBUG] force hungry")
+                coord.pushPetCoreState(.hungry)
+            } label: {
+                Text("Enter Hungry")
+                    .font(.caption)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Capsule().fill(Color.purple.opacity(0.2)))
+                    .foregroundStyle(.purple)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                BolaDebugLog.shared.log(.command, "[DEBUG] force thirsty")
+                coord.pushPetCoreState(.thirsty)
+            } label: {
+                Text("Enter Thirsty")
+                    .font(.caption)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Capsule().fill(Color.blue.opacity(0.2)))
+                    .foregroundStyle(.blue)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                BolaDebugLog.shared.log(.command, "[DEBUG] force sleepWait")
+                coord.pushPetCoreState(.sleepWait)
+            } label: {
+                Text("Enter Sleepy")
+                    .font(.caption)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Capsule().fill(Color.indigo.opacity(0.2)))
+                    .foregroundStyle(.indigo)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+        }
+    }
 
     // MARK: - Filter
 

@@ -205,7 +205,7 @@ struct IOSMainHomeView: View {
         .animation(.easeInOut(duration: 0.18), value: shouldShowWaitDialogue)
     }
 
-    /// 只有控制器处于「等待互动」循环或 idle 时，`PetCoreState.localDialogue` 才可信；
+    /// 只有控制器处于「等待互动」循环或无交互时，`PetCoreState.localDialogue` 才可信；
     /// 处于 eat/drink/sleep 过渡或 tap jump 期间应隐藏气泡，避免「饿了」台词盖在正吃东西的 Bola 上。
     private var shouldShowWaitDialogue: Bool {
         switch interactionController.activeInteraction {
@@ -328,9 +328,12 @@ struct IOSMainHomeView: View {
     }
 
     /// 把手表推送过来的核心状态投影到本机控制器：
-    /// - 普通的「等待」态（饿/渴/睡觉）若本机尚未进入对应流程，则切进等待循环；
-    /// - 过渡态（.eating/.drinking/.fallingAsleep/.sleeping）若本机还没开始，就直接推动到对应过渡；
-    /// - `.idle` 只清除「等待循环」，正在跑的一次性动画让它自己跑完。
+    /// - 等待态（hungry/thirsty/sleepWait）若本机尚未进入对应流程，则切进等待循环；
+    /// - sleeping 直接切到 sleepLoop（不重放 fallingAsleep 过渡）；
+    /// - idle 只清除「等待循环」，正在跑的本机一次性动画让它自己跑完。
+    /// 交互过渡动画（eating/drinking/fallingAsleep）由本机驱动，不作为核心状态同步；
+    /// 对端在交互开始时立即推送结果状态（idle/sleeping），本端直接对齐即可。
+    /// 若本机正处于本地过渡动画中（如 fallAsleep），不中断——让本地动画自然完成。
     private func mirrorCoreStateToController(_ state: PetCoreState) {
         let active = interactionController.activeInteraction
         switch state {
@@ -351,29 +354,10 @@ struct IOSMainHomeView: View {
                 interactionController.enterSleepWait()
             }
         case .sleeping:
-            if active != .sleepLoop && active != .fallAsleep {
+            if isInWaitingLoop(active) {
                 interactionController.enterSleeping()
-            }
-        case .eating:
-            if active == .eatingWait {
-                interactionController.applyEatCommand()
-            } else if !isInEatingFlow(active) {
-                interactionController.enterHungry()
-                interactionController.applyEatCommand()
-            }
-        case .drinking:
-            if active == .idleDrinkOne || active == .idleDrinkTwo {
-                interactionController.applyDrinkCommand()
-            } else if !isInDrinkingFlow(active) {
-                interactionController.enterThirsty()
-                interactionController.applyDrinkCommand()
-            }
-        case .fallingAsleep:
-            if active == .nightSleepWait {
-                interactionController.applySleepCommand()
-            } else if !isInSleepFlow(active) {
-                interactionController.enterSleepWait()
-                interactionController.applySleepCommand()
+            } else if active == nil {
+                interactionController.enterSleeping()
             }
         }
     }

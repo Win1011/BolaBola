@@ -299,14 +299,9 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     }
 
     /// 推送宠物核心状态变化（附带当前陪伴值，以便对端同步更新）。
+    /// 先在主线程设置 currentPetCoreState，再调用 pushCompanionValue，
+    /// 确保发出的 payload 携带的是新状态而非旧值。
     public func pushPetCoreState(_ state: PetCoreState) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            if self.currentPetCoreState != state {
-                BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue)")
-            }
-            self.currentPetCoreState = state
-        }
         let defaults = BolaSharedDefaults.resolved()
         let value: Double
         if defaults.object(forKey: CompanionPersistenceKeys.companionValue) != nil {
@@ -314,7 +309,19 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         } else {
             value = 50
         }
-        pushCompanionValue(value)
+        let run: () -> Void = { [weak self] in
+            guard let self else { return }
+            if self.currentPetCoreState != state {
+                BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue)")
+            }
+            self.currentPetCoreState = state
+            self.pushCompanionValue(value)
+        }
+        if Thread.isMainThread {
+            run()
+        } else {
+            DispatchQueue.main.async(execute: run)
+        }
     }
 
     #if os(iOS)
@@ -824,7 +831,8 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     }
     #endif
 
-    /// 仅当远端时间戳更新时才写入并回调，避免旧包覆盖新本地编辑。
+    /// 陪伴值写入受时间戳保护（last-write-wins），petCoreState / petEmotionLabel
+    /// 与陪伴值时间戳无关，始终先于时间戳守卫应用，确保核心状态即时同步。
     private func ingest(_ dict: [String: Any]) {
         #if os(watchOS)
         if Self.ingestRemindersIfPresent(dict) {
@@ -832,6 +840,25 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         }
         Self.ingestWatchHomeScreenPayloadIfPresent(dict)
         #endif
+
+        // petCoreState 与 petEmotionLabel 不受陪伴值时间戳守卫限制；
+        // 它们由对端直接驱动，应始终应用以保证即时同步。
+        if let raw = dict[WCSyncPayload.petCoreState] as? String,
+           let state = PetCoreState(rawValue: raw) {
+            if currentPetCoreState != state {
+                BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue)")
+            }
+            currentPetCoreState = state
+        }
+        #if os(iOS)
+        if let label = dict[WCSyncPayload.petEmotionLabel] as? String, !label.isEmpty {
+            if currentPetEmotionLabel != label {
+                BolaDebugLog.shared.log(.petState, "watch emotion → \(label)")
+            }
+            currentPetEmotionLabel = label
+        }
+        #endif
+
         guard let (v, tsRaw) = Self.parsePayload(dict) else { return }
         let forcedFromPhone = Self.boolFlag(dict[WCSyncPayload.companionSyncForcedFromPhone])
         let defaults = BolaSharedDefaults.resolved()
@@ -856,21 +883,6 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         defaults.set(storedTs, forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
         onReceiveCompanionValue?(v)
         BolaDebugLog.shared.log(.recv, "companion value=\(String(format: "%.1f", v)) forced=\(forcedFromPhone)")
-        if let raw = dict[WCSyncPayload.petCoreState] as? String,
-           let state = PetCoreState(rawValue: raw) {
-            if currentPetCoreState != state {
-                BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue)")
-            }
-            currentPetCoreState = state
-        }
-        #if os(iOS)
-        if let label = dict[WCSyncPayload.petEmotionLabel] as? String, !label.isEmpty {
-            if currentPetEmotionLabel != label {
-                BolaDebugLog.shared.log(.petState, "watch emotion → \(label)")
-            }
-            currentPetEmotionLabel = label
-        }
-        #endif
     }
 
     private static func parsePayload(_ dict: [String: Any]) -> (Double, TimeInterval)? {
@@ -1037,6 +1049,12 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             let keys = userInfo.keys.sorted().joined(separator: ",")
             bolaWCChatLog.info("didReceiveUserInfo keys=\(keys, privacy: .public) count=\(userInfo.count, privacy: .public)")
             BolaDebugLog.shared.log(.recv, "userInfo keys=[\(keys)]")
+            // petCoreState 不依赖陪伴值时间戳，在任何专用 ingestor 判断前先应用。
+            if let raw = userInfo[WCSyncPayload.petCoreState] as? String,
+               let state = PetCoreState(rawValue: raw), self.currentPetCoreState != state {
+                BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue) (userInfo early)")
+                self.currentPetCoreState = state
+            }
             #if os(iOS)
             if (userInfo[WCSyncPayload.requestSync] as? String) == WCSyncPayload.requestSyncValueLLMKeychain {
                 bolaWCChatLog.info("didReceiveUserInfo: watch asked for LLM Keychain → pushStored")
@@ -1077,6 +1095,12 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             let keys = message.keys.sorted().joined(separator: ",")
             bolaWCChatLog.info("didReceiveMessage keys=\(keys, privacy: .public)")
             BolaDebugLog.shared.log(.recv, "message keys=[\(keys)]")
+            // petCoreState 不依赖陪伴值时间戳，优先应用。
+            if let raw = message[WCSyncPayload.petCoreState] as? String,
+               let state = PetCoreState(rawValue: raw), self.currentPetCoreState != state {
+                BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue) (message early)")
+                self.currentPetCoreState = state
+            }
             #if os(watchOS)
             if self.ingestSpeechRelayReplyIfPresent(message) {
                 return
