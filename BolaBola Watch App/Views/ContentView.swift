@@ -114,6 +114,7 @@ final class PetViewModel: ObservableObject {
     /// 每次进入界面/回到前台都想打招呼；仅防 `onAppear` 与 `scenePhase.active` 同一次打开重复播两次（秒）
     private let greetingThrottleSeconds: TimeInterval = 12
     private var proactiveChatCancellable: AnyCancellable?
+    private var debugEmotionCancellable: AnyCancellable?
     /// 前台周期查心率；仅用户已授权读 HealthKit 时启用
     private var heartRateMonitorCancellable: AnyCancellable?
     private var healthKitReadAuthorized = false
@@ -193,8 +194,17 @@ final class PetViewModel: ObservableObject {
         ) { [weak self] note in
             guard let self else { return }
             guard let kind = note.userInfo?[PetCommandNotificationKey.kind] as? String else { return }
+            BolaDebugLog.shared.log(.command, "手表收到 iPhone 指令 kind=\(kind)")
             self.handleRemotePetCommand(kind)
         }
+
+        // Debug log：订阅情绪变化（无需每个赋值点加埋点）。仅更新标签；内部再按 isEnabled 判断是否推到 iPhone。
+        debugEmotionCancellable = $currentEmotion
+            .map { String(describing: $0) }
+            .removeDuplicates()
+            .sink { label in
+                BolaWCSessionCoordinator.shared.updatePetEmotionLabel(label)
+            }
         #endif
 
     }
@@ -224,6 +234,7 @@ final class PetViewModel: ObservableObject {
     func showDialogue(_ text: String, duration: TimeInterval = 5) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        BolaDebugLog.shared.log(.petState, "dialogue: \(trimmed.prefix(40))")
         dialogueDismissWorkItem?.cancel()
         dialogueGeneration += 1
         let gen = dialogueGeneration

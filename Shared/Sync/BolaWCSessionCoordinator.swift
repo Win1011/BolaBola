@@ -20,6 +20,23 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     /// 跨设备同步的宠物核心状态（idle / hungry / thirsty / sleepWait / sleeping）。
     @Published public var currentPetCoreState: PetCoreState = .idle
 
+    /// 仅用于 iPhone 调试面板：当前正在播放的情绪动画标签（由手表推送）。
+    @Published public var currentPetEmotionLabel: String = "idle"
+
+    // MARK: - 调试面板镜像的 WCSession 状态
+    @Published public private(set) var debugActivationState: Int = 0      // WCSessionActivationState.rawValue
+    @Published public private(set) var debugIsReachable: Bool = false
+    @Published public private(set) var debugIsPaired: Bool = false        // iOS 专有，watch 固定 false
+    @Published public private(set) var debugIsCounterpartInstalled: Bool = false
+    @Published public private(set) var debugPendingContext: Bool = false
+    @Published public private(set) var debugPendingChatDeltaCount: Int = 0
+
+    /// 节流：`petEmotionLabel` 上次推送（调试模式才推）。
+    #if os(watchOS)
+    private var lastPushedPetEmotionLabel: String = ""
+    private var petEmotionLabelDebounceTask: Task<Void, Never>?
+    #endif
+
     #if os(watchOS)
     /// iPhone → 手表指令 id 去重（保留最近 16 个 id）。
     private var recentPetCommandIds: [String] = []
@@ -47,6 +64,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         UserDefaults.standard.set(now, forKey: Self.llmKeychainPullDefaultsKey)
         session.transferUserInfo([WCSyncPayload.requestSync: WCSyncPayload.requestSyncValueLLMKeychain])
         bolaWCChatLog.info("requestLLMKeychainFromPhone queued (watch has no API key, transferUserInfo)")
+        BolaDebugLog.shared.log(.llm, "手表无 API Key，向 iPhone 请求同步")
     }
 
     /// 无 App Group 时：把手表上的陪伴游戏状态批量同步到 iPhone defaults（防抖，避免每 tick 刷屏）。
@@ -61,13 +79,48 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     }
 
     #if os(watchOS)
+    /// 手表 `PetViewModel` 在情绪动画变化时调用。仅当调试面板开启时，防抖推送到 iPhone。
+    public func updatePetEmotionLabel(_ label: String) {
+        let run: () -> Void = { [weak self] in
+            guard let self else { return }
+            guard self.currentPetEmotionLabel != label else { return }
+            self.currentPetEmotionLabel = label
+            BolaDebugLog.shared.log(.petState, "emotion → \(label)")
+            guard BolaDebugLog.shared.isEnabled else { return }
+            guard self.lastPushedPetEmotionLabel != label else { return }
+            self.petEmotionLabelDebounceTask?.cancel()
+            self.petEmotionLabelDebounceTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 300_000_000) // 300ms 合并
+                guard let self else { return }
+                guard !Task.isCancelled else { return }
+                self.sendPetEmotionLabelNow(self.currentPetEmotionLabel)
+            }
+        }
+        if Thread.isMainThread { run() } else { DispatchQueue.main.async(execute: run) }
+    }
+
+    private func sendPetEmotionLabelNow(_ label: String) {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isCompanionAppInstalled else { return }
+        lastPushedPetEmotionLabel = label
+        let payload: [String: Any] = [
+            WCSyncPayload.petEmotionLabel: label,
+            WCSyncPayload.petCoreState: currentPetCoreState.rawValue
+        ]
+        session.transferUserInfo(payload)
+        BolaDebugLog.shared.log(.send, "emotion label transferUserInfo → \(label)")
+    }
+
     public func prepareSpeechRelay(requestId: String, completion: @escaping (String?) -> Void) {
         speechRelayPending = (requestId, completion)
         speechRelayTimeoutWorkItem?.cancel()
+        BolaDebugLog.shared.log(.speech, "语音中继开始 id=\(requestId.prefix(8))")
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             if let pending = self.speechRelayPending, pending.id == requestId {
                 self.speechRelayPending = nil
+                BolaDebugLog.shared.log(.error, "语音中继超时 45s id=\(requestId.prefix(8))")
                 pending.completion(nil)
             }
         }
@@ -87,11 +140,13 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         speechRelayPending = nil
         speechRelayTimeoutWorkItem?.cancel()
         if let err = dict[WCSyncPayload.speechRelayError] as? String, !err.isEmpty {
+            BolaDebugLog.shared.log(.speech, "语音中继回包错误 err=\(err)")
             pending.completion(nil)
             return true
         }
         let text = dict[WCSyncPayload.speechRelayTranscript] as? String ?? ""
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        BolaDebugLog.shared.log(.speech, "语音中继转写 len=\(trimmed.count)")
         pending.completion(trimmed.isEmpty ? nil : trimmed)
         return true
     }
@@ -106,23 +161,56 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     #endif
 
     public func activate() {
-        guard WCSession.isSupported() else { return }
+        guard WCSession.isSupported() else {
+            BolaDebugLog.shared.log(.wc, "activate skip: WCSession not supported")
+            return
+        }
         let session = WCSession.default
         session.delegate = self
         switch session.activationState {
         case .activated:
             // 已激活时只补读 context，避免多处调用 `activate()` 打出 “already in progress or activated”
+            BolaDebugLog.shared.log(.wc, "activate noop (already activated)")
             DispatchQueue.main.async { [weak self] in
+                self?.refreshDebugSessionState(session)
                 self?.ingest(session.receivedApplicationContext)
             }
         case .inactive:
             // 正在激活过程中，勿重复调用
+            BolaDebugLog.shared.log(.wc, "activate noop (inactive/in progress)")
             break
         case .notActivated:
+            BolaDebugLog.shared.log(.wc, "activate() called")
             session.activate()
         @unknown default:
             session.activate()
         }
+    }
+
+    /// 把当前 `WCSession` 的配对/可达/安装状态镜像到 `@Published` 上，供调试面板订阅。
+    private func refreshDebugSessionState(_ session: WCSession) {
+        let activation = session.activationState.rawValue
+        let reachable = session.isReachable
+        #if os(iOS)
+        let paired = session.isPaired
+        let installed = session.isWatchAppInstalled
+        #elseif os(watchOS)
+        let paired = false
+        let installed = session.isCompanionAppInstalled
+        #else
+        let paired = false
+        let installed = false
+        #endif
+        let update: () -> Void = { [weak self] in
+            guard let self else { return }
+            self.debugActivationState = activation
+            self.debugIsReachable = reachable
+            self.debugIsPaired = paired
+            self.debugIsCounterpartInstalled = installed
+            self.debugPendingContext = (self.pendingPayload != nil)
+            self.debugPendingChatDeltaCount = self.pendingChatDeltaPayloads.count
+        }
+        if Thread.isMainThread { update() } else { DispatchQueue.main.async(execute: update) }
     }
 
     /// 对端 Watch/iPhone App 是否已安装（未安装时发 WC 会刷屏系统日志）
@@ -165,6 +253,12 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         }
         Self.appendWatchHomeScreenPayload(&payload)
         #endif
+        #if os(watchOS)
+        // 仅在调试面板开启时，随 context 一起带上当前情绪动画标签（供 iPhone 调试 UI 显示）。
+        if BolaDebugLog.shared.isEnabled, !currentPetEmotionLabel.isEmpty {
+            payload[WCSyncPayload.petEmotionLabel] = currentPetEmotionLabel
+        }
+        #endif
         let defaults = BolaSharedDefaults.resolved()
         defaults.set(value, forKey: CompanionPersistenceKeys.companionValue)
         defaults.set(ts, forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
@@ -179,18 +273,23 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
                 #if os(iOS)
                 if !session.isWatchAppInstalled {
                     bolaWCChatLog.warning("pushCompanionValue 未发往手表：isWatchAppInstalled=false")
+                    BolaDebugLog.shared.log(.pending, "pushCompanion 搁置：watchApp 未安装 value=\(value)")
                 } else if !session.isPaired {
                     bolaWCChatLog.warning("pushCompanionValue 未发往手表：当前未配对 Apple Watch")
+                    BolaDebugLog.shared.log(.pending, "pushCompanion 搁置：未配对手表 value=\(value)")
                 }
                 #elseif os(watchOS)
                 if !session.isCompanionAppInstalled {
                     bolaWCChatLog.warning("pushCompanionValue 未发往 iPhone：isCompanionAppInstalled=false")
+                    BolaDebugLog.shared.log(.pending, "pushCompanion 搁置：iPhone 未安装 value=\(value)")
                 }
                 #endif
                 self.pendingPayload = payload
             } else {
+                BolaDebugLog.shared.log(.pending, "pushCompanion 搁置：session 未激活 value=\(value)")
                 self.pendingPayload = payload
             }
+            self.refreshDebugSessionState(session)
         }
         if Thread.isMainThread {
             run()
@@ -203,6 +302,9 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     public func pushPetCoreState(_ state: PetCoreState) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            if self.currentPetCoreState != state {
+                BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue)")
+            }
             self.currentPetCoreState = state
         }
         let defaults = BolaSharedDefaults.resolved()
@@ -247,12 +349,14 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             if session.isReachable {
                 session.sendMessage(payload, replyHandler: nil) { err in
                     bolaWCChatLog.warning("sendPetCommand sendMessage failed kind=\(kind, privacy: .public) err=\(String(describing: err), privacy: .public); falling back to transferUserInfo")
+                    BolaDebugLog.shared.log(.error, "sendMessage 失败(kind=\(kind))，回退 transferUserInfo")
                     session.transferUserInfo(payload)
                 }
             } else {
                 session.transferUserInfo(payload)
             }
             bolaWCChatLog.info("sendPetCommand dispatched kind=\(kind, privacy: .public)")
+            BolaDebugLog.shared.log(.command, "发出指令 kind=\(kind) viaMessage=\(session.isReachable)")
         }
         if Thread.isMainThread { run() } else { DispatchQueue.main.async(execute: run) }
     }
@@ -277,6 +381,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             }
         }
         bolaWCChatLog.info("ingestPetCommand kind=\(kind, privacy: .public) id=\(id, privacy: .public)")
+        BolaDebugLog.shared.log(.command, "收到指令 kind=\(kind)")
         NotificationCenter.default.post(
             name: .bolaPetCommandReceived,
             object: nil,
@@ -287,16 +392,24 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     #endif
 
     private func sendPayload(_ payload: [String: Any], session: WCSession) {
-        guard isCounterpartAppReady(session) else { return }
+        guard isCounterpartAppReady(session) else {
+            BolaDebugLog.shared.log(.pending, "sendPayload skip: counterpart not ready")
+            return
+        }
+        var contextOK = true
         do {
             try session.updateApplicationContext(payload)
         } catch {
+            contextOK = false
             bolaWCChatLog.warning("updateApplicationContext failed, companion will rely on transferUserInfo: \(String(describing: error), privacy: .public)")
+            BolaDebugLog.shared.log(.error, "updateApplicationContext 失败: \(error.localizedDescription)")
         }
         // 与 application context 并行排队：部分环境下表端 `receivedApplicationContext` 长期为空，仍可通过 `didReceiveUserInfo` 合并陪伴值。
         session.transferUserInfo(payload)
         let keys = payload.keys.sorted().joined(separator: ",")
         bolaWCChatLog.info("sendPayload companion queued transferUserInfo keys=\(keys, privacy: .public)")
+        let v = Self.doubleValue(payload[WCSyncPayload.companionValue]).map { String(format: "%.1f", $0) } ?? "-"
+        BolaDebugLog.shared.log(.send, "context\(contextOK ? "+ui" : " failed → ui") value=\(v) keys=[\(keys)]")
     }
 
 #if os(iOS)
@@ -368,6 +481,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             let useBearer = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountAuthBearer) != "0"
             self.pushLLMConfigurationToWatch(apiKey: key, baseURL: base, model: model, useBearerAuth: useBearer)
             bolaWCChatLog.info("pushStoredLLMConfigurationToWatchIfConfigured sent (llm transferUserInfo)")
+            BolaDebugLog.shared.log(.llm, "已向手表推送 LLM 配置")
         }
         if Thread.isMainThread {
             run()
@@ -421,19 +535,27 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         if pendingChatDeltaPayloads.count >= maxPendingChatDeltaPayloads {
             pendingChatDeltaPayloads.removeFirst()
             bolaWCChatLog.warning("pushChatDelta queue full: dropped oldest pending")
+            BolaDebugLog.shared.log(.error, "chatDelta 队列已满，丢弃最旧一条")
         }
         pendingChatDeltaPayloads.append(payload)
         bolaWCChatLog.info("pushChatDelta enqueued pendingCount=\(self.pendingChatDeltaPayloads.count, privacy: .public)")
+        debugPendingChatDeltaCount = pendingChatDeltaPayloads.count
+        BolaDebugLog.shared.log(.pending, "chatDelta 入队 pending=\(pendingChatDeltaPayloads.count)")
     }
 
     /// 对端就绪且 session 已激活时，按顺序发出队列中的聊天记录包。
     private func flushPendingChatDeltasIfReady(session: WCSession) {
         guard session.activationState == .activated, isCounterpartAppReady(session) else { return }
+        let initial = pendingChatDeltaPayloads.count
         while !pendingChatDeltaPayloads.isEmpty {
             let payload = pendingChatDeltaPayloads.removeFirst()
             session.transferUserInfo(payload)
             bolaWCChatLog.info("flushPendingChatDeltas transferUserInfo remaining=\(self.pendingChatDeltaPayloads.count, privacy: .public)")
         }
+        if initial > 0 {
+            BolaDebugLog.shared.log(.send, "chatDelta flush \(initial) 条")
+        }
+        debugPendingChatDeltaCount = pendingChatDeltaPayloads.count
     }
 
     /// 推送本轮新增的两条对话到对端（手表 / iPhone 各有一份本地存储，需 WC 合并）。
@@ -482,6 +604,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             }
             session.transferUserInfo(payload)
             bolaWCChatLog.info("pushChatDelta transferUserInfo submitted \(detail)")
+            BolaDebugLog.shared.log(.send, "chatDelta 已发出 turns=\(turns.count)")
         }
     }
 
@@ -490,17 +613,20 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         guard let b64 = dict[WCSyncPayload.chatDeltaDataB64] as? String,
               let raw = Data(base64Encoded: b64) else {
             bolaWCChatLog.warning("ingestChatDelta malformed b64")
+            BolaDebugLog.shared.log(.error, "chatDelta 收到但 b64 解析失败")
             return false
         }
         let dec = JSONDecoder()
         guard let turns = try? dec.decode([ChatTurn].self, from: raw), !turns.isEmpty else {
             bolaWCChatLog.warning("ingestChatDelta decode failed rawBytes=\(raw.count, privacy: .public)")
+            BolaDebugLog.shared.log(.error, "chatDelta 收到但 JSON 解码失败 bytes=\(raw.count)")
             return false
         }
         bolaWCChatLog.info("ingestChatDelta merging turns=\(turns.count, privacy: .public)")
         ChatHistoryStore.mergeRemoteTurns(turns)
         NotificationCenter.default.post(name: .bolaChatHistoryDidMerge, object: nil)
         bolaWCChatLog.info("ingestChatDelta done → posted bolaChatHistoryDidMerge")
+        BolaDebugLog.shared.log(.recv, "chatDelta 合并 turns=\(turns.count)")
         return true
     }
 
@@ -607,6 +733,25 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     }
     #endif
 
+    #if os(iOS)
+    /// 仅用于调试：若 payload 只携带 `petEmotionLabel`（+ 可选 `petCoreState`），写入镜像状态后返回 true。
+    @discardableResult
+    private func ingestPetEmotionLabelIfPresent(_ dict: [String: Any]) -> Bool {
+        guard dict[WCSyncPayload.companionValue] == nil else { return false }
+        guard let label = dict[WCSyncPayload.petEmotionLabel] as? String, !label.isEmpty else { return false }
+        if currentPetEmotionLabel != label {
+            BolaDebugLog.shared.log(.recv, "emotion 标签 → \(label)")
+            currentPetEmotionLabel = label
+        }
+        if let raw = dict[WCSyncPayload.petCoreState] as? String,
+           let state = PetCoreState(rawValue: raw), currentPetCoreState != state {
+            BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue)")
+            currentPetCoreState = state
+        }
+        return true
+    }
+    #endif
+
     /// 若 `userInfo` 为 LLM 同步包则写入本机 Keychain 并返回 `true`。
     private func ingestLLMConfigurationIfPresent(_ dict: [String: Any]) -> Bool {
         guard dict.keys.contains(WCSyncPayload.llmApiKey) else { return false }
@@ -634,6 +779,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         }
         let hasKey = !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         bolaWCChatLog.info("ingestLLMConfiguration applied hasApiKey=\(hasKey, privacy: .public) baseLen=\(base.count, privacy: .public) modelLen=\(model.count, privacy: .public)")
+        BolaDebugLog.shared.log(.llm, "LLM 配置落地 hasKey=\(hasKey) baseLen=\(base.count) modelLen=\(model.count)")
         return true
     }
 
@@ -709,10 +855,22 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         let storedTs = forcedFromPhone ? Date().timeIntervalSince1970 : remoteTs
         defaults.set(storedTs, forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
         onReceiveCompanionValue?(v)
+        BolaDebugLog.shared.log(.recv, "companion value=\(String(format: "%.1f", v)) forced=\(forcedFromPhone)")
         if let raw = dict[WCSyncPayload.petCoreState] as? String,
            let state = PetCoreState(rawValue: raw) {
+            if currentPetCoreState != state {
+                BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue)")
+            }
             currentPetCoreState = state
         }
+        #if os(iOS)
+        if let label = dict[WCSyncPayload.petEmotionLabel] as? String, !label.isEmpty {
+            if currentPetEmotionLabel != label {
+                BolaDebugLog.shared.log(.petState, "watch emotion → \(label)")
+            }
+            currentPetEmotionLabel = label
+        }
+        #endif
     }
 
     private static func parsePayload(_ dict: [String: Any]) -> (Double, TimeInterval)? {
@@ -763,15 +921,19 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             guard let self else { return }
             if let error {
                 bolaWCChatLog.error("WCSession activation error=\(String(describing: error), privacy: .public) state=\(activationState.rawValue, privacy: .public)")
+                BolaDebugLog.shared.log(.error, "activation error state=\(activationState.rawValue) err=\(error.localizedDescription)")
             } else {
                 #if os(iOS)
                 bolaWCChatLog.info("WCSession activation state=\(activationState.rawValue, privacy: .public) paired=\(session.isPaired, privacy: .public) watchAppInstalled=\(session.isWatchAppInstalled, privacy: .public) reachable=\(session.isReachable, privacy: .public)")
+                BolaDebugLog.shared.log(.wc, "activated state=\(activationState.rawValue) paired=\(session.isPaired) watchInstalled=\(session.isWatchAppInstalled) reach=\(session.isReachable)")
                 #elseif os(watchOS)
                 bolaWCChatLog.info("WCSession activation state=\(activationState.rawValue, privacy: .public) companionInstalled=\(session.isCompanionAppInstalled, privacy: .public) reachable=\(session.isReachable, privacy: .public)")
+                BolaDebugLog.shared.log(.wc, "activated state=\(activationState.rawValue) iPhoneInstalled=\(session.isCompanionAppInstalled) reach=\(session.isReachable)")
                 #else
                 bolaWCChatLog.info("WCSession activation state=\(activationState.rawValue, privacy: .public)")
                 #endif
             }
+            self.refreshDebugSessionState(session)
             guard activationState == .activated else { return }
             let ctx = session.receivedApplicationContext
             bolaWCChatLog.info("receivedApplicationContext keys=\(ctx.keys.sorted().joined(separator: ","), privacy: .public) count=\(ctx.count, privacy: .public)")
@@ -805,8 +967,10 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     /// 配对/安装状态变化时系统回调；此前 `isWatchAppInstalled` 可能刚从 false 变 true。
     public func sessionWatchStateDidChange(_ session: WCSession) {
         bolaWCChatLog.info("sessionWatchStateDidChange watchAppInstalled=\(session.isWatchAppInstalled) paired=\(session.isPaired) reachable=\(session.isReachable)")
+        BolaDebugLog.shared.log(.wc, "watchState paired=\(session.isPaired) installed=\(session.isWatchAppInstalled) reach=\(session.isReachable)")
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            self.refreshDebugSessionState(session)
             self.flushPendingChatDeltasIfReady(session: session)
             self.pushStoredLLMConfigurationToWatchIfConfigured()
             self.pushLocalCompanionTowardWatchFromDefaults()
@@ -817,8 +981,10 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
 
     public func sessionReachabilityDidChange(_ session: WCSession) {
         bolaWCChatLog.info("sessionReachabilityDidChange reachable=\(session.isReachable) watchAppInstalled=\(session.isWatchAppInstalled)")
+        BolaDebugLog.shared.log(.wc, "reachability → \(session.isReachable)")
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            self.refreshDebugSessionState(session)
             self.flushPendingChatDeltasIfReady(session: session)
             guard session.isReachable, session.isWatchAppInstalled else { return }
             self.pushStoredLLMConfigurationToWatchIfConfigured()
@@ -836,6 +1002,8 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     /// iPhone 伴侣 App 安装/可达性变化时，把本机当前陪伴值再推给手机（与 iPhone 侧 `pushLocalCompanionTowardWatchFromDefaults` 对称）。
     public func sessionCompanionStateDidChange(_ session: WCSession) {
         bolaWCChatLog.info("sessionCompanionStateDidChange companionInstalled=\(session.isCompanionAppInstalled) reachable=\(session.isReachable)")
+        BolaDebugLog.shared.log(.wc, "companionState installed=\(session.isCompanionAppInstalled) reach=\(session.isReachable)")
+        refreshDebugSessionState(session)
         guard session.isCompanionAppInstalled else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -856,6 +1024,8 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     #endif
 
     public func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        let keys = applicationContext.keys.sorted().joined(separator: ",")
+        BolaDebugLog.shared.log(.recv, "context keys=[\(keys)]")
         DispatchQueue.main.async { [weak self] in
             self?.ingest(applicationContext)
         }
@@ -866,6 +1036,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             guard let self else { return }
             let keys = userInfo.keys.sorted().joined(separator: ",")
             bolaWCChatLog.info("didReceiveUserInfo keys=\(keys, privacy: .public) count=\(userInfo.count, privacy: .public)")
+            BolaDebugLog.shared.log(.recv, "userInfo keys=[\(keys)]")
             #if os(iOS)
             if (userInfo[WCSyncPayload.requestSync] as? String) == WCSyncPayload.requestSyncValueLLMKeychain {
                 bolaWCChatLog.info("didReceiveUserInfo: watch asked for LLM Keychain → pushStored")
@@ -889,6 +1060,9 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             if self.ingestCompanionGameStateSnapshotFromWatchIfPresent(userInfo) {
                 return
             }
+            if self.ingestPetEmotionLabelIfPresent(userInfo) {
+                return
+            }
             #endif
             if self.ingestLLMConfigurationIfPresent(userInfo) {
                 return
@@ -902,6 +1076,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             guard let self else { return }
             let keys = message.keys.sorted().joined(separator: ",")
             bolaWCChatLog.info("didReceiveMessage keys=\(keys, privacy: .public)")
+            BolaDebugLog.shared.log(.recv, "message keys=[\(keys)]")
             #if os(watchOS)
             if self.ingestSpeechRelayReplyIfPresent(message) {
                 return

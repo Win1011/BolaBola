@@ -53,6 +53,8 @@ public enum WCSyncPayload {
 
     /// 双向：宠物核心状态（`PetCoreState.rawValue`，如 `"idle"`、`"hungry"`）。
     public static let petCoreState = "petCoreState"
+    /// 手表 → iPhone（调试日志用）：当前播放的情绪动画标签（`PetEmotion` 的字符串形式）。
+    public static let petEmotionLabel = "petEmotionLabel"
 
     /// iPhone → Watch：宠物交互指令（`"eat"`、`"drink"`、`"sleep"`；tap 已改为本机处理）。
     public static let petCommandKind = "petCommandKind"

@@ -17,6 +17,7 @@ struct IOSSettingsListView: View {
     @State private var confirmResetGrowth = false
     @State private var growthSummary: String = ""
     @State private var selectedPersonality = BolaPersonalitySelectionStore.validated()
+    @ObservedObject private var debugLog = BolaDebugLog.shared
 
     var body: some View {
         List {
@@ -30,6 +31,27 @@ struct IOSSettingsListView: View {
                 Text("连接")
             } footer: {
                 Text("密钥与中转地址保存在本机钥匙串，并可同步到 Apple Watch。")
+            }
+
+            Section {
+                Toggle(isOn: $debugLog.isEnabled) {
+                    Label("启用实时日志", systemImage: "doc.text.magnifyingglass")
+                }
+                NavigationLink {
+                    IOSDebugLogSheet()
+                } label: {
+                    HStack {
+                        Label("打开调试面板", systemImage: "ladybug")
+                        Spacer()
+                        Text("\(debugLog.entries.count) 条")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Debug · 日志")
+            } footer: {
+                Text("记录 WC 通信、宠物状态、聊天/语音同步等事件，仅保存在内存最近 500 条。关闭后立即停止写入。")
             }
 
             Section {
