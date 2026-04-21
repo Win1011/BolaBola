@@ -17,7 +17,7 @@ struct IOSLifeTimePageView: View {
     @State private var diaryEntries: [BolaDiaryEntry] = BolaDiaryStore.load()
     @State private var showDiaryCalendar = false
     @State private var selectedDiaryDate = Date()
-    @State private var activeDayFilter: Date?
+    @State private var activeDayFilter: Date? = Calendar.current.startOfDay(for: Date())
 
     private var groupedRecords: [(title: String, records: [BolaDiaryEntry])] {
         let formatter = DateFormatter()
@@ -29,16 +29,16 @@ struct IOSLifeTimePageView: View {
                 guard let activeDayFilter else { return true }
                 return Calendar.current.isDate(entry.createdAt, inSameDayAs: activeDayFilter)
             }
-            .sorted { $0.createdAt > $1.createdAt }
+            .sorted { $0.createdAt < $1.createdAt }
 
         let grouped = Dictionary(grouping: filteredEntries) { entry in
             Calendar.current.startOfDay(for: entry.createdAt)
         }
 
         return grouped.keys
-            .sorted(by: >)
+            .sorted(by: <)
             .map { day in
-                (formatter.string(from: day), grouped[day]?.sorted { $0.createdAt > $1.createdAt } ?? [])
+                (formatter.string(from: day), grouped[day]?.sorted { $0.createdAt < $1.createdAt } ?? [])
             }
     }
 
@@ -48,9 +48,9 @@ struct IOSLifeTimePageView: View {
                 Text("波拉日记")
                     .font(.headline)
                 Spacer()
-                if activeDayFilter != nil {
-                    Button("显示全部") {
-                        activeDayFilter = nil
+                if !isShowingToday {
+                    Button("回到今天") {
+                        activeDayFilter = Calendar.current.startOfDay(for: Date())
                     }
                     .font(.caption.weight(.semibold))
                     .buttonStyle(.bordered)
@@ -104,7 +104,7 @@ struct IOSLifeTimePageView: View {
         VStack(spacing: 10) {
             Text("还没有时光记录")
                 .font(.subheadline.weight(.semibold))
-            Text(activeDayFilter == nil ? "和 Bola 聊聊今天发生了什么，它会把适合留下来的片段自动整理成日记。生活记录请在生活页添加。" : "这一天还没有波拉日记。")
+            Text(isShowingToday ? "今天的时光记录还没有出现，和 Bola 聊聊今天发生了什么，它会把适合留下来的片段自动整理成日记。" : "这一天还没有波拉日记，其他过去的记录也可以直接在日历里看。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -128,7 +128,7 @@ struct IOSLifeTimePageView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(entry.emoji)
-                    Text("Bola 日记")
+                    Text(entry.title)
                         .font(.subheadline.weight(.semibold))
                 }
                 Text(entry.summary)
@@ -152,6 +152,14 @@ struct IOSLifeTimePageView: View {
 
     private func reload() {
         diaryEntries = BolaDiaryStore.load()
+        if activeDayFilter == nil {
+            activeDayFilter = Calendar.current.startOfDay(for: Date())
+        }
+    }
+
+    private var isShowingToday: Bool {
+        guard let activeDayFilter else { return false }
+        return Calendar.current.isDateInToday(activeDayFilter)
     }
 
     private static let timeFormatter: DateFormatter = {
@@ -184,9 +192,8 @@ private struct DiaryCalendarSheet: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
-            .padding(18)
-            .background(BolaTheme.backgroundGrouped)
-            .navigationTitle("波拉日记日历")
+            .padding(20)
+            .navigationTitle("选择日期")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -212,15 +219,14 @@ private struct DiaryCalendarSheet: View {
                 moveMonth(by: -1)
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 14, weight: .bold))
-                    .frame(width: 34, height: 34)
+                    .font(.headline)
             }
             .buttonStyle(.plain)
 
             Spacer()
 
             Text(monthTitle(for: visibleMonth))
-                .font(.headline.weight(.bold))
+                .font(.headline)
 
             Spacer()
 
@@ -228,21 +234,14 @@ private struct DiaryCalendarSheet: View {
                 moveMonth(by: 1)
             } label: {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .bold))
-                    .frame(width: 34, height: 34)
+                    .font(.headline)
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemBackground))
-        )
     }
 
     private var weekdayHeader: some View {
-        LazyVGrid(columns: calendarColumns, spacing: 8) {
+        LazyVGrid(columns: calendarColumns, spacing: 12) {
             ForEach(weekdaySymbols, id: \.self) { day in
                 Text(day)
                     .font(.caption.weight(.semibold))
@@ -263,11 +262,6 @@ private struct DiaryCalendarSheet: View {
                 }
             }
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemBackground))
-        )
     }
 
     private func dayButton(for date: Date) -> some View {
@@ -278,26 +272,21 @@ private struct DiaryCalendarSheet: View {
             selectedDate = date
         } label: {
             Text("\(Calendar.current.component(.day, from: date))")
-                .font(.subheadline.weight(hasEntry ? .bold : .medium))
-                .foregroundStyle(hasEntry ? Color.black : Color.primary.opacity(0.72))
-                .frame(width: 38, height: 38)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(dayForeground(isSelected: isSelected, hasEntry: hasEntry))
+                .frame(maxWidth: .infinity, minHeight: 38)
                 .background(
-                    Circle()
-                        .fill(hasEntry ? BolaTheme.accent : Color.clear)
-                )
-                .overlay(
-                    Circle()
-                        .stroke(isSelected ? Color.black.opacity(0.72) : Color.clear, lineWidth: 1.4)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(dayBackground(isSelected: isSelected, hasEntry: hasEntry))
                 )
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
     }
 
     private var selectedDateHint: String {
         hasDiary(on: selectedDate)
             ? "这一天有波拉日记，点完成查看。"
-            : "有日记的日期会显示主题色圆形。"
+            : "有日记的日期会显示主题色标记。"
     }
 
     private var calendarColumns: [GridItem] {
@@ -320,6 +309,18 @@ private struct DiaryCalendarSheet: View {
 
     private func hasDiary(on date: Date) -> Bool {
         entries.contains { Calendar.current.isDate($0.createdAt, inSameDayAs: date) }
+    }
+
+    private func dayBackground(isSelected: Bool, hasEntry: Bool) -> Color {
+        if isSelected { return BolaTheme.accent }
+        if hasEntry { return BolaTheme.accent.opacity(0.18) }
+        return .clear
+    }
+
+    private func dayForeground(isSelected: Bool, hasEntry: Bool) -> AnyShapeStyle {
+        if isSelected { return AnyShapeStyle(.black) }
+        if hasEntry { return AnyShapeStyle(BolaTheme.accent) }
+        return AnyShapeStyle(.primary)
     }
 
     private func moveMonth(by value: Int) {

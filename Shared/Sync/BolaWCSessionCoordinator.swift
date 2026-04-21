@@ -247,6 +247,9 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             WCSyncPayload.companionValueUpdatedAt: ts,
             WCSyncPayload.petCoreState: currentPetCoreState.rawValue
         ]
+        if let data = try? JSONEncoder().encode(SpecialAnimationUnlockStore.loadUnlockedOrderedIds()) {
+            payload[WCSyncPayload.specialAnimationUnlockedIdsB64] = data.base64EncodedString()
+        }
         #if os(iOS)
         if forcedForWatch {
             payload[WCSyncPayload.companionSyncForcedFromPhone] = true
@@ -890,6 +893,12 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
 
         if !forcedFromPhone {
             guard remoteTs > localTs else { return }
+        }
+
+        if let b64 = dict[WCSyncPayload.specialAnimationUnlockedIdsB64] as? String,
+           let data = Data(base64Encoded: b64),
+           let ids = try? JSONDecoder().decode([String].self, from: data) {
+            _ = SpecialAnimationUnlockStore.mergeFromRemote(ids)
         }
 
         defaults.set(v, forKey: CompanionPersistenceKeys.companionValue)

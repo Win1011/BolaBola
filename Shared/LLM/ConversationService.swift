@@ -46,8 +46,15 @@ public enum ConversationService {
         \(recentLifeContextInstruction())
 
         如果用户要求设闹钟、定时器或计时提醒，在回复末尾加上标签（用户看不到标签）：
-        - 倒计时 N 分钟：<<ALARM:{"minutes":N}>>
-        - 指定时间：<<ALARM:{"hour":H,"minute":M}>>（24 小时制）
+        - N 分钟/小时后提醒一次：<<ALARM:{"mode":"once","minutes":N,"title":"提醒标题","body":"提醒内容"}>>
+        - 今天/明天/后天某时提醒一次：<<ALARM:{"mode":"once","hour":H,"minute":M,"dayOffset":D,"title":"提醒标题","body":"提醒内容"}>>，`dayOffset` 为 0/1/2
+        - 每天固定时间：<<ALARM:{"mode":"daily","hour":H,"minute":M,"title":"提醒标题","body":"提醒内容"}>>
+        - 工作日固定时间：<<ALARM:{"mode":"workweek","hour":H,"minute":M,"title":"提醒标题","body":"提醒内容"}>>
+        - 每周几固定时间：<<ALARM:{"mode":"weekly","hour":H,"minute":M,"weekdays":[2,4,6],"title":"提醒标题","body":"提醒内容"}>>
+        - 每隔 N 小时/分钟重复：<<ALARM:{"mode":"interval","hours":N,"title":"提醒标题","body":"提醒内容"}>> 或 <<ALARM:{"mode":"interval","minutes":N,"title":"提醒标题","body":"提醒内容"}>>
+        `title` 要简短，优先直接写要做的事，比如“洗头提醒”“拿快递提醒”。
+        `body` 要像一句真正会发出的提醒，比如“主人该洗头啦～”。
+        如果用户说“每天/每晚/工作日/每周一三五/每隔两小时”，要选对应的重复模式，不要误写成一次性提醒。
         只加一个标签，不要解释标签格式。用可爱语气确认闹钟已设好。
         """
     }
@@ -68,10 +75,15 @@ public enum ConversationService {
         let reply: String
         if let parsed = AlarmIntentParser.parse(fromLLMReply: rawReply) {
             reply = parsed.cleanedReply
+            let reminderContent = inferredReminderContent(
+                from: utterance,
+                parsedTitle: parsed.intent.title,
+                parsedBody: parsed.intent.body
+            )
             let alarm = BolaReminder(
-                title: "Bola 闹钟",
-                notificationBody: "时间到啦～",
-                schedule: .once(parsed.intent.fireDate),
+                title: reminderContent.title,
+                notificationBody: reminderContent.body,
+                schedule: parsed.intent.schedule,
                 kind: .custom
             )
             var reminders = ReminderListStore.load(from: defaults)
@@ -83,7 +95,7 @@ public enum ConversationService {
             #if os(iOS)
             BolaWCSessionCoordinator.shared.pushReminderRefreshToWatchIfPossible()
             #endif
-            bolaConversationSyncLog.info("replyToUser: alarm scheduled at \(parsed.intent.fireDate, privacy: .public)")
+            bolaConversationSyncLog.info("replyToUser: alarm scheduled summary=\(alarm.scheduleSummary(), privacy: .public)")
         } else {
             reply = rawReply
         }
@@ -151,6 +163,72 @@ public enum ConversationService {
         return "嘿嘿，\(utterance.prefix(28)) —— 最喜欢和你聊天啦！"
     }
 
+    private static func inferredReminderContent(
+        from utterance: String,
+        parsedTitle: String?,
+        parsedBody: String?
+    ) -> (title: String, body: String) {
+        let action = extractReminderAction(from: utterance)
+
+        let title = {
+            if let parsedTitle, !parsedTitle.isEmpty { return String(parsedTitle.prefix(18)) }
+            if !action.isEmpty { return String("\(action)提醒".prefix(18)) }
+            return "Bola提醒"
+        }()
+
+        let body = {
+            if let parsedBody, !parsedBody.isEmpty { return String(parsedBody.prefix(40)) }
+            if !action.isEmpty { return String("主人该\(action)啦～".prefix(40)) }
+            return "主人，时间到啦～"
+        }()
+
+        return (title, body)
+    }
+
+    private static func extractReminderAction(from utterance: String) -> String {
+        let text = utterance
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\n", with: "")
+
+        let cues = ["提醒我", "告诉我", "记得", "帮我记得", "到时候提醒我", "叫我"]
+        for cue in cues {
+            if let range = text.range(of: cue, options: .backwards) {
+                let tail = String(text[range.upperBound...])
+                let cleaned = cleanReminderActionFragment(tail)
+                if !cleaned.isEmpty { return cleaned }
+            }
+        }
+
+        return cleanReminderActionFragment(text)
+    }
+
+    private static func cleanReminderActionFragment(_ raw: String) -> String {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let leadingPatterns = [
+            #"^(在|到|于)?"#,
+            #"^([零一二两三四五六七八九十百半\d]+)(秒钟|秒|分钟|分|小时|点|天)(后|的时候|时)?"#,
+            #"^(今天|明天|后天)(早上|上午|中午|下午|晚上)?([零一二两三四五六七八九十百\d]+点([零一二两三四五六七八九十百\d]+分)?)?"#
+        ]
+        for pattern in leadingPatterns {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(text.startIndex..<text.endIndex, in: text)
+                text = regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        let trailingJunk = CharacterSet(charactersIn: "，。,！!？?～~ ")
+        text = text.trimmingCharacters(in: trailingJunk)
+
+        let fillers = ["一下", "这件事", "这个", "这件"]
+        for filler in fillers where text.hasSuffix(filler) {
+            text.removeLast(filler.count)
+            text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return String(text.prefix(12))
+    }
+
     private static func recentLifeContextInstruction() -> String {
         let recent = LifeRecordListStore.load()
             .filter { $0.kind != .weather }
@@ -198,6 +276,7 @@ public enum ConversationService {
         if let diary = extraction.diary {
             BolaDiaryStore.append(
                 BolaDiaryEntry(
+                    title: diary.title,
                     summary: diary.summary,
                     emoji: diary.emoji ?? "📝",
                     sourceText: sourceText

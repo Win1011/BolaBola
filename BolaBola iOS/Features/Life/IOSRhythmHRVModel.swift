@@ -17,6 +17,102 @@ final class IOSRhythmHRVModel: ObservableObject {
         case ready
     }
 
+    /// HRV 节奏阶段：基于归一化值（0–1）划分，参考 Garmin / Oura / Whoop 分层逻辑。
+    enum HRVStage {
+        /// 无数据 / 未授权
+        case noData
+        /// 低迷：身体可能处于较高压力或疲劳状态
+        case depleted
+        /// 偏低：节奏略低于自身基线，需要适当休息
+        case low
+        /// 平稳：处于正常波动范围内
+        case balanced
+        /// 良好：身体恢复状态不错
+        case good
+        /// 活力满满：今日节奏处于峰值区间
+        case vibrant
+
+        var imageName: String {
+            switch self {
+            case .noData:    return "GrowthHeroIsland"
+            case .depleted:  return "RhythmBola_Depleted"
+            case .low:       return "RhythmBola_Low"
+            case .balanced:  return "RhythmBola_Balanced"
+            case .good:      return "RhythmBola_Good"
+            case .vibrant:   return "RhythmBola_Vibrant"
+            }
+        }
+
+        /// 对应阶段的 Bola 口吻话语池，每次从中随机取一句
+        var speechPool: [String] {
+            switch self {
+            case .noData:
+                return [
+                    "节奏还在读取中，稍等一下哦~",
+                    "我正在帮你读今天的节奏~",
+                    "节奏数据还没到，等等它~",
+                ]
+            case .depleted:
+                return [
+                    "节奏有点低迷，好好歇一歇吧~",
+                    "节奏低迷也没关系，充个电就好~",
+                    "节奏在谷底，今天慢慢来就行~",
+                    "节奏低迷，允许自己放慢脚步~",
+                ]
+            case .low:
+                return [
+                    "节奏偏低，今天轻轻地过就好~",
+                    "节奏稍微低了点，慢慢来没关系~",
+                    "节奏偏低，记得多喝点水哦~",
+                    "节奏在慢慢恢复，有我陪着你~",
+                ]
+            case .balanced:
+                return [
+                    "节奏挺稳的，继续保持哦~",
+                    "节奏平稳，今天挺从容的嘛~",
+                    "节奏稳稳的，是很不错的一天~",
+                    "节奏平稳！你的状态真不错~",
+                ]
+            case .good:
+                return [
+                    "节奏不错！继续保持哦~",
+                    "节奏良好！趁势多做点开心的事~",
+                    "节奏在涨，好替你开心🌿",
+                    "节奏良好，今天你好棒的~",
+                ]
+            case .vibrant:
+                return [
+                    "节奏满满！今天可以全力以赴~",
+                    "节奏这么好，完全被你感染了！",
+                    "节奏满满，今天是元气爆棚的一天🌟",
+                    "节奏峰值！太替你骄傲啦~",
+                ]
+            }
+        }
+
+        var label: String {
+            switch self {
+            case .noData:   return "等待数据"
+            case .depleted: return "节奏低迷"
+            case .low:      return "节奏偏低"
+            case .balanced: return "节奏平稳"
+            case .good:     return "节奏良好"
+            case .vibrant:  return "节奏满满"
+            }
+        }
+
+        static func from(normalized value: Double) -> HRVStage {
+            guard value > 0.001 else { return .noData }
+            switch value {
+            case ..<0.2:  return .depleted
+            case ..<0.4:  return .low
+            case ..<0.6:  return .balanced
+            case ..<0.8:  return .good
+            default:      return .vibrant
+            }
+        }
+    }
+
     /// 24 个值，对应今天 0–23 时，0...1 用于条高
     @Published private(set) var hourlyNormalized: [Double] = Array(repeating: 0, count: 24)
     @Published private(set) var phase: Phase = .idle
@@ -34,7 +130,12 @@ final class IOSRhythmHRVModel: ObservableObject {
             return
         }
         let types: Set<HKObjectType> = [hrvType]
-        await requestAuthorization(types: types)
+        let requestStatus = await authorizationRequestStatus(types: types)
+        guard requestStatus == .unnecessary else {
+            phase = .empty
+            errorMessage = "尚未授权健康读取"
+            return
+        }
 
         let cal = Calendar.current
         let now = Date()
@@ -52,11 +153,11 @@ final class IOSRhythmHRVModel: ObservableObject {
         }
     }
 
-    private func requestAuthorization(types: Set<HKObjectType>) async {
-        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-            store.requestAuthorization(toShare: [], read: types) { _, _ in
+    private func authorizationRequestStatus(types: Set<HKObjectType>) async -> HKAuthorizationRequestStatus {
+        await withCheckedContinuation { cont in
+            store.getRequestStatusForAuthorization(toShare: [], read: types) { status, _ in
                 DispatchQueue.main.async {
-                    cont.resume()
+                    cont.resume(returning: status)
                 }
             }
         }

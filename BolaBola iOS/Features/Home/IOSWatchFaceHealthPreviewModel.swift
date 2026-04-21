@@ -28,8 +28,15 @@ final class IOSWatchFaceHealthPreviewModel: ObservableObject {
         var read = Set<HKObjectType>()
         if let t = HKQuantityType.quantityType(forIdentifier: .heartRate) { read.insert(t) }
         if let t = HKQuantityType.quantityType(forIdentifier: .stepCount) { read.insert(t) }
-        store.requestAuthorization(toShare: [], read: read) { [weak self] _, _ in
+        store.getRequestStatusForAuthorization(toShare: [], read: read) { [weak self] status, _ in
             guard let self else { return }
+            guard status == .unnecessary else {
+                Task { @MainActor in
+                    self.heartRateText = "—"
+                    self.stepsText = "—"
+                }
+                return
+            }
             Task { @MainActor in
                 async let hr = Self.queryLatestHeartRateText(store: self.store)
                 async let st = Self.queryTodayStepsText(store: self.store)

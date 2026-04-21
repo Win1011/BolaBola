@@ -9,7 +9,10 @@ struct WatchFaceComplicationsOverlay: View {
     @ObservedObject var viewModel: PetViewModel
     @State private var slots = WatchFaceSlotsStore.load()
     @State private var titleSelection = BolaTitleSelectionStore.validated()
-    private let watchTitleScale: CGFloat = 0.96
+
+    private var watchTitleConfiguration: TitleBadgeSceneConfiguration {
+        TitleBadgeSizing.configuration(for: .realWatch)
+    }
 
     private var selectedTitleFrame: TitleFrameDefinition {
         TitleFrameBank.frame(id: titleSelection.frameId)
@@ -26,6 +29,10 @@ struct WatchFaceComplicationsOverlay: View {
         default:
             return .white.opacity(0.9)
         }
+    }
+
+    private var resolvedTitleText: String {
+        titleSelection.resolvedLine()
     }
 
     var body: some View {
@@ -45,17 +52,20 @@ struct WatchFaceComplicationsOverlay: View {
                             )
                     }
 
-                    Text(titleSelection.resolvedLine())
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    Text(resolvedTitleText)
+                        .font(.system(size: watchTitleConfiguration.fontSize(for: resolvedTitleText), weight: .semibold, design: .rounded))
+                        .tracking(watchTitleConfiguration.tracking(for: resolvedTitleText))
                         .foregroundStyle(titleForegroundColor)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.48)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 2)
+                        .minimumScaleFactor(watchTitleConfiguration.box.minimumScaleFactor)
+                        .padding(.horizontal, watchTitleConfiguration.box.horizontalPadding)
+                        .padding(.vertical, watchTitleConfiguration.box.verticalPadding)
                 }
-                .frame(width: 116, height: 27)
-                .scaleEffect(watchTitleScale)
-                .offset(y: -68)
+                .frame(
+                    width: watchTitleConfiguration.box.minWidth,
+                    height: watchTitleConfiguration.box.height
+                )
+                .offset(y: -40)
                 .padding(.top, 2)
             }
 

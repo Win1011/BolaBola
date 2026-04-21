@@ -43,6 +43,8 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
                 "GrowthHeroIsland",
                 "backgroundstar",
                 "GrowthTaskCardYellowPattern",
+                "GrowthCardBackSilhouette",
+                "GrowthCardShinyBackSilhouette",
                 "sticker_panel_bg",
             ])
         }

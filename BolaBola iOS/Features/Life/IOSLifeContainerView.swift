@@ -172,6 +172,7 @@ struct IOSLifeContainerView: View {
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: bubbleMode)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .bolaLocationNudgeOnFirstAppear(weatherModel: weather)
         .onDisappear {
             if isEditingDashboard {
                 endDashboardEditing()
@@ -180,12 +181,14 @@ struct IOSLifeContainerView: View {
         .onAppear {
             guard !hasPerformedInitialLoad else { return }
             hasPerformedInitialLoad = true
-            lifeRecords = LifeRecordListStore.load()
-            reloadDigest()
-            weather.requestAndFetch()
             Task {
+                await Task.yield()
+                WeatherDiaryRecorder.syncLifeRecordsFromDiary()
+                lifeRecords = LifeRecordListStore.load()
+                reloadDigest()
+                weather.requestAndFetch()
                 await rhythm.refresh()
-                await healthHabits.refresh(requestIfNeeded: true)
+                await healthHabits.refresh()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaLifeRecordsDidChange)) { _ in
@@ -292,7 +295,7 @@ struct IOSLifeContainerView: View {
             reloadDigest()
             weather.requestAndFetch()
             await rhythm.refresh()
-            await healthHabits.refresh(requestIfNeeded: true)
+            await healthHabits.refresh()
         }
     }
 
@@ -364,17 +367,20 @@ struct IOSLifeContainerView: View {
                     }
                     .offset(y: -arcTrackLiftY)
 
-                // 岛图居中，底部对齐弧底部
+                // 岛图居中，底部对齐弧底部；图片跟随 HRV 阶段切换，无对应资源则回退
                 Button {
                     onRequestChat()
                 } label: {
-                    Image("GrowthHeroIsland")
+                    let stage = rhythmStage
+                    let imageName = UIImage(named: stage.imageName) != nil ? stage.imageName : "GrowthHeroIsland"
+                    Image(imageName)
                         .resizable()
                         .scaledToFit()
                         .frame(width: min(w * 0.54, 204))
+                        .animation(.easeInOut(duration: 0.4), value: stage.imageName)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("打开对话")
+                .accessibilityLabel("打开对话 · 当前节奏：\(rhythmStage.label)")
                 .padding(.bottom, strokeW / 2 + 2)
                 .offset(x: 10)
                 .offset(y: heroContentDropY)
@@ -440,9 +446,18 @@ struct IOSLifeContainerView: View {
         .padding(.bottom, 2)
     }
 
+    private var rhythmStage: IOSRhythmHRVModel.HRVStage {
+        IOSRhythmHRVModel.HRVStage.from(normalized: rhythmArcProgress)
+    }
+
     private var speechLine: String {
         let t = digestText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.isEmpty { return "节奏不错！继续保持哦~" }
+        if t.isEmpty {
+            // 无摘要时：用 HRV 阶段话语池随机取一句，以当天日期为种子保证同一天不跳变
+            let pool = rhythmStage.speechPool
+            let seed = Calendar.current.component(.day, from: Date()) + Calendar.current.component(.month, from: Date()) * 31
+            return pool[seed % pool.count]
+        }
         if let first = t.split(separator: "。").first, !first.isEmpty {
             return String(first) + "。"
         }
@@ -627,6 +642,8 @@ struct IOSLifeContainerView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: dashboardTileHeight(for: tile))
+        case .weather:
+            EmptyView()
         }
     }
 
@@ -904,21 +921,29 @@ struct IOSLifeContainerView: View {
     }
 
     private func compactExerciseContent(compact: Bool) -> some View {
+        let steps = IOSHealthHabitSnapshot.todayStepsValue(healthHabits)
         let move = IOSHealthHabitSnapshot.todayMoveEnergyValue(healthHabits)
         let exercise = IOSHealthHabitSnapshot.todayExerciseMinutesValue(healthHabits)
         let stand = IOSHealthHabitSnapshot.todayStandMinutesValue(healthHabits)
         let moveProgress = IOSHealthHabitSnapshot.moveGoalProgress(healthHabits)
         let exerciseProgress = IOSHealthHabitSnapshot.exerciseGoalProgress(healthHabits)
         let standProgress = IOSHealthHabitSnapshot.standGoalProgress(healthHabits)
-        let hasData = move > 0 || exercise > 0 || stand > 0
+        let hasActivityRingsData = move > 0 || exercise > 0 || stand > 0
+        let hasAnyData = hasActivityRingsData || steps > 0
+        let primaryValueText = hasActivityRingsData
+            ? "\(IOSHealthHabitSnapshot.intString(from: move)) kcal"
+            : (steps > 0 ? "\(IOSHealthHabitSnapshot.intString(from: steps)) 步" : "暂无数据")
+        let footerText = hasActivityRingsData
+            ? "锻炼 \(Int(exercise)) 分 · 站立 \(Int(stand)) 分"
+            : (steps > 0 ? "今日步数已同步，活动环数据仍在等待来源" : "等待运动数据同步")
 
         if compact {
             return AnyView(
                 compactHealthCardShell(
                     title: "运动",
                     systemImage: "figure.walk",
-                    valueText: hasData ? "\(IOSHealthHabitSnapshot.intString(from: move)) kcal" : "暂无数据",
-                    valueStyle: hasData ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)
+                    valueText: primaryValueText,
+                    valueStyle: hasAnyData ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)
                 ) {
                     IOSHealthTodayRingsBlock(
                         moveProgress: moveProgress,
@@ -935,10 +960,10 @@ struct IOSLifeContainerView: View {
             featuredHealthCardShell(
                 title: "运动",
                 systemImage: "figure.walk",
-                valueText: hasData ? "\(IOSHealthHabitSnapshot.intString(from: move)) kcal" : "暂无数据",
-                valueStyle: hasData ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary),
-                footerText: hasData ? "锻炼 \(Int(exercise)) 分 · 站立 \(Int(stand)) 分" : "等待运动数据同步",
-                footerStyle: hasData ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary)
+                valueText: primaryValueText,
+                valueStyle: hasAnyData ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary),
+                footerText: footerText,
+                footerStyle: hasAnyData ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary)
             ) {
                 HStack {
                     Spacer()
@@ -1094,7 +1119,65 @@ struct IOSLifeContainerView: View {
 
     private var filteredLifeRecords: [LifeRecordCard] {
         let cal = Calendar.current
-        return lifeRecords.filter { cal.isDate($0.createdAt, inSameDayAs: selectedDashboardDate) }
+        let dayRecords = lifeRecords.filter { cal.isDate($0.createdAt, inSameDayAs: selectedDashboardDate) }
+        guard cal.isDateInToday(selectedDashboardDate) else { return dayRecords }
+        return mergedTodayRecordsWithRealtimeWeather(dayRecords)
+    }
+
+    private func mergedTodayRecordsWithRealtimeWeather(_ dayRecords: [LifeRecordCard]) -> [LifeRecordCard] {
+        let todayWeatherCard = realtimeWeatherLifeRecordCard()
+        let weatherHistory = dayRecords.filter {
+            !($0.kind == .weather && $0.title == WeatherDiaryRecorder.dailyWeatherLifeTitle)
+        }
+        return [todayWeatherCard] + weatherHistory.sorted { lhs, rhs in
+            if lhs.kind == .weather, rhs.kind != .weather { return true }
+            if rhs.kind == .weather, lhs.kind != .weather { return false }
+            return lhs.createdAt > rhs.createdAt
+        }
+    }
+
+    private func realtimeWeatherLifeRecordCard() -> LifeRecordCard {
+        if let snapshot = weather.weather {
+            return LifeRecordCard(
+                kind: .weather,
+                title: WeatherDiaryRecorder.dailyWeatherLifeTitle,
+                subtitle: "\(snapshot.conditionText) · \(Int(snapshot.temperatureC.rounded()))°C",
+                detailNote: "主人今天这边现在是\(snapshot.conditionText)，实时温度大概\(Int(snapshot.temperatureC.rounded()))度。",
+                iconEmoji: snapshot.emoji,
+                createdAt: Date()
+            )
+        }
+
+        if weather.isLoading {
+            return LifeRecordCard(
+                kind: .weather,
+                title: WeatherDiaryRecorder.dailyWeatherLifeTitle,
+                subtitle: "加载中 · 实时天气",
+                detailNote: "Bola 正在帮主人更新今天的实时天气。",
+                iconEmoji: "🌤️",
+                createdAt: Date()
+            )
+        }
+
+        if let errorText = weather.lastError, !errorText.isEmpty {
+            return LifeRecordCard(
+                kind: .weather,
+                title: WeatherDiaryRecorder.dailyWeatherLifeTitle,
+                subtitle: "暂无天气 · 点按刷新",
+                detailNote: errorText,
+                iconEmoji: "🌥️",
+                createdAt: Date()
+            )
+        }
+
+        return LifeRecordCard(
+            kind: .weather,
+            title: WeatherDiaryRecorder.dailyWeatherLifeTitle,
+            subtitle: "轻点刷新 · 实时天气",
+            detailNote: "点一下这张卡，Bola 会帮主人刷新今天的实时天气。",
+            iconEmoji: "🌤️",
+            createdAt: Date()
+        )
     }
 
     private var emptyLifeRecordsCard: some View {
@@ -1118,82 +1201,7 @@ struct IOSLifeContainerView: View {
     }
 
     private func lifeRecordTile(_ card: LifeRecordCard) -> some View {
-        Group {
-            switch card.kind {
-            case .weather:
-                weatherTile
-            default:
-                genericRecordTile(card)
-            }
-        }
-    }
-
-    private var weatherTile: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(weatherEmoji)
-                    .font(.system(size: LifeRecordTileMetrics.leadingIconSize))
-                    .fixedSize(horizontal: true, vertical: true)
-                    .frame(minWidth: 40, minHeight: 40, alignment: .leading)
-                    .accessibilityLabel("天气状况")
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            Text("天气")
-                .font(.system(size: 19, weight: .semibold))
-                .lineLimit(1)
-                .truncationMode(.tail)
-            weatherDetailLine
-                .frame(maxWidth: .infinity, minHeight: LifeRecordTileMetrics.subtitleReservedHeight, alignment: .leading)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 148, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous)
-                .fill(BolaTheme.surfaceBubble)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous)
-                .stroke(Color(uiColor: .separator).opacity(0.25), lineWidth: 1)
-        )
-        .onTapGesture {
-            weather.requestAndFetch()
-        }
-    }
-
-    @ViewBuilder
-    private var weatherDetailLine: some View {
-        if weather.isLoading {
-            HStack(spacing: 8) {
-                ProgressView().scaleEffect(0.85)
-                Text("加载中·—")
-                    .font(.caption)
-                    .foregroundStyle(BolaTheme.figmaSubtleCaption)
-            }
-            .lineLimit(1)
-        } else if let w = weather.weather {
-            Text("\(w.conditionText)·\(String(format: "%.0f", w.temperatureC))°C")
-                .font(.caption)
-                .foregroundStyle(BolaTheme.figmaSubtleCaption)
-                .lineLimit(1)
-                .truncationMode(.tail)
-        } else if weather.lastError != nil {
-            Text("无法获取·—")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        } else {
-            Text("轻点刷新·—")
-                .font(.caption)
-                .foregroundStyle(BolaTheme.figmaSubtleCaption)
-                .lineLimit(1)
-        }
-    }
-
-    private var weatherEmoji: String {
-        weather.weather?.emoji ?? "☀️"
+        genericRecordTile(card)
     }
 
     private func genericRecordTile(_ card: LifeRecordCard) -> some View {
@@ -1229,6 +1237,11 @@ struct IOSLifeContainerView: View {
             RoundedRectangle(cornerRadius: BolaTheme.cornerLifePageCard, style: .continuous)
                 .stroke(Color(uiColor: .separator).opacity(0.25), lineWidth: 1)
         )
+        .onTapGesture {
+            if card.kind == .weather, Calendar.current.isDateInToday(card.createdAt) {
+                weather.requestAndFetch()
+            }
+        }
     }
 
     private func toggleDashboardVariant(for kind: LifeDashboardTileKind) {
@@ -1323,6 +1336,8 @@ struct IOSLifeContainerView: View {
         switch kind {
         case .reminders:
             return 0.65
+        case .weather:
+            return 0.58
         case .sleep:
             return 0.82
         case .activity:
@@ -2060,6 +2075,7 @@ private extension LifeDashboardTileKind {
     var dashboardTitle: String {
         switch self {
         case .reminders: return "提醒"
+        case .weather:   return "天气"
         case .sleep:     return "睡眠"
         case .activity:  return "运动"
         }
@@ -2068,6 +2084,7 @@ private extension LifeDashboardTileKind {
     var dashboardIcon: String {
         switch self {
         case .reminders: return "bell.fill"
+        case .weather:   return "cloud.sun.fill"
         case .sleep:     return "moon.fill"
         case .activity:  return "figure.run"
         }
@@ -2076,6 +2093,7 @@ private extension LifeDashboardTileKind {
     var dashboardDescription: String {
         switch self {
         case .reminders: return "喝水、活动、睡前等自定义提醒"
+        case .weather:   return "当地实时天气与温度"
         case .sleep:     return "昨晚睡眠时长与阶段概览"
         case .activity:  return "今日活动环与运动数据"
         }

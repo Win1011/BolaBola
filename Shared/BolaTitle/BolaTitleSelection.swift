@@ -3,6 +3,7 @@
 //  称号选择：从 indexA/indexB 迁移为 wordIdA/wordIdB；支持旧格式读取兼容。
 //
 
+import CoreGraphics
 import Foundation
 
 public extension Notification.Name {
@@ -136,5 +137,139 @@ public enum BolaTitleSelectionStore {
             frameId: validFrameId,
             showsOnWatchFace: sel.showsOnWatchFace
         )
+    }
+}
+
+public struct TitleBadgeMetrics: Sendable {
+    public let fontSize: CGFloat
+    public let horizontalPadding: CGFloat
+    public let verticalPadding: CGFloat
+    public let height: CGFloat
+    public let minWidth: CGFloat
+    public let minimumScaleFactor: CGFloat
+
+    public init(
+        fontSize: CGFloat,
+        horizontalPadding: CGFloat,
+        verticalPadding: CGFloat,
+        height: CGFloat,
+        minWidth: CGFloat,
+        minimumScaleFactor: CGFloat
+    ) {
+        self.fontSize = fontSize
+        self.horizontalPadding = horizontalPadding
+        self.verticalPadding = verticalPadding
+        self.height = height
+        self.minWidth = minWidth
+        self.minimumScaleFactor = minimumScaleFactor
+    }
+
+    public func scaled(
+        width widthScale: CGFloat,
+        height heightScale: CGFloat,
+        font fontScale: CGFloat,
+        horizontalPadding horizontalPaddingScale: CGFloat,
+        verticalPadding verticalPaddingScale: CGFloat
+    ) -> TitleBadgeMetrics {
+        TitleBadgeMetrics(
+            fontSize: fontSize * fontScale,
+            horizontalPadding: horizontalPadding * horizontalPaddingScale,
+            verticalPadding: verticalPadding * verticalPaddingScale,
+            height: height * heightScale,
+            minWidth: minWidth * widthScale,
+            minimumScaleFactor: minimumScaleFactor
+        )
+    }
+}
+
+public enum TitleBadgeLayout {
+    public static func metrics(compact: Bool) -> TitleBadgeMetrics {
+        if compact {
+            return TitleBadgeMetrics(
+                fontSize: 12,
+                horizontalPadding: 14,
+                verticalPadding: 8,
+                height: 40,
+                minWidth: 92,
+                minimumScaleFactor: 0.58
+            )
+        }
+        return TitleBadgeMetrics(
+            fontSize: 14,
+            horizontalPadding: 18,
+            verticalPadding: 10,
+            height: 56,
+            minWidth: 180,
+            minimumScaleFactor: 0.58
+        )
+    }
+}
+
+public enum TitleBadgeScene: Sendable {
+    case phoneWatchPreview
+    case realWatch
+}
+
+public struct TitleBadgeSceneConfiguration: Sendable {
+    public let box: TitleBadgeMetrics
+    public let fontSizeUnder6: CGFloat
+    public let fontSizeUnder8: CGFloat
+    public let trackingUnder6: CGFloat
+
+    public func fontSize(for text: String) -> CGFloat {
+        let count = text.count
+        if count < 6 { return fontSizeUnder6 }
+        if count < 8 { return fontSizeUnder8 }
+        return box.fontSize
+    }
+
+    public func tracking(for text: String) -> CGFloat {
+        text.count < 6 ? trackingUnder6 : 0
+    }
+}
+
+public enum TitleBadgeSizing {
+    /// 真实手表当前采用的显示尺寸。后续如果你要调真实手表大小，优先改这里，
+    /// 手机表盘预览会按相对比例自动跟随。
+    private static let realWatchReference = TitleBadgeMetrics(
+        fontSize: 8.29,
+        horizontalPadding: 9.22,
+        verticalPadding: 1.84,
+        height: 24.88,
+        minWidth: 106.91,
+        minimumScaleFactor: 0.48
+    )
+
+    private static let phonePreviewRelativeToWatch = (
+        width: CGFloat(102.6 / 111.36),
+        height: CGFloat(31.92 / 25.92),
+        font: CGFloat(7.98 / 8.64),
+        horizontalPadding: CGFloat(10.26 / 9.6),
+        verticalPadding: CGFloat(5.7 / 1.92)
+    )
+
+    public static func configuration(for scene: TitleBadgeScene) -> TitleBadgeSceneConfiguration {
+        switch scene {
+        case .realWatch:
+            return TitleBadgeSceneConfiguration(
+                box: realWatchReference,
+                fontSizeUnder6: 8.64,
+                fontSizeUnder8: 8.45,
+                trackingUnder6: 0.25
+            )
+        case .phoneWatchPreview:
+            return TitleBadgeSceneConfiguration(
+                box: realWatchReference.scaled(
+                    width: phonePreviewRelativeToWatch.width,
+                    height: phonePreviewRelativeToWatch.height,
+                    font: phonePreviewRelativeToWatch.font,
+                    horizontalPadding: phonePreviewRelativeToWatch.horizontalPadding,
+                    verticalPadding: phonePreviewRelativeToWatch.verticalPadding
+                ),
+                fontSizeUnder6: 9,
+                fontSizeUnder8: 8.5,
+                trackingUnder6: 0.25
+            )
+        }
     }
 }

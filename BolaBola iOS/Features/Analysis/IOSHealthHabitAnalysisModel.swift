@@ -136,7 +136,8 @@ final class IOSHealthHabitAnalysisModel: ObservableObject {
             async let st = fetchStandWeek(start: start, end: end)
             async let h = fetchHeartWeek(start: start, end: end)
             async let sl = fetchSleepWeek(start: start, end: end)
-            let (mVal, eVal, sVal, stVal, hVal, slVal) = try await (m, e, s, st, h, sl)
+            async let stepsTodayFallback = fetchTodayStepsFallback()
+            let (mVal, eVal, sVal, stVal, hVal, slVal, stepsTodayFallbackVal) = try await (m, e, s, st, h, sl, stepsTodayFallback)
 
             activeEnergyWeek = IOSHealthKitWeekQueries.mergeIntoWeek(partial: mVal, start: start, end: end)
             exerciseMinutesWeek = IOSHealthKitWeekQueries.mergeIntoWeek(partial: eVal, start: start, end: end)
@@ -144,6 +145,7 @@ final class IOSHealthHabitAnalysisModel: ObservableObject {
             standMinutesWeek = IOSHealthKitWeekQueries.mergeIntoWeek(partial: stVal, start: start, end: end)
             heartRateWeek = IOSHealthKitWeekQueries.mergeIntoWeek(partial: hVal, start: start, end: end)
             sleepHoursWeek = IOSHealthKitWeekQueries.mergeIntoWeek(partial: slVal, start: start, end: end)
+            applyTodayStepsFallbackIfNeeded(stepsTodayFallbackVal)
 
             authPhase = .ready
         } catch {
@@ -161,6 +163,23 @@ final class IOSHealthHabitAnalysisModel: ObservableObject {
             start: start,
             end: end
         )
+    }
+
+    private func fetchTodayStepsFallback() async throws -> Double {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return 0 }
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: Date())
+        let pred = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
+
+        return await withCheckedContinuation { cont in
+            let q = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: pred, options: .cumulativeSum) { _, stats, _ in
+                let v = stats?.sumQuantity()?.doubleValue(for: .count()) ?? 0
+                DispatchQueue.main.async {
+                    cont.resume(returning: v)
+                }
+            }
+            store.execute(q)
+        }
     }
 
     private func fetchMoveWeek(start: Date, end: Date) async throws -> [IOSHealthKitWeekQueries.DayValue] {
@@ -204,6 +223,16 @@ final class IOSHealthHabitAnalysisModel: ObservableObject {
         standMinutesWeek = []
         heartRateWeek = []
         sleepHoursWeek = []
+    }
+
+    private func applyTodayStepsFallbackIfNeeded(_ fallback: Double) {
+        guard fallback > 0 else { return }
+        let cal = Calendar.current
+        if let idx = stepsWeek.firstIndex(where: { cal.isDateInToday($0.date) }) {
+            guard stepsWeek[idx].value <= 0 else { return }
+            let day = stepsWeek[idx].date
+            stepsWeek[idx] = IOSHealthKitWeekQueries.DayValue(date: day, value: fallback)
+        }
     }
 
     private func requestAuthorization(types: Set<HKObjectType>) async {

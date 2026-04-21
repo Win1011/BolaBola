@@ -28,6 +28,7 @@ struct IOSRootView: View {
     @StateObject private var lifeRhythm = IOSRhythmHRVModel()
     @StateObject private var lifeWeather = IOSWeatherLocationModel()
     @StateObject private var lifeHealthHabits = IOSHealthHabitAnalysisModel()
+    @State private var lifeTabPrewarmed = false
 
     // 与 Life tab 同理：提前在根视图初始化，避免成长 tab 首次点击时在主线程同步创建
     @StateObject private var growthDailyTasksVM = GrowthDailyTasksViewModel.shared
@@ -128,6 +129,10 @@ struct IOSRootView: View {
                 growthTabRootPrewarmHost
             }
 
+            if !lifeTabPrewarmed, selectedTab != .life {
+                lifeTabRootPrewarmHost
+            }
+
             if let presentation = growthLevelVM.activeLevelUp {
                 LevelUpCelebrationView(
                     presentation: presentation,
@@ -181,6 +186,10 @@ struct IOSRootView: View {
                 BolaWCSessionCoordinator.shared.pushStoredLLMConfigurationToWatchIfConfigured()
                 refreshCompanionFromPersistedDefaults()
                 BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
+                Task {
+                    await lifeRhythm.refresh()
+                    await lifeHealthHabits.refresh()
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaCompanionStateDidMergeFromWatch)) { _ in
@@ -188,6 +197,23 @@ struct IOSRootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaOpenSettingsRequested)) { _ in
             showSettingsSheet = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaHealthDataRefreshRequested)) { _ in
+            Task {
+                await lifeRhythm.refresh()
+                await lifeHealthHabits.refresh()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaRemindersDidChange)) { _ in
+            reminders = ReminderListStore.load()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaNavigateToTab)) { note in
+            guard let raw = note.userInfo?["tab"] as? Int,
+                  let tab = IOSRootTab(rawValue: raw) else { return }
+            selectedTab = tab
+        }
+        .onReceive(NotificationCenter.default.publisher(for: BolaOnboardingState.didRequestReplayNotification)) { _ in
+            showOnboarding = true
         }
         .task {
             BolaSharedDefaults.migrateStandardToGroupIfNeeded()
@@ -217,8 +243,30 @@ struct IOSRootView: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             .task {
+                await MainActor.run {
+                    ImagePrewarmCache.shared.prewarm(named: [
+                        "GrowthTaskCardYellowPattern",
+                        "GrowthCardBackSilhouette",
+                        "GrowthCardShinyBackSilhouette",
+                    ])
+                }
                 await Task.yield()
+                try? await Task.sleep(for: .milliseconds(450))
                 growthTabPrewarmed = true
+            }
+    }
+
+    /// 提前构建一次生活页子树，把首次点「生活」时的大视图构建与 modifier 安装成本提前摊掉。
+    private var lifeTabRootPrewarmHost: some View {
+        lifeTabRoot
+            .frame(width: 1, height: 1)
+            .clipped()
+            .opacity(0.01)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .task {
+                await Task.yield()
+                lifeTabPrewarmed = true
             }
     }
 

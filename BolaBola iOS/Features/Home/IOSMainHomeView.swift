@@ -823,22 +823,20 @@ struct IOSMainHomeView: View {
     }
 }
 
-enum TitleBadgeLayout {
-    static func metrics(compact: Bool) -> (fontSize: CGFloat, horizontalPadding: CGFloat, verticalPadding: CGFloat, height: CGFloat, minWidth: CGFloat) {
-        if compact {
-            return (12, 14, 8, 40, 92)
-        }
-        return (14, 18, 10, 56, 180)
-    }
-}
-
 private struct TitleBadgeFrame: View {
     let text: String
     let frame: TitleFrameDefinition
     var compact: Bool = false
 
     private var titleColor: Color {
-        .white
+        switch frame.assetName {
+        case "TitleFrame0to5":
+            return Color.black.opacity(0.68)
+        case "TitleFrame5to10":
+            return Color(red: 254 / 255, green: 214 / 255, blue: 189 / 255)
+        default:
+            return .white
+        }
     }
 
     var body: some View {
@@ -876,7 +874,7 @@ private struct TitleBadgeFrame: View {
                 .font(.system(size: metrics.fontSize, weight: .semibold, design: .rounded))
                 .foregroundStyle(titleColor)
                 .lineLimit(1)
-                .minimumScaleFactor(0.58)
+                .minimumScaleFactor(metrics.minimumScaleFactor)
                 .padding(.horizontal, metrics.horizontalPadding)
                 .padding(.vertical, metrics.verticalPadding)
         }

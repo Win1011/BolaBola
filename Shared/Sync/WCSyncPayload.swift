@@ -46,6 +46,8 @@ public enum WCSyncPayload {
     public static let growthStateB64 = "growthStateB64"
     /// 称号解锁同步（`applicationContext`）：已解锁词 ID 数组 JSON 的 Base64。
     public static let titleUnlockedIdsB64 = "titleUnlockedIdsB64"
+    /// 特殊动画图鉴解锁同步（`applicationContext`）：已解锁动画 ID 数组 JSON 的 Base64。
+    public static let specialAnimationUnlockedIdsB64 = "specialAnimationUnlockedIdsB64"
     /// iPhone → Watch：历史最高陪伴值（用于称号条件评估）。
     public static let maxEverCompanionValue = "maxEverCompanionValue"
     /// iPhone -> Watch：提醒列表 `[BolaReminder]` JSON 的 Base64。

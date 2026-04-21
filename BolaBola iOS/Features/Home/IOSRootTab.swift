@@ -5,6 +5,11 @@
 
 import Foundation
 
+extension Notification.Name {
+    /// 成长页任务卡点击时 post，携带 userInfo["tab"] = IOSRootTab.rawValue，根视图监听后切换 Tab。
+    static let bolaNavigateToTab = Notification.Name("bolaNavigateToTab")
+}
+
 enum IOSRootTab: Int, CaseIterable, Hashable {
     /// 主界面：模拟表盘、陪伴值与表盘配置（底栏第一项）。
     case mine = 0

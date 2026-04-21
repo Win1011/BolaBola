@@ -1278,6 +1278,7 @@ final class PetViewModel: ObservableObject {
             tapChainReturnsToRandomIdle = true
             isTapInteractionAnimating = true
             currentEmotion = .angry2Once
+            unlockSpecialAnimationIfNeeded(for: currentEmotion)
             currentFrameIndex = 0
             showDialogue(BolaDialogueLines.tapAngrySample())
             print("🐾 Tap -> angry2Once")
@@ -1342,6 +1343,21 @@ final class PetViewModel: ObservableObject {
         default:
             return false
         }
+    }
+
+    private func unlockSpecialAnimationIfNeeded(for emotion: PetEmotion) {
+        let unlocked: Bool
+        switch emotion {
+        case .angry2, .angry2Once:
+            unlocked = SpecialAnimationUnlockStore.unlock(.angry2)
+        case .surprisedOne, .surprisedTwo:
+            unlocked = SpecialAnimationUnlockStore.unlock(.companion100Surprise)
+        default:
+            unlocked = false
+        }
+
+        guard unlocked else { return }
+        BolaWCSessionCoordinator.shared.pushCompanionValue(companionValue)
     }
 
     // MARK: - Companion value time coupling
@@ -1646,6 +1662,7 @@ final class PetViewModel: ObservableObject {
 
         // 里程碑触发后：随机只选一个惊喜动画。
         currentEmotion = Bool.random() ? .surprisedOne : .surprisedTwo
+        unlockSpecialAnimationIfNeeded(for: currentEmotion)
         currentFrameIndex = 0
         print("🎉 Surprise triggered at hours:", totalHours, "(milestone:", nextMilestoneHours, ") =>", String(describing: currentEmotion))
     }

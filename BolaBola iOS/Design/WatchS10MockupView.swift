@@ -37,21 +37,8 @@ struct WatchS10MockupView: View {
         }
     }
 
-    private var watchPreviewTitleBadgeMetrics: (fontSize: CGFloat, horizontalPadding: CGFloat, verticalPadding: CGFloat, height: CGFloat, minWidth: CGFloat) {
-        TitleBadgeLayout.metrics(compact: false)
-    }
-
-    private var watchPreviewTitleBadgeScale: CGFloat { 0.57 }
-
-    private var watchPreviewTitleFontSize: CGFloat {
-        if titleText.count < 6 { return 9 }
-        if titleText.count < 8 { return 8.5 }
-        return watchPreviewTitleBadgeMetrics.fontSize * watchPreviewTitleBadgeScale
-    }
-
-    private var watchPreviewTitleTracking: CGFloat {
-        if titleText.count < 6 { return 0.25 }
-        return 0
+    private var watchPreviewTitleConfiguration: TitleBadgeSceneConfiguration {
+        TitleBadgeSizing.configuration(for: .phoneWatchPreview)
     }
 
     /// 当前正在播放的宠物动画帧前缀（如 "idleone"），由 BolaWCSessionCoordinator 从手表同步而来。
@@ -218,17 +205,17 @@ struct WatchS10MockupView: View {
                         }
 
                         Text(titleText)
-                            .font(.system(size: watchPreviewTitleFontSize, weight: .semibold, design: .rounded))
-                            .tracking(watchPreviewTitleTracking)
+                            .font(.system(size: watchPreviewTitleConfiguration.fontSize(for: titleText), weight: .semibold, design: .rounded))
+                            .tracking(watchPreviewTitleConfiguration.tracking(for: titleText))
                             .foregroundStyle(titleForegroundColor)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.48)
-                            .padding(.horizontal, watchPreviewTitleBadgeMetrics.horizontalPadding * watchPreviewTitleBadgeScale)
-                            .padding(.vertical, watchPreviewTitleBadgeMetrics.verticalPadding * watchPreviewTitleBadgeScale)
+                            .minimumScaleFactor(watchPreviewTitleConfiguration.box.minimumScaleFactor)
+                            .padding(.horizontal, watchPreviewTitleConfiguration.box.horizontalPadding)
+                            .padding(.vertical, watchPreviewTitleConfiguration.box.verticalPadding)
                     }
                     .frame(
-                        width: watchPreviewTitleBadgeMetrics.minWidth * watchPreviewTitleBadgeScale,
-                        height: watchPreviewTitleBadgeMetrics.height * watchPreviewTitleBadgeScale
+                        width: watchPreviewTitleConfiguration.box.minWidth,
+                        height: watchPreviewTitleConfiguration.box.height
                     )
                     .offset(y: 18)
 

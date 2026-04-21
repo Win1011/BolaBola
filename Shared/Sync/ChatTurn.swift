@@ -8,6 +8,8 @@ import os
 private let bolaChatStoreLog = Logger(subsystem: "com.gathxr.BolaBola.sync", category: "ChatStore")
 
 public extension Notification.Name {
+    /// 任意聊天记录写入本地存储后发出，供任务/列表等统一刷新。
+    static let bolaChatHistoryDidChange = Notification.Name("bolaChatHistoryDidChange")
     /// 通过 WatchConnectivity 合并远端聊天记录后发出，供 iOS / watchOS 列表刷新。
     static let bolaChatHistoryDidMerge = Notification.Name("bolaChatHistoryDidMerge")
     /// iPhone：`isWatchAppInstalled` 等变化时发出，供主界面刷新「能否同步到手表」提示。
@@ -68,6 +70,9 @@ public enum ChatHistoryStore {
         let trimmed = Array(turns.suffix(maxTurns))
         guard let data = try? encoder.encode(trimmed) else { return }
         defaults.set(data, forKey: ChatHistoryKeys.turnsJSON)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .bolaChatHistoryDidChange, object: nil)
+        }
     }
 
     /// 仅追加一条 assistant 角色的 turn（用于镜像手表侧自主台词，如每日信件）。
@@ -121,5 +126,8 @@ public enum ChatHistoryStore {
 
     public static func clear(defaults: UserDefaults = BolaSharedDefaults.resolved()) {
         defaults.removeObject(forKey: ChatHistoryKeys.turnsJSON)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .bolaChatHistoryDidChange, object: nil)
+        }
     }
 }

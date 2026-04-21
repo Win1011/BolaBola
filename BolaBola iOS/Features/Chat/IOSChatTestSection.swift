@@ -843,6 +843,9 @@ struct IOSChatTestSection: View {
     private func addDiaryEntry(from turn: ChatTurn) {
         BolaDiaryStore.append(
             BolaDiaryEntry(
+                title: String(turn.content.trimmingCharacters(in: .whitespacesAndNewlines).prefix(8)).isEmpty
+                    ? "时光片段"
+                    : String(turn.content.trimmingCharacters(in: .whitespacesAndNewlines).prefix(8)),
                 summary: turn.content,
                 emoji: turn.role == "user" ? "📝" : "🤖",
                 sourceText: turn.content
