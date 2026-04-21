@@ -17,14 +17,13 @@ public enum LifeRecordListStore {
     public static func load(from defaults: UserDefaults = BolaSharedDefaults.resolved()) -> [LifeRecordCard] {
         guard let data = defaults.data(forKey: LifeRecordStorageKeys.recordsJSON),
               let list = try? decoder.decode([LifeRecordCard].self, from: data) else {
-            return defaultDeck()
+            return []
         }
-        if list.isEmpty { return defaultDeck() }
-        return ensureWeatherFirst(list)
+        return list
     }
 
     public static func save(_ records: [LifeRecordCard], to defaults: UserDefaults = BolaSharedDefaults.resolved()) {
-        let ordered = ensureWeatherFirst(records)
+        let ordered = records.sorted { $0.createdAt > $1.createdAt }
         guard let data = try? encoder.encode(ordered) else { return }
         defaults.set(data, forKey: LifeRecordStorageKeys.recordsJSON)
         DispatchQueue.main.async {
@@ -34,27 +33,9 @@ public enum LifeRecordListStore {
 
     /// 将卡组恢复为默认（仅保留「天气」卡），并主线程发出 `bolaLifeRecordsDidReset`。
     public static func resetToDefaultDeck(to defaults: UserDefaults = BolaSharedDefaults.resolved()) {
-        save(defaultDeck(), to: defaults)
+        save([], to: defaults)
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .bolaLifeRecordsDidReset, object: nil)
         }
-    }
-
-    private static func defaultDeck() -> [LifeRecordCard] {
-        [
-            LifeRecordCard(
-                kind: .weather,
-                title: "天气",
-                subtitle: nil,
-                detailNote: nil
-            )
-        ]
-    }
-
-    private static func ensureWeatherFirst(_ list: [LifeRecordCard]) -> [LifeRecordCard] {
-        let rest = list.filter { $0.kind != .weather }
-        let weather = list.first(where: { $0.kind == .weather })
-            ?? LifeRecordCard(kind: .weather, title: "天气")
-        return [weather] + rest
     }
 }

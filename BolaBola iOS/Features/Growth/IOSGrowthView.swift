@@ -14,15 +14,25 @@ struct IOSGrowthView: View {
     @State private var showLevelInfo = false
     @State private var hasPerformedInitialLoad = false
 
-    private var topRowDefinitions: [GrowthDailyTaskCardDefinition] {
-        Array(dailyTasksVM.dailyDefinitions.prefix(2))
+    private var topRowDefinitions: [GrowthDailyTaskCardInstance] {
+        Array(dailyTasksVM.dailyCards.prefix(2))
     }
 
-    private var bottomRowDefinitions: [GrowthDailyTaskCardDefinition] {
-        Array(dailyTasksVM.dailyDefinitions.suffix(3))
+    private var bottomRowDefinitions: [GrowthDailyTaskCardInstance] {
+        Array(dailyTasksVM.dailyCards.suffix(3))
     }
 
     private var companionDisplayName: String { CompanionDisplayNameStore.resolved() }
+
+    private var heroBubbleText: String {
+        GrowthTaskHeroCopy.heroBubbleText(
+            dailyCards: dailyTasksVM.dailyCards,
+            surfacedCompletedCount: dailyTasksVM.surfacedCompletedCount,
+            surfacedPendingCards: dailyTasksVM.surfacedPendingCards,
+            allRandomTasksRevealed: dailyTasksVM.allRandomTasksRevealed,
+            companionDisplayName: companionDisplayName
+        )
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -45,7 +55,7 @@ struct IOSGrowthView: View {
                     Spacer()
                         .frame(height: 5)
 
-                    GrowthHeroSection()
+                    GrowthHeroSection(text: heroBubbleText)
                         .zIndex(0)
 
                     GrowthGroupedSection {
@@ -112,6 +122,7 @@ struct IOSGrowthView: View {
             .presentationDragIndicator(.visible)
         }
     }
+
 }
 
 // MARK: - 等级值条
@@ -256,6 +267,8 @@ private struct GrowthGroupedSection<Content: View>: View {
 // MARK: - 主视觉 + 气泡
 
 private struct GrowthHeroSection: View {
+    let text: String
+
     var body: some View {
         ZStack(alignment: .top) {
             Image("GrowthHeroIsland")
@@ -282,7 +295,7 @@ private struct GrowthHeroSection: View {
                         .hidden()
                 }
 
-            GrowthSpeechBubble(text: "快来翻翻看今天的三个随机任务！")
+            GrowthSpeechBubble(text: text)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 10)
                 .zIndex(1)
@@ -332,8 +345,8 @@ private struct BubbleTail: Shape {
 
 private struct GrowthDailyTasksSection: View {
     @ObservedObject var viewModel: GrowthDailyTasksViewModel
-    let topRow: [GrowthDailyTaskCardDefinition]
-    let bottomRow: [GrowthDailyTaskCardDefinition]
+    let topRow: [GrowthDailyTaskCardInstance]
+    let bottomRow: [GrowthDailyTaskCardInstance]
     private let rowSpacing: CGFloat = 10
     @State private var showAnimatedStar = false
 
@@ -365,7 +378,7 @@ private struct GrowthDailyTasksSection: View {
                         .offset(x: -6, y: -6)
                         .accessibilityHidden(true)
                     }
-                    Text("今日 \(viewModel.completedCount)/\(viewModel.dailyDefinitions.count) 完成")
+                    Text("今日 \(viewModel.surfacedCompletedCount)/\(viewModel.dailyCards.count) 完成")
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(BolaTheme.figmaMutedBody.opacity(0.68))
                         .fixedSize()
@@ -375,8 +388,8 @@ private struct GrowthDailyTasksSection: View {
 
                 // 右：五个盖章
                 HStack(spacing: 5) {
-                    ForEach(0 ..< viewModel.dailyDefinitions.count, id: \.self) { i in
-                        GrowthTaskStamp(completed: i < viewModel.completedCount)
+                    ForEach(0 ..< viewModel.dailyCards.count, id: \.self) { i in
+                        GrowthTaskStamp(completed: i < viewModel.surfacedCompletedCount)
                     }
                 }
                 .padding(.leading, -9)
@@ -403,39 +416,36 @@ private struct GrowthDailyTasksSection: View {
 /// 与下方三列同宽，上方两张在整行内水平居中。使用自定义 `Layout` 给出稳定高度，避免 ScrollView 内 GeometryReader 高度为 0 导致与下方 section 重叠。
 private struct GrowthDailyTaskCardsGrid: View {
     @ObservedObject var viewModel: GrowthDailyTasksViewModel
-    let topRow: [GrowthDailyTaskCardDefinition]
-    let bottomRow: [GrowthDailyTaskCardDefinition]
+    let topRow: [GrowthDailyTaskCardInstance]
+    let bottomRow: [GrowthDailyTaskCardInstance]
     let rowSpacing: CGFloat
 
     var body: some View {
         GrowthDailyTaskFiveCardLayout(rowSpacing: rowSpacing, horizontalSpacing: rowSpacing) {
-            GrowthPortraitTaskCard(
-                definition: topRow[0],
-                progress: viewModel.progress(for: topRow[0].id)
-            )
-            GrowthPortraitTaskCard(
-                definition: topRow[1],
-                progress: viewModel.progress(for: topRow[1].id)
-            )
-            GrowthFlippableTaskCard(
-                definition: bottomRow[0],
-                progress: viewModel.progress(for: bottomRow[0].id),
-                isRevealed: viewModel.isRandomTaskRevealed(id: bottomRow[0].id),
-                onReveal: { viewModel.markRandomTaskRevealed(id: bottomRow[0].id) }
-            )
-            GrowthFlippableTaskCard(
-                definition: bottomRow[1],
-                progress: viewModel.progress(for: bottomRow[1].id),
-                isRevealed: viewModel.isRandomTaskRevealed(id: bottomRow[1].id),
-                onReveal: { viewModel.markRandomTaskRevealed(id: bottomRow[1].id) }
-            )
-            GrowthFlippableTaskCard(
-                definition: bottomRow[2],
-                progress: viewModel.progress(for: bottomRow[2].id),
-                isRevealed: viewModel.isRandomTaskRevealed(id: bottomRow[2].id),
-                onReveal: { viewModel.markRandomTaskRevealed(id: bottomRow[2].id) }
-            )
+            topCardView(index: 0)
+            topCardView(index: 1)
+            bottomCardView(index: 0)
+            bottomCardView(index: 1)
+            bottomCardView(index: 2)
         }
+    }
+
+    @ViewBuilder
+    private func topCardView(index: Int) -> some View {
+        GrowthPortraitTaskCard(
+            card: topRow[index],
+            progress: viewModel.progress(for: topRow[index].id)
+        )
+    }
+
+    @ViewBuilder
+    private func bottomCardView(index: Int) -> some View {
+        GrowthFlippableTaskCard(
+            card: bottomRow[index],
+            progress: viewModel.progress(for: bottomRow[index].id),
+            isRevealed: viewModel.isRandomTaskRevealed(id: bottomRow[index].id),
+            onReveal: { viewModel.markRandomTaskRevealed(id: bottomRow[index].id) }
+        )
     }
 }
 
@@ -478,15 +488,40 @@ private struct GrowthDailyTaskFiveCardLayout: Layout {
 // MARK: - 3:4 卡牌模版（分类底色 + 纹理；下半叠透明白 + 文案与完成度）
 
 private enum GrowthTaskCardPalette {
-    /// 卡面底色（与纹理一起铺满整张卡）
+    /// 聊天类沿用之前的亮黄色卡面。
     static let topYellow = Color(red: 1, green: 0.925, blue: 0.2)
     /// 下半区叠在整卡底色之上，半透明白让底下黄/纹理透出来
-    static let bottomFill = Color.white.opacity(0.7)
+    static let bottomFill = Color.white.opacity(0.6)
     /// 上半区高度占比（约 6 : 4）
     static let topHeightFraction: CGFloat = 0.58
 
-    /// 与卡背、散步卡正面一致的主色渐变。
-    static let accentCardGradient = LinearGradient(
+    private static let interactionBase = Color(hex: 0xFFC6A4)
+    private static let lifeBase = Color(hex: 0xBCEDFF)
+
+    static func cardGradient(for kind: GrowthDailyTaskCardSurfaceKind) -> LinearGradient {
+        let base: Color
+        switch kind {
+        case .movement:
+            base = topYellow
+        case .interaction:
+            base = interactionBase
+        case .life:
+            base = lifeBase
+        case .chat:
+            base = BolaTheme.accent
+        }
+
+        return LinearGradient(
+            colors: [
+                base.opacity(0.92),
+                base.opacity(0.68)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    static let cardBackGradient = LinearGradient(
         colors: [
             BolaTheme.accent.opacity(0.88),
             BolaTheme.accent.opacity(0.65)
@@ -495,11 +530,61 @@ private enum GrowthTaskCardPalette {
         endPoint: .bottomTrailing
     )
 
-    /// 随机任务正面：偏弱主色，与亮黄卡区分。
-    static let accentMutedCardGradient = LinearGradient(
+    static func symbolForeground(for kind: GrowthDailyTaskCardSurfaceKind) -> Color {
+        switch kind {
+        case .movement:
+            return Color.black.opacity(0.32)
+        case .chat, .interaction, .life:
+            return Color.white.opacity(0.9)
+        }
+    }
+
+    static func fabChevronColor(for kind: GrowthDailyTaskCardSurfaceKind) -> Color {
+        return Color(uiColor: .tertiaryLabel)
+    }
+
+    /// 炫彩背面：与正面同向，颜色顺序不同形成差异感。
+    static let shinyBackGradient = LinearGradient(
         colors: [
-            BolaTheme.accent.opacity(0.52),
-            BolaTheme.accent.opacity(0.34)
+            Color(red: 0.74, green: 0.44, blue: 1.0),   // 紫罗兰
+            Color(red: 1.0, green: 0.38, blue: 0.64),   // 玫红
+            BolaTheme.accent,                            // 主题色：电光黄绿
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    /// 炫彩正面：对角全虹彩，以主题色为核心色锚。
+    /// 色号直接改这里即可，SwiftUI Color(hex:) 用法：Color(hex: 0xFF6164)
+    static let shinyFrontGradient = LinearGradient(
+        colors: [
+            Color(hex: 0xFF4245),
+            Color(hex: 0xFFFF00),   // #FF6164 玫红
+            Color(hex: 0xFFFFFF),
+            /*Color(hex: 0xE5FF00),*/   // #E5FF00 主题黄绿
+            Color(hex: 0xE8FF67),   //
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    /// 炫彩卡底部文案区：珍珠白调，带淡紫蓝色调。
+    static let shinyBottomFill = LinearGradient(
+        colors: [
+            Color(red: 0.97, green: 0.94, blue: 1.0).opacity(0.90),
+            Color(red: 0.94, green: 0.97, blue: 1.0).opacity(0.92),
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    static let shinyStroke = LinearGradient(
+        colors: [
+            Color(red: 1.0, green: 0.60, blue: 0.78),   // 玫红
+            Color.white.opacity(0.90),
+            BolaTheme.accent,                            // 主题黄绿
+            Color.white.opacity(0.90),
+            Color(red: 0.10, green: 0.40, blue: 0.30).opacity(0.10),   // 橙（柔化）
         ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
@@ -517,13 +602,20 @@ private struct GrowthTaskCardYellowPatternOverlay: View {
             let w = geo.size.width
             let h = geo.size.height
             let overscan = max(w, h) * 0.55
-            Image("GrowthTaskCardYellowPattern")
-                .resizable()
-                .scaledToFill()
-                .frame(width: w + overscan, height: h + overscan)
-                .scaleEffect(patternScale)
-                .rotationEffect(.degrees(rotationDegrees))
-                .position(x: w * 0.5, y: h * 0.5)
+            Group {
+                if let decoded = ImagePrewarmCache.shared.image(named: "GrowthTaskCardYellowPattern") {
+                    Image(uiImage: decoded)
+                        .resizable()
+                } else {
+                    Image("GrowthTaskCardYellowPattern")
+                        .resizable()
+                }
+            }
+            .scaledToFill()
+            .frame(width: w + overscan, height: h + overscan)
+            .scaleEffect(patternScale)
+            .rotationEffect(.degrees(rotationDegrees))
+            .position(x: w * 0.5, y: h * 0.5)
         }
         .clipped()
         .allowsHitTesting(false)
@@ -531,10 +623,100 @@ private struct GrowthTaskCardYellowPatternOverlay: View {
     }
 }
 
+private struct GrowthTaskCardShinyFoilOverlay: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { timeline in
+            GeometryReader { geo in
+                let size = geo.size
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                // 每约 4.2 秒扫一次光带
+                let sweepCycle = (t / 4.2).truncatingRemainder(dividingBy: 1.0)
+                // 慢速色相旋转（11 秒一圈）
+                let hue = Angle.degrees(360 * (t / 11.0).truncatingRemainder(dividingBy: 1.0))
+                // 光带从左侧卡外扫到右侧卡外
+                let sweepX = size.width * (sweepCycle * 2.6 - 0.8)
+                // 呼吸光晕
+                let glowPhase = (t * 0.55).truncatingRemainder(dividingBy: .pi * 2)
+                let glowAlpha = 0.48 + 0.52 * sin(glowPhase)
+
+                ZStack {
+                    // 层 1：慢速色相旋转虹彩晕染
+                    LinearGradient(
+                        colors: [
+                            Color(red: 1.0, green: 0.45, blue: 0.78).opacity(0.22),
+                            Color.white.opacity(0.06),
+                            Color(red: 0.45, green: 0.82, blue: 1.0).opacity(0.22),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .hueRotation(hue)
+                    .blendMode(.screen)
+
+                    // 层 2：固定斜向高光棱（模拟全息材质的折射纹路）
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            Color.white.opacity(0.22),
+                            Color.white.opacity(0.05),
+                            Color.white.opacity(0.16),
+                            Color.white.opacity(0.03),
+                            Color.white.opacity(0.12),
+                            .clear,
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .blendMode(.screen)
+
+                    // 层 3：主扫光（彩虹色带 + blur 柔化）
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            Color(red: 1.0, green: 0.55, blue: 0.75).opacity(0.18),
+                            Color(red: 1.0, green: 0.88, blue: 0.50).opacity(0.28),
+                            Color.white.opacity(0.38),
+                            Color(red: 0.55, green: 0.92, blue: 1.0).opacity(0.28),
+                            Color(red: 0.80, green: 0.60, blue: 1.0).opacity(0.18),
+                            .clear,
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: size.width * 0.85, height: size.height * 3.0)
+                    .blur(radius: 10)
+                    .rotationEffect(.degrees(-22))
+                    .position(x: sweepX, y: size.height * 0.5)
+                    .blendMode(.screen)
+
+                    // 层 4：中心呼吸光晕（带生命感）
+                    RadialGradient(
+                        colors: [
+                            Color.white.opacity(0.32 * glowAlpha),
+                            Color.white.opacity(0.10 * glowAlpha),
+                            .clear
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: size.width * 0.40
+                    )
+                    .blendMode(.screen)
+                }
+                .saturation(1.15)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
 private struct GrowthPortraitTaskCard: View {
-    let definition: GrowthDailyTaskCardDefinition
+    let card: GrowthDailyTaskCardInstance
     let progress: Double
     private let cornerRadius: CGFloat = 16
+
+    @State private var showXPToast = false
+    @State private var toastOpacity: Double = 0
+    @State private var toastOffset: CGFloat = 0
 
     var body: some View {
         GeometryReader { geo in
@@ -556,49 +738,100 @@ private struct GrowthPortraitTaskCard: View {
         }
         .aspectRatio(GrowthDailyTaskModels.cardAspectRatio, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(Color.white.opacity(0.75), lineWidth: 1.0)
+                .shadow(color: .white.opacity(0.30), radius: 8, x: 0, y: 0)
+        }
         .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .onTapGesture {
+            let tab = card.definition.surfaceKind.destinationTab
+            NotificationCenter.default.post(
+                name: .bolaNavigateToTab,
+                object: nil,
+                userInfo: ["tab": tab.rawValue]
+            )
+        }
+        .overlay(alignment: .center) {
+            if showXPToast {
+                Text("+\(card.xpReward) XP")
+                    .font(.system(size: 14, weight: .black, design: .rounded))
+                    .foregroundStyle(
+                        card.rarity.isShiny
+                            ? AnyShapeStyle(LinearGradient(
+                                colors: [Color(hex: 0xFF6164), Color(hex: 0xE5FF00), Color(hex: 0xFF8C2E)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                              ))
+                            : AnyShapeStyle(Color.white)
+                    )
+                    .shadow(color: .black.opacity(0.18), radius: 4, x: 0, y: 2)
+                    .offset(y: toastOffset)
+                    .opacity(toastOpacity)
+                    .allowsHitTesting(false)
+            }
+        }
+        .onChange(of: progress) { _, new in
+            if new >= 1.0 {
+                triggerXPToast()
+            }
+        }
     }
+
+    private func triggerXPToast() {
+        guard !showXPToast else { return }
+        showXPToast = true
+        toastOpacity = 1.0
+        toastOffset = 0
+        withAnimation(.easeOut(duration: 1.4)) {
+            toastOpacity = 0
+            toastOffset = -44
+        } completion: {
+            showXPToast = false
+            toastOffset = 0
+        }
+    }
+
 
     @ViewBuilder
     private func cardFullBleedBackground() -> some View {
-        switch definition.surfaceKind {
-        case .accentGradient:
-            ZStack {
-                Rectangle().fill(GrowthTaskCardPalette.accentCardGradient)
-                GrowthTaskCardYellowPatternOverlay(patternOpacity: 0.14)
-            }
-        case .yellowPattern:
-            ZStack {
-                GrowthTaskCardPalette.topYellow
-                GrowthTaskCardYellowPatternOverlay()
-            }
-        case .accentMuted:
-            ZStack {
-                Rectangle().fill(GrowthTaskCardPalette.accentMutedCardGradient)
-                GrowthTaskCardYellowPatternOverlay(patternOpacity: 0.18)
+        let baseFill = card.rarity.isShiny
+            ? AnyShapeStyle(GrowthTaskCardPalette.shinyFrontGradient)
+            : AnyShapeStyle(GrowthTaskCardPalette.cardGradient(for: card.definition.surfaceKind))
+        ZStack {
+            Rectangle().fill(baseFill)
+            // 炫彩卡降低底纹 opacity，避免遮盖渐变色彩
+            GrowthTaskCardYellowPatternOverlay(patternOpacity: card.rarity.isShiny ? 0.07 : 0.14)
+            if card.rarity.isShiny {
+                GrowthTaskCardShinyFoilOverlay()
             }
         }
     }
 
     private func growthTagChip() -> some View {
-        Text(definition.tag)
-            .font(.system(size: 10, weight: .semibold))
+        let chipShape = UnevenRoundedRectangle(
+            cornerRadii: RectangleCornerRadii(
+                topLeading: 0,
+                bottomLeading: 8,
+                bottomTrailing: 0,
+                /// 与卡片 `cornerRadius` 一致，外缘贴齐卡片右上角圆弧。
+                topTrailing: cornerRadius
+            ),
+            style: .continuous
+        )
+        return Text(card.definition.tag)
+            .font(.system(size: 10, weight: .bold))
             .foregroundStyle(.white)
             .padding(.horizontal, 7)
             .padding(.top, 4)
             .padding(.bottom, 5)
             .background(
-                UnevenRoundedRectangle(
-                    cornerRadii: RectangleCornerRadii(
-                        topLeading: 0,
-                        bottomLeading: 8,
-                        bottomTrailing: 0,
-                        /// 与卡片 `cornerRadius` 一致，外缘贴齐卡片右上角圆弧。
-                        topTrailing: cornerRadius
-                    ),
-                    style: .continuous
+                chipShape.fill(
+                    card.rarity.isShiny
+                        ? AnyShapeStyle(.ultraThinMaterial)
+                        : AnyShapeStyle(Color.black.opacity(0.22))
                 )
-                .fill(Color.black.opacity(0.22))
             )
     }
 
@@ -616,21 +849,11 @@ private struct GrowthPortraitTaskCard: View {
     }
 
     private var fabChevronColor: Color {
-        switch definition.surfaceKind {
-        case .yellowPattern:
-            return Color(red: 0.82, green: 0.72, blue: 0.05)
-        case .accentGradient, .accentMuted:
-            return BolaTheme.onAccentForeground.opacity(0.88)
-        }
+        GrowthTaskCardPalette.fabChevronColor(for: card.definition.surfaceKind)
     }
 
     private var placeholderSymbolForeground: Color {
-        switch definition.surfaceKind {
-        case .yellowPattern:
-            return Color.black.opacity(0.32)
-        case .accentGradient, .accentMuted:
-            return Color.white.opacity(0.9)
-        }
+        GrowthTaskCardPalette.symbolForeground(for: card.definition.surfaceKind)
     }
 
     /// 透明底插图在画布内视觉重心常偏上，相对几何中心略下移。
@@ -641,14 +864,14 @@ private struct GrowthPortraitTaskCard: View {
         ZStack {
             // 背景由外层整卡 ZStack 提供，此处仅内容。
             Group {
-                if let asset = definition.illustrationAssetName {
+                if let asset = card.definition.illustrationAssetName {
                     Image(asset)
                         .resizable()
                         .scaledToFit()
                         .padding(.horizontal, 10)
                         .offset(y: Self.illustrationVisualOffsetY)
                 } else {
-                    Image(systemName: definition.placeholderSystemImage)
+                    Image(systemName: card.definition.placeholderSystemImage)
                         .font(.system(size: 40, weight: .medium))
                         .foregroundStyle(placeholderSymbolForeground)
                 }
@@ -673,24 +896,24 @@ private struct GrowthPortraitTaskCard: View {
         ZStack {
             GrowthTaskCardPalette.bottomFill
             VStack(alignment: .center, spacing: 0) {
-                Text(definition.detailLine1)
+                Text(card.definition.detailLine1)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
-                Text(definition.detailLine2)
-                    .font(.system(size: 11, weight: .medium))
+                Text(card.definition.detailLine2)
+                    .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(BolaTheme.figmaMutedBody)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 3)
 
-                GrowthTaskCompletionBar(progress: progress, taskId: definition.id)
+                GrowthTaskCompletionBar(progress: progress, taskId: card.id)
                     .padding(.top, 6)
             }
             .padding(.horizontal, 10)
             .padding(.top, 10)
-            .padding(.bottom, 8)
+            .padding(.bottom, 20)
         }
         .frame(height: height)
         .frame(maxWidth: .infinity)
@@ -698,89 +921,86 @@ private struct GrowthPortraitTaskCard: View {
 }
 
 private struct GrowthFlippableTaskCard: View {
-    let definition: GrowthDailyTaskCardDefinition
+    let card: GrowthDailyTaskCardInstance
     let progress: Double
     let isRevealed: Bool
     let onReveal: () -> Void
 
-    @State private var flipDegrees: Double
-    @State private var isFlipping = false
-
-    init(
-        definition: GrowthDailyTaskCardDefinition,
-        progress: Double,
-        isRevealed: Bool,
-        onReveal: @escaping () -> Void
-    ) {
-        self.definition = definition
-        self.progress = progress
-        self.isRevealed = isRevealed
-        self.onReveal = onReveal
-        _flipDegrees = State(initialValue: isRevealed ? 0 : 180)
-    }
+    @State private var animatedFlipDegrees: Double = 180
+    @State private var isAnimatingFlip = false
 
     var body: some View {
         Button {
-            guard !isRevealed else { return }
-            isFlipping = true
-            withAnimation(.spring(response: 0.52, dampingFraction: 0.82)) {
-                flipDegrees = 0
-            } completion: {
-                isFlipping = false
-            }
+            guard !isRevealed, !isAnimatingFlip else { return }
+            animatedFlipDegrees = 180
+            isAnimatingFlip = true
             onReveal()
+            withAnimation(.spring(response: 0.52, dampingFraction: 0.82)) {
+                animatedFlipDegrees = 0
+            } completion: {
+                isAnimatingFlip = false
+            }
         } label: {
-            if isFlipping {
+            if isAnimatingFlip {
                 ZStack {
-                    GrowthPortraitTaskCard(definition: definition, progress: progress)
-                        .opacity(flipDegrees < 90 ? 1 : 0)
+                    GrowthPortraitTaskCard(card: card, progress: progress)
+                        .opacity(animatedFlipDegrees < 90 ? 1 : 0)
 
-                    GrowthTaskCardBack()
+                    GrowthTaskCardBack(rarity: card.rarity)
                         .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-                        .opacity(flipDegrees < 90 ? 0 : 1)
+                        .opacity(animatedFlipDegrees < 90 ? 0 : 1)
                 }
                 .rotation3DEffect(
-                    .degrees(flipDegrees),
+                    .degrees(animatedFlipDegrees),
                     axis: (x: 0, y: 1, z: 0),
                     anchor: .center,
                     anchorZ: 0,
                     perspective: 0.52
                 )
             } else if isRevealed {
-                GrowthPortraitTaskCard(definition: definition, progress: progress)
+                GrowthPortraitTaskCard(card: card, progress: progress)
             } else {
-                GrowthTaskCardBack()
+                GrowthTaskCardBack(rarity: card.rarity)
             }
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(isRevealed ? "随机任务，已翻开" : "随机任务，轻点翻面")
-        .onChange(of: isRevealed) { _, new in
-            var t = Transaction()
-            t.disablesAnimations = true
-            withTransaction(t) {
-                flipDegrees = new ? 0 : 180
-            }
-        }
     }
 }
 
 private struct GrowthTaskCardBack: View {
+    let rarity: GrowthDailyTaskRarity
     private let cornerRadius: CGFloat = 16
 
     var body: some View {
+        let backFill = rarity.isShiny
+            ? AnyShapeStyle(GrowthTaskCardPalette.shinyBackGradient)
+            : AnyShapeStyle(GrowthTaskCardPalette.cardBackGradient)
         ZStack {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(GrowthTaskCardPalette.accentCardGradient)
+                .fill(backFill)
 
-            GrowthTaskCardYellowPatternOverlay()
+            GrowthTaskCardYellowPatternOverlay(patternOpacity: rarity.isShiny ? 0.08 : 0.18)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
 
-            VStack(spacing: 6) {
+            if rarity.isShiny {
+                GrowthTaskCardShinyFoilOverlay()
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            }
+
+            if rarity.isShiny {
                 ZStack {
-                    Circle()
-                        .fill(BolaTheme.mascotSilhouette)
-                        .frame(width: 44, height: 44)
+                    backSilhouetteImage(named: "GrowthCardShinyBackSilhouette")
+                        .opacity(0.45)
+                    Text("?")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.white)
+                        .shadow(color: .white.opacity(0.60), radius: 6, x: 0, y: 0)
+                }
+            } else {
+                ZStack {
+                    backSilhouetteImage(named: "GrowthCardBackSilhouette")
                     Text("?")
                         .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(BolaTheme.surfaceBubble)
@@ -788,6 +1008,28 @@ private struct GrowthTaskCardBack: View {
             }
         }
         .aspectRatio(GrowthDailyTaskModels.cardAspectRatio, contentMode: .fit)
+        .shadow(
+            color: .black.opacity(0.06),
+            radius: 8,
+            x: 0, y: 3
+        )
+    }
+
+    @ViewBuilder
+    private func backSilhouetteImage(named name: String) -> some View {
+        if let decoded = ImagePrewarmCache.shared.image(named: name) {
+            Image(uiImage: decoded)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 42, height: 42)
+                .offset(y: -1)
+        } else {
+            Image(name)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 42, height: 42)
+                .offset(y: -1)
+        }
     }
 }
 
@@ -943,8 +1185,8 @@ private struct GrowthTaskCompletionBar: View {
     @ViewBuilder
     private func progressTrackRow(progress visibleProgress: Double, hidden: Bool) -> some View {
         HStack(alignment: .center, spacing: 8) {
-            Text("完成度")
-                .font(.system(size: 9, weight: .medium))
+            Text("进度")
+                .font(.system(size: 7, weight: .medium))
                 .foregroundStyle(Color(uiColor: .secondaryLabel))
                 .fixedSize()
 
@@ -1017,14 +1259,14 @@ private struct GrowthRewardGallerySection: View {
         GridItem(.flexible(), spacing: 10),
         GridItem(.flexible(), spacing: 10)
     ]
-
-    private let cells: [(unlocked: Bool, emoji: String?)] = [
-        (true, "🥳"), (true, "😢"), (true, "🎉"),
-        (false, nil), (true, "💛"), (false, nil),
-        (false, nil), (false, nil), (true, "✨"),
-        (false, nil), (false, nil), (false, nil)
-    ]
+    private let totalCellCount = 12
+    @State private var unlockedOrderedIds = SpecialAnimationUnlockStore.loadUnlockedOrderedIds()
+    @State private var seenIds = SpecialAnimationSeenStore.loadSeenIds()
+    @State private var pendingSeenIds: Set<String> = []
     @State private var showGiftLottie = false
+    #if DEBUG
+    @State private var debugAllRewardsUnlocked = !SpecialAnimationUnlockStore.loadUnlockedOrderedIds().isEmpty
+    #endif
 
     var body: some View {
         GrowthGroupedSection {
@@ -1032,26 +1274,66 @@ private struct GrowthRewardGallerySection: View {
             /// 内层 `spacing`：主标题行与副标题文案之间的距离。
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .center, spacing: 3) {
-                        Text("完成任务解锁更多奖励")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.primary)
-                        Group {
-                            if showGiftLottie {
-                                LottieView(animation: LottieAnimation.named("GrowthRewardGiftPremium"))
-                                    .configure { $0.contentMode = .scaleAspectFill }
-                                    .playing(loopMode: .loop)
-                                    .resizable()
-                            } else {
-                                Image(systemName: "gift.fill")
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .foregroundStyle(BolaTheme.accent)
+                    HStack(alignment: .center, spacing: 8) {
+                        HStack(alignment: .center, spacing: 3) {
+                            Text("完成任务解锁更多奖励")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.primary)
+                            Group {
+                                if showGiftLottie {
+                                    LottieView(animation: LottieAnimation.named("GrowthRewardGiftPremium"))
+                                        .configure { $0.contentMode = .scaleAspectFill }
+                                        .playing(loopMode: .loop)
+                                        .resizable()
+                                } else {
+                                    Image(systemName: "gift.fill")
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundStyle(BolaTheme.accent)
+                                }
                             }
+                            .frame(width: 28, height: 28)
+                            .clipped()
+                            .offset(y: -3)
+                            .accessibilityHidden(true)
                         }
-                        .frame(width: 28, height: 28)
-                        .clipped()
-                        .offset(y: -3)
-                        .accessibilityHidden(true)
+
+                        Spacer(minLength: 8)
+
+                        #if DEBUG
+                        Button {
+                            debugAllRewardsUnlocked.toggle()
+                            if debugAllRewardsUnlocked {
+                                SpecialAnimationUnlockStore.saveOrdered(
+                                    SpecialAnimationRewardBank.all.map(\.id)
+                                )
+                            } else {
+                                SpecialAnimationUnlockStore.saveOrdered([])
+                                SpecialAnimationSeenStore.clear()
+                            }
+                            unlockedOrderedIds = SpecialAnimationUnlockStore.loadUnlockedOrderedIds()
+                            seenIds = SpecialAnimationSeenStore.loadSeenIds()
+                            pendingSeenIds = Set(unlockedOrderedIds).subtracting(seenIds)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: debugAllRewardsUnlocked ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 14, weight: .semibold))
+                                Text("测试")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .foregroundStyle(debugAllRewardsUnlocked ? BolaTheme.accent : .secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(Color.white.opacity(0.72))
+                            )
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .stroke(Color(uiColor: .separator).opacity(0.28), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        #endif
                     }
                     Text("加油完成任务，解锁更多奖励吧！")
                         .font(.system(size: 13, weight: .regular))
@@ -1059,11 +1341,20 @@ private struct GrowthRewardGallerySection: View {
                 }
 
                 LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(cells.indices, id: \.self) { i in
-                        GrowthRewardCell(unlocked: cells[i].unlocked, emoji: cells[i].emoji)
+                    ForEach(0 ..< totalCellCount, id: \.self) { index in
+                        if let reward = rewardForCell(at: index) {
+                            GrowthRewardCell(
+                                reward: reward,
+                                unlocked: true,
+                                isNew: pendingSeenIds.contains(reward.id)
+                            )
+                        } else {
+                            GrowthRewardLockedPlaceholderCell()
+                        }
                     }
                 }
             }
+            .padding(.bottom, 20)
         }
         .onAppear {
             guard !showGiftLottie else { return }
@@ -1071,29 +1362,88 @@ private struct GrowthRewardGallerySection: View {
                 await Task.yield()
                 showGiftLottie = true
             }
+            seenIds = SpecialAnimationSeenStore.loadSeenIds()
+            pendingSeenIds = Set(unlockedOrderedIds).subtracting(seenIds)
         }
+        .onDisappear {
+            SpecialAnimationSeenStore.markSeen(pendingSeenIds)
+            seenIds = SpecialAnimationSeenStore.loadSeenIds()
+            pendingSeenIds.removeAll()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaSpecialAnimationUnlocksDidChange)) { _ in
+            unlockedOrderedIds = SpecialAnimationUnlockStore.loadUnlockedOrderedIds()
+            pendingSeenIds.formUnion(Set(unlockedOrderedIds).subtracting(seenIds))
+            #if DEBUG
+            debugAllRewardsUnlocked = unlockedOrderedIds.count == SpecialAnimationRewardBank.all.count
+            #endif
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaSpecialAnimationSeenStateDidChange)) { _ in
+            seenIds = SpecialAnimationSeenStore.loadSeenIds()
+            pendingSeenIds.subtract(seenIds)
+        }
+    }
+
+    private func rewardForCell(at index: Int) -> SpecialAnimationRewardDefinition? {
+        guard unlockedOrderedIds.indices.contains(index) else { return nil }
+        return SpecialAnimationRewardBank.definition(for: unlockedOrderedIds[index])
     }
 }
 
 private struct GrowthRewardCell: View {
+    let reward: SpecialAnimationRewardDefinition
     let unlocked: Bool
-    let emoji: String?
+    let isNew: Bool
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(BolaTheme.mascotSilhouette)
+                .fill(Color.black)
                 .aspectRatio(1, contentMode: .fit)
 
-            if unlocked, let emoji {
-                Text(emoji)
-                    .font(.system(size: 28))
+            if unlocked {
+                if UIImage(named: reward.previewAssetName) != nil {
+                    Image(reward.previewAssetName)
+                        .resizable()
+                        .scaledToFit()
+                        .padding(4)
+                } else {
+                    Text(reward.fallbackEmoji)
+                        .font(.system(size: 28))
+                }
             } else {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.9))
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if isNew {
+                Text("NEW")
+                    .font(.system(size: 8, weight: .black))
+                    .foregroundStyle(.red)
+                    .padding(4)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(reward.title)
+        .accessibilityValue(isNew ? "新解锁" : (unlocked ? "已解锁" : "未解锁"))
+    }
+}
+
+private struct GrowthRewardLockedPlaceholderCell: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.black)
+                .aspectRatio(1, contentMode: .fit)
+
+            Image(systemName: "lock.fill")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.9))
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("未解锁奖励")
+        .accessibilityValue("未解锁")
     }
 }
 
@@ -1101,6 +1451,10 @@ private struct GrowthRewardCell: View {
     NavigationStack {
         IOSGrowthView()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onAppear {
+                // Preview 每次刷新重置翻面状态，方便查看背面
+                GrowthRandomCardFlipStore.debugClearRandomRevealed()
+            }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

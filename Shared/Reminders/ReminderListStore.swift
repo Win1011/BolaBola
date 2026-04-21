@@ -4,6 +4,10 @@
 
 import Foundation
 
+public extension Notification.Name {
+    static let bolaRemindersDidChange = Notification.Name("bolaRemindersDidChange")
+}
+
 public enum ReminderListStore {
     private static let encoder = JSONEncoder()
     private static let decoder = JSONDecoder()
@@ -19,5 +23,8 @@ public enum ReminderListStore {
     public static func save(_ reminders: [BolaReminder], to defaults: UserDefaults = BolaSharedDefaults.resolved()) {
         guard let data = try? encoder.encode(reminders) else { return }
         defaults.set(data, forKey: ReminderStorageKeys.remindersJSON)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .bolaRemindersDidChange, object: nil)
+        }
     }
 }

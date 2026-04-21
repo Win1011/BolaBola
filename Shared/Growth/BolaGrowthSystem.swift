@@ -166,13 +166,13 @@ public enum BolaXPEngine {
     public static let openAppXPSecondsPerPoint: TimeInterval = 20 * 60
     public static let highCompanionOpenAppXPMultiplier: Double = 1.2
 
-    /// 任务完成：+10 XP，每日上限 5 次。
+    /// 任务完成：默认 +10 XP，每日上限 5 次。
     @discardableResult
-    public static func grantTaskXP() -> Bool {
+    public static func grantTaskXP(amount: Int = 10) -> Bool {
         var state = BolaGrowthStore.load()
         _resetIfNeeded(&state)
         guard state.dailyTaskXPCount < 5 else { return false }
-        state.totalXP += 10
+        state.totalXP += amount
         state.dailyTaskXPCount += 1
         BolaGrowthStore.save(state)
         return true

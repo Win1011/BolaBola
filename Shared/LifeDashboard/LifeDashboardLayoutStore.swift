@@ -5,12 +5,17 @@
 
 import Foundation
 
-public enum LifeDashboardTileKind: String, Codable, CaseIterable, Identifiable {
+public enum LifeDashboardTileKind: String, Codable, Identifiable {
     case reminders
+    case weather
     case sleep
     case activity
 
     public var id: String { rawValue }
+
+    public static var allCases: [LifeDashboardTileKind] {
+        [.reminders, .sleep, .activity]
+    }
 }
 
 public enum LifeDashboardTileVariant: String, Codable {
@@ -59,9 +64,14 @@ public enum LifeDashboardLayoutStore {
         var seen = Set<LifeDashboardTileKind>()
         var result: [LifeDashboardTileLayout] = []
 
-        for item in layout where !seen.contains(item.kind) {
+        for item in layout where item.kind != .weather && !seen.contains(item.kind) {
             result.append(item)
             seen.insert(item.kind)
+        }
+
+        for fallback in defaultLayout() where !seen.contains(fallback.kind) {
+            result.append(fallback)
+            seen.insert(fallback.kind)
         }
 
         return result

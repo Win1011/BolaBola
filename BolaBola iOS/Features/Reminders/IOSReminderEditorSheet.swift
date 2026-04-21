@@ -17,6 +17,7 @@ struct IOSReminderEditorSheet: View {
     var onDelete: (() -> Void)?
 
     private enum RepeatShape: String, CaseIterable {
+        case once = "仅一次"
         case daily = "每天"
         case workweek = "工作日"
         case customWeekdays = "自定义星期"
@@ -66,7 +67,7 @@ struct IOSReminderEditorSheet: View {
                 }
             case .once(let d):
                 baseTime = d
-                initialRepeat = .daily
+                initialRepeat = .once
             }
         case .edit(let r):
             initialTitle = r.title
@@ -88,7 +89,7 @@ struct IOSReminderEditorSheet: View {
                 }
             case .once(let d):
                 baseTime = d
-                initialRepeat = .daily
+                initialRepeat = .once
             }
         }
 
@@ -130,9 +131,13 @@ struct IOSReminderEditorSheet: View {
                     }
                     .pickerStyle(.menu)
                 } footer: {
-                    Text(repeatShape == .interval
-                         ? "固定间隔：从保存或重新打开通知权限后起算，每隔设定时长重复一次（与「每天几点」不同）。"
-                         : "日历重复：在指定时间点提醒；可选工作日或自定义星期。")
+                    Text(
+                        repeatShape == .interval
+                        ? "固定间隔：从保存或重新打开通知权限后起算，每隔设定时长重复一次（与「每天几点」不同）。"
+                        : repeatShape == .once
+                        ? "仅一次：会在指定时间提醒一次，到点后不会重复。"
+                        : "日历重复：在指定时间点提醒；可选工作日或自定义星期。"
+                    )
                         .font(.caption)
                 }
 
@@ -141,7 +146,7 @@ struct IOSReminderEditorSheet: View {
                         DatePicker(
                             "提醒时间",
                             selection: $timeDate,
-                            displayedComponents: [.hourAndMinute]
+                            displayedComponents: repeatShape == .once ? [.date, .hourAndMinute] : [.hourAndMinute]
                         )
                         .datePickerStyle(.wheel)
                     }
@@ -209,6 +214,8 @@ struct IOSReminderEditorSheet: View {
         let schedule: BolaReminder.Schedule
         let cal = Calendar.current
         switch repeatShape {
+        case .once:
+            schedule = .once(timeDate)
         case .interval:
             let sec = TimeInterval(intervalHours * 3600)
             schedule = .interval(max(60, sec))

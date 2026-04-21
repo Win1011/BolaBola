@@ -59,7 +59,9 @@ final class IOSWeatherLocationModel: NSObject, ObservableObject {
         lastError = nil
         defer { isLoading = false }
         do {
-            weather = try await Self.fetchWeatherBestEffort(latitude: lat, longitude: lon)
+            let fetched = try await Self.fetchWeatherBestEffort(latitude: lat, longitude: lon)
+            weather = fetched
+            WeatherDiaryRecorder.recordIfNeeded(weather: fetched)
         } catch {
             lastError = "无法获取天气"
             weather = nil

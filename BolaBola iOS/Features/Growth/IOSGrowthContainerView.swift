@@ -9,7 +9,7 @@ struct IOSGrowthContainerView: View {
     @Binding var growthSegment: IOSGrowthSubPage
 
     var body: some View {
-        Group {
+        ZStack {
             switch growthSegment {
             case .growth:
                 IOSGrowthView()

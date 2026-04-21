@@ -12,24 +12,35 @@ import SwiftUI
 
 enum GrowthDailyTaskSelectionStore {
     private static let periodKey = "growth_daily_selection_period_start_v1"
-    private static let selectedKey = "growth_daily_selected_task_ids_v1"
+    private static let selectedKey = "growth_daily_selected_task_cards_v1"
     private static let dailyTaskCount = 5
+    private static let shinyProbability = 0.05
 
     private static var defaults: UserDefaults { BolaSharedDefaults.resolved() }
 
-    static func syncAndLoadSelectedIds(taskPool: [GrowthDailyTaskCardDefinition]) -> [String] {
+    static func syncAndLoadSelectedCards(taskPool: [GrowthDailyTaskCardDefinition]) -> [GrowthDailyTaskCardInstance] {
         let currentTs = GrowthDayBoundary.currentPeriodStart().timeIntervalSince1970
-        let poolIds = Set(taskPool.map(\.id))
+        let definitionsById = Dictionary(uniqueKeysWithValues: taskPool.map { ($0.id, $0) })
 
         if let stored = defaults.object(forKey: periodKey) as? TimeInterval,
            abs(stored - currentTs) <= 0.5,
-           let ids = loadRaw(),
-           ids.count == min(dailyTaskCount, taskPool.count),
-           ids.allSatisfy(poolIds.contains) {
-            return ids
+           let cards = loadRaw(),
+           cards.count == min(dailyTaskCount, taskPool.count) {
+            let restored = cards.compactMap { raw -> GrowthDailyTaskCardInstance? in
+                guard let definition = definitionsById[raw.definitionId] else { return nil }
+                return GrowthDailyTaskCardInstance(definition: definition, rarity: raw.rarity)
+            }
+            if restored.count == cards.count {
+                return restored
+            }
         }
 
-        let next = Array(taskPool.shuffled().prefix(dailyTaskCount)).map(\.id)
+        let next = Array(taskPool.shuffled().prefix(dailyTaskCount)).map {
+            GrowthDailyTaskCardInstance(
+                definition: $0,
+                rarity: Double.random(in: 0 ..< 1) < shinyProbability ? .shiny : .normal
+            )
+        }
         defaults.set(currentTs, forKey: periodKey)
         save(next)
         return next
@@ -40,18 +51,24 @@ enum GrowthDailyTaskSelectionStore {
         defaults.removeObject(forKey: selectedKey)
     }
 
-    private static func loadRaw() -> [String]? {
+    private static func loadRaw() -> [StoredDailyTaskCard]? {
         guard let data = defaults.data(forKey: selectedKey),
-              let ids = try? JSONDecoder().decode([String].self, from: data) else {
+              let ids = try? JSONDecoder().decode([StoredDailyTaskCard].self, from: data) else {
             return nil
         }
         return ids
     }
 
-    private static func save(_ ids: [String]) {
+    private static func save(_ cards: [GrowthDailyTaskCardInstance]) {
+        let ids = cards.map { StoredDailyTaskCard(definitionId: $0.definition.id, rarity: $0.rarity) }
         if let data = try? JSONEncoder().encode(ids) {
             defaults.set(data, forKey: selectedKey)
         }
+    }
+
+    private struct StoredDailyTaskCard: Codable {
+        let definitionId: String
+        let rarity: GrowthDailyTaskRarity
     }
 }
 
@@ -147,12 +164,38 @@ enum GrowthTaskXPGrantStore {
 
 /// 卡面上半区底色策略（与 `GrowthPortraitTaskCard` 对应）。
 enum GrowthDailyTaskCardSurfaceKind: Equatable {
-    /// 与随机卡背面一致的主色渐变（如散步）
-    case accentGradient
-    /// 亮黄 + 纹理（如聊天）
-    case yellowPattern
-    /// 主色偏弱渐变，与亮黄区分（如随机任务正面）
-    case accentMuted
+    case movement
+    case chat
+    case interaction
+    case life
+}
+
+extension GrowthDailyTaskCardSurfaceKind {
+    /// 点击任务卡后跳转的目标 Tab。
+    var destinationTab: IOSRootTab {
+        switch self {
+        case .chat:        return .chat
+        case .interaction: return .mine
+        case .life:        return .life
+        case .movement:    return .life
+        }
+    }
+}
+
+enum GrowthDailyTaskRarity: String, Codable, Equatable {
+    case normal
+    case shiny
+
+    var xpReward: Int {
+        switch self {
+        case .normal:
+            return 10
+        case .shiny:
+            return 20
+        }
+    }
+
+    var isShiny: Bool { self == .shiny }
 }
 
 struct GrowthDailyTaskCardDefinition: Identifiable, Equatable {
@@ -165,6 +208,14 @@ struct GrowthDailyTaskCardDefinition: Identifiable, Equatable {
     var surfaceKind: GrowthDailyTaskCardSurfaceKind
 }
 
+struct GrowthDailyTaskCardInstance: Identifiable, Equatable {
+    let definition: GrowthDailyTaskCardDefinition
+    let rarity: GrowthDailyTaskRarity
+
+    var id: String { definition.id }
+    var xpReward: Int { rarity.xpReward }
+}
+
 // MARK: - ViewModel（实时进度）
 
 @MainActor
@@ -172,7 +223,7 @@ final class GrowthDailyTasksViewModel: ObservableObject {
     static let shared = GrowthDailyTasksViewModel()
     @Published private(set) var progressByTaskId: [String: Double]
     /// 当前周期抽到的 5 个每日任务（上 2 张直接展示，下 3 张翻卡）。
-    @Published private(set) var dailyDefinitions: [GrowthDailyTaskCardDefinition]
+    @Published private(set) var dailyCards: [GrowthDailyTaskCardInstance]
     /// 底部三张任务在本周期内已翻开过的任务 id（翻面后持久为正面至下次 8:00 周期）。
     @Published private(set) var revealedRandomTaskIds: Set<String>
     /// 本周期内已触发 XP 的任务 id（跨日自动清空，防止重启后重复发放）。
@@ -182,6 +233,9 @@ final class GrowthDailyTasksViewModel: ObservableObject {
     private let healthStore = HKHealthStore()
     private var growthObserver: NSObjectProtocol?
     private var chatObserver: NSObjectProtocol?
+    private var diaryObserver: NSObjectProtocol?
+    private var reminderObserver: NSObjectProtocol?
+    private var lifeRecordObserver: NSObjectProtocol?
 
     init(
         definitions: [GrowthDailyTaskCardDefinition]? = nil,
@@ -194,13 +248,7 @@ final class GrowthDailyTasksViewModel: ObservableObject {
             seed[d.id] = initialProgress?[d.id] ?? 0
         }
         progressByTaskId = seed
-        let selectedIds = GrowthDailyTaskSelectionStore.syncAndLoadSelectedIds(taskPool: defs)
-        dailyDefinitions = defs.filter { selectedIds.contains($0.id) }
-            .sorted { lhs, rhs in
-                guard let li = selectedIds.firstIndex(of: lhs.id),
-                      let ri = selectedIds.firstIndex(of: rhs.id) else { return false }
-                return li < ri
-            }
+        dailyCards = GrowthDailyTaskSelectionStore.syncAndLoadSelectedCards(taskPool: defs)
         revealedRandomTaskIds = GrowthRandomCardFlipStore.syncPeriodAndLoadRevealedIds()
         xpGrantedTaskIds = GrowthTaskXPGrantStore.syncAndLoadGrantedIds()
         BolaXPEngine.ensureDailyReset()
@@ -212,7 +260,28 @@ final class GrowthDailyTasksViewModel: ObservableObject {
             Task { @MainActor [weak self] in await self?.refreshProgress() }
         }
         chatObserver = NotificationCenter.default.addObserver(
-            forName: .bolaChatHistoryDidMerge,
+            forName: .bolaChatHistoryDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.refreshProgress() }
+        }
+        diaryObserver = NotificationCenter.default.addObserver(
+            forName: .bolaDiaryEntriesDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.refreshProgress() }
+        }
+        reminderObserver = NotificationCenter.default.addObserver(
+            forName: .bolaRemindersDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.refreshProgress() }
+        }
+        lifeRecordObserver = NotificationCenter.default.addObserver(
+            forName: .bolaLifeRecordsDidChange,
             object: nil,
             queue: .main
         ) { [weak self] _ in
@@ -229,14 +298,14 @@ final class GrowthDailyTasksViewModel: ObservableObject {
         next["walk_5000"] = await Self.queryWalkProgress(store: healthStore)
         next["chat_daily"] = Self.chatProgressToday(defaults: defaults)
         next["exercise_15m"] = await Self.queryExerciseMinutesProgress(store: healthStore, goalMinutes: 15)
-        next["praise_bola"] = Self.placeholderProgress(for: "praise_bola")
+        next["praise_bola"] = Self.praiseBolaProgress(defaults: defaults)
         next["drink_water_once"] = Self.placeholderProgress(for: "drink_water_once")
         next["touch_bola_5"] = Self.placeholderProgress(for: "touch_bola_5")
         next["feed_bola_once"] = Self.placeholderProgress(for: "feed_bola_once")
-        next["share_mood"] = Self.placeholderProgress(for: "share_mood")
-        next["complete_reminder_once"] = Self.placeholderProgress(for: "complete_reminder_once")
-        next["chat_meal"] = Self.placeholderProgress(for: "chat_meal")
-        next["life_record_two_cards"] = Self.placeholderProgress(for: "life_record_two_cards")
+        next["share_mood"] = Self.shareMoodProgress(defaults: defaults)
+        next["complete_reminder_once"] = Self.completeReminderProgress(defaults: defaults)
+        next["chat_meal"] = Self.chatMealProgress(defaults: defaults)
+        next["life_record_two_cards"] = Self.lifeRecordProgress(defaults: defaults)
         // 批量写入：单次 Dictionary 赋值只触发一次 objectWillChange，
         // 避免逐条 updateProgress() 造成多次 re-render。
         applyProgressBatch(next)
@@ -250,7 +319,7 @@ final class GrowthDailyTasksViewModel: ObservableObject {
             let wasDone = (updated[taskId] ?? 0) >= 1.0
             updated[taskId] = clamped
             if clamped >= 1.0 && !wasDone && !xpGrantedTaskIds.contains(taskId) {
-                BolaXPEngine.grantTaskXP()
+                BolaXPEngine.grantTaskXP(amount: xpReward(for: taskId))
                 xpGrantedTaskIds.insert(taskId)
                 TitleUnlockManager.refreshUnlocks()
             }
@@ -261,6 +330,9 @@ final class GrowthDailyTasksViewModel: ObservableObject {
     deinit {
         if let obs = growthObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = chatObserver { NotificationCenter.default.removeObserver(obs) }
+        if let obs = diaryObserver { NotificationCenter.default.removeObserver(obs) }
+        if let obs = reminderObserver { NotificationCenter.default.removeObserver(obs) }
+        if let obs = lifeRecordObserver { NotificationCenter.default.removeObserver(obs) }
     }
 
     /// 进入前台或跨日时调用：新周期会清空翻面状态。
@@ -277,7 +349,7 @@ final class GrowthDailyTasksViewModel: ObservableObject {
     }
 
     func markRandomTaskRevealed(id: String) {
-        guard dailyDefinitions.suffix(3).contains(where: { $0.id == id }) else { return }
+        guard dailyCards.suffix(3).contains(where: { $0.id == id }) else { return }
         GrowthRandomCardFlipStore.saveRevealed(taskId: id)
         revealedRandomTaskIds.insert(id)
     }
@@ -287,7 +359,20 @@ final class GrowthDailyTasksViewModel: ObservableObject {
     }
 
     var completedCount: Int {
-        dailyDefinitions.filter { progress(for: $0.id) >= 1.0 }.count
+        dailyCards.filter { progress(for: $0.id) >= 1.0 }.count
+    }
+
+    var surfacedCompletedCount: Int {
+        dailyCards.filter { shouldSurfaceCompletion(for: $0.id) && progress(for: $0.id) >= 1.0 }.count
+    }
+
+    var surfacedPendingCards: [GrowthDailyTaskCardInstance] {
+        dailyCards.filter { shouldSurfaceCompletion(for: $0.id) && progress(for: $0.id) < 1.0 }
+    }
+
+    var allRandomTasksRevealed: Bool {
+        let randomIds = dailyCards.suffix(3).map(\.id)
+        return Set(randomIds).isSubset(of: revealedRandomTaskIds)
     }
 
     func updateProgress(taskId: String, value: Double) {
@@ -296,7 +381,7 @@ final class GrowthDailyTasksViewModel: ObservableObject {
         progressByTaskId[taskId] = clamped
         // 首次到达 100% 且本周期未发过 XP 时发放
         if clamped >= 1.0 && !wasDone && !xpGrantedTaskIds.contains(taskId) {
-            BolaXPEngine.grantTaskXP()
+            BolaXPEngine.grantTaskXP(amount: xpReward(for: taskId))
             xpGrantedTaskIds.insert(taskId)
             TitleUnlockManager.refreshUnlocks()
         }
@@ -317,33 +402,67 @@ final class GrowthDailyTasksViewModel: ObservableObject {
 
     /// 调试：完成下一个未完成的任务（按 definitions 顺序）。
     func debugCompleteNextTask() {
-        guard let task = dailyDefinitions.first(where: { progress(for: $0.id) < 1.0 }) else { return }
-        var next = progressByTaskId
-        next[task.id] = 1.0
-        progressByTaskId = next
+        guard let task = dailyCards.first(where: { progress(for: $0.id) < 1.0 }) else { return }
+        applyProgressBatch([task.id: 1.0])
     }
 
     /// 调试：一键将所有任务进度设为 1.0（已完成）。
     func debugCompleteAllTasks() {
-        var next = progressByTaskId
-        for d in dailyDefinitions {
-            next[d.id] = 1.0
-        }
-        progressByTaskId = next
+        let next = dailyCards.reduce(into: [String: Double]()) { $0[$1.id] = 1.0 }
+        applyProgressBatch(next)
     }
 
     private static func chatProgressToday(defaults: UserDefaults) -> Double {
         let turns = ChatHistoryStore.load(from: defaults)
-        let todayStart = Calendar.current.startOfDay(for: Date())
+        let todayStart = GrowthDayBoundary.currentPeriodStart()
         let todayUserTurns = turns.filter { $0.role == "user" && $0.createdAt >= todayStart }
         return todayUserTurns.isEmpty ? 0 : 1
+    }
+
+    private static func praiseBolaProgress(defaults: UserDefaults) -> Double {
+        let turns = userTurnsSinceCurrentPeriod(defaults: defaults)
+        return turns.contains { containsAnyKeyword($0.content, keywords: praiseKeywords) } ? 1 : 0
+    }
+
+    private static func shareMoodProgress(defaults: UserDefaults) -> Double {
+        let turns = userTurnsSinceCurrentPeriod(defaults: defaults)
+        if turns.contains(where: { containsAnyKeyword($0.content, keywords: moodKeywords) }) {
+            return 1
+        }
+        let periodStart = GrowthDayBoundary.currentPeriodStart()
+        let entries = BolaDiaryStore.load(from: defaults)
+        return entries.contains {
+            $0.createdAt >= periodStart && containsAnyKeyword($0.sourceText + "\n" + $0.summary, keywords: moodKeywords)
+        } ? 1 : 0
+    }
+
+    private static func completeReminderProgress(defaults: UserDefaults) -> Double {
+        let periodStart = GrowthDayBoundary.currentPeriodStart()
+        let reminders = ReminderListStore.load(from: defaults)
+        return reminders.contains { $0.createdAt >= periodStart } ? 1 : 0
+    }
+
+    private static func chatMealProgress(defaults: UserDefaults) -> Double {
+        let turns = userTurnsSinceCurrentPeriod(defaults: defaults)
+        if turns.contains(where: { containsAnyKeyword($0.content, keywords: mealKeywords) }) {
+            return 1
+        }
+        let periodStart = GrowthDayBoundary.currentPeriodStart()
+        let records = LifeRecordListStore.load(from: defaults)
+        return records.contains { $0.createdAt >= periodStart && $0.kind == .food } ? 1 : 0
+    }
+
+    private static func lifeRecordProgress(defaults: UserDefaults) -> Double {
+        let periodStart = GrowthDayBoundary.currentPeriodStart()
+        let records = LifeRecordListStore.load(from: defaults)
+        let count = records.filter { $0.createdAt >= periodStart && $0.kind != .weather }.count
+        return min(1, Double(count) / 2.0)
     }
 
     nonisolated private static func queryWalkProgress(store: HKHealthStore) async -> Double {
         guard HKHealthStore.isHealthDataAvailable(),
               let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return 0 }
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: Date())
+        let start = currentTaskPeriodStart()
         let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         let totalSteps: Double = await withCheckedContinuation { continuation in
             let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, stats, _ in
@@ -357,8 +476,7 @@ final class GrowthDailyTasksViewModel: ObservableObject {
     nonisolated private static func queryExerciseMinutesProgress(store: HKHealthStore, goalMinutes: Double) async -> Double {
         guard HKHealthStore.isHealthDataAvailable(),
               let type = HKQuantityType.quantityType(forIdentifier: .appleExerciseTime) else { return 0 }
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: Date())
+        let start = currentTaskPeriodStart()
         let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         let totalMinutes: Double = await withCheckedContinuation { continuation in
             let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, stats, _ in
@@ -386,17 +504,64 @@ final class GrowthDailyTasksViewModel: ObservableObject {
         }
     }
 
-    private func refreshDailyDefinitionsIfNeeded() {
-        let selectedIds = GrowthDailyTaskSelectionStore.syncAndLoadSelectedIds(taskPool: taskPool)
-        let next = taskPool.filter { selectedIds.contains($0.id) }
-            .sorted { lhs, rhs in
-                guard let li = selectedIds.firstIndex(of: lhs.id),
-                      let ri = selectedIds.firstIndex(of: rhs.id) else { return false }
-                return li < ri
-            }
-        if next != dailyDefinitions {
-            dailyDefinitions = next
+    private func shouldSurfaceCompletion(for taskId: String) -> Bool {
+        guard dailyCards.suffix(3).contains(where: { $0.id == taskId }) else { return true }
+        return revealedRandomTaskIds.contains(taskId)
+    }
+
+    private static func userTurnsSinceCurrentPeriod(defaults: UserDefaults) -> [ChatTurn] {
+        let periodStart = GrowthDayBoundary.currentPeriodStart()
+        return ChatHistoryStore.load(from: defaults).filter { $0.role == "user" && $0.createdAt >= periodStart }
+    }
+
+    private static func containsAnyKeyword(_ rawText: String, keywords: [String]) -> Bool {
+        let text = rawText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !text.isEmpty else { return false }
+        return keywords.contains(where: text.contains)
+    }
+
+    nonisolated private static func currentTaskPeriodStart(now: Date = Date()) -> Date {
+        let cal = Calendar.current
+        let dayStart = cal.startOfDay(for: now)
+        guard let eightToday = cal.date(bySettingHour: 8, minute: 0, second: 0, of: dayStart) else {
+            return now
         }
+        return now < eightToday
+            ? (cal.date(byAdding: .day, value: -1, to: eightToday) ?? eightToday)
+            : eightToday
+    }
+
+    private static let moodKeywords = [
+        "心情", "情绪", "开心", "高兴", "快乐", "难过", "伤心", "委屈", "生气",
+        "烦", "焦虑", "紧张", "压力", "累", "疲惫", "emo", "崩溃",
+        "沮丧", "平静", "幸福", "激动", "失落"
+    ]
+
+    private static let mealKeywords = [
+        "早餐", "午餐", "午饭", "晚餐", "晚饭", "夜宵", "吃饭", "吃了", "喝了",
+        "外卖", "奶茶", "咖啡", "火锅", "烧烤", "面", "米饭", "汉堡", "沙拉"
+    ]
+
+    private static let praiseKeywords = [
+        "喜欢你", "爱你", "你真好", "你好棒", "真棒", "可爱", "贴心", "谢谢你",
+        "你最好", "好乖", "好聪明", "真厉害"
+    ]
+
+    private func refreshDailyDefinitionsIfNeeded() {
+        let next = GrowthDailyTaskSelectionStore.syncAndLoadSelectedCards(taskPool: taskPool)
+        if next != dailyCards {
+            dailyCards = next
+        }
+    }
+
+    func card(for taskId: String) -> GrowthDailyTaskCardInstance? {
+        dailyCards.first(where: { $0.id == taskId })
+    }
+
+    func xpReward(for taskId: String) -> Int {
+        card(for: taskId)?.xpReward ?? GrowthDailyTaskRarity.normal.xpReward
     }
 }
 
@@ -440,12 +605,12 @@ enum GrowthDailyTaskModels {
     static let defaultTaskDefinitions: [GrowthDailyTaskCardDefinition] = [
         GrowthDailyTaskCardDefinition(
             id: "walk_5000",
-            tag: "散步",
+            tag: "运动",
             illustrationAssetName: nil,
             placeholderSystemImage: "figure.walk",
             detailLine1: "和我一起散步",
             detailLine2: "今日走够 5000 步",
-            surfaceKind: .accentGradient
+            surfaceKind: .movement
         ),
         GrowthDailyTaskCardDefinition(
             id: "chat_daily",
@@ -454,7 +619,7 @@ enum GrowthDailyTaskModels {
             placeholderSystemImage: "bubble.left.and.bubble.right.fill",
             detailLine1: "和我聊聊",
             detailLine2: "今日发生什么了",
-            surfaceKind: .yellowPattern
+            surfaceKind: .chat
         ),
         GrowthDailyTaskCardDefinition(
             id: "exercise_15m",
@@ -463,7 +628,7 @@ enum GrowthDailyTaskModels {
             placeholderSystemImage: "figure.run",
             detailLine1: "一起运动哦",
             detailLine2: "今日运动 15min",
-            surfaceKind: .accentGradient
+            surfaceKind: .movement
         ),
         GrowthDailyTaskCardDefinition(
             id: "praise_bola",
@@ -472,16 +637,16 @@ enum GrowthDailyTaskModels {
             placeholderSystemImage: "heart.text.square.fill",
             detailLine1: "给我一句夸夸",
             detailLine2: "说给我听听吧",
-            surfaceKind: .accentGradient
+            surfaceKind: .interaction
         ),
         GrowthDailyTaskCardDefinition(
             id: "drink_water_once",
-            tag: "喝水",
+            tag: "互动",
             illustrationAssetName: nil,
             placeholderSystemImage: "drop.fill",
             detailLine1: "喝一大口水",
             detailLine2: "完成一次喝水",
-            surfaceKind: .accentGradient
+            surfaceKind: .interaction
         ),
         GrowthDailyTaskCardDefinition(
             id: "touch_bola_5",
@@ -490,34 +655,34 @@ enum GrowthDailyTaskModels {
             placeholderSystemImage: "hand.tap.fill",
             detailLine1: "多摸摸我",
             detailLine2: "今日摸我 5 次",
-            surfaceKind: .accentMuted
+            surfaceKind: .interaction
         ),
         GrowthDailyTaskCardDefinition(
             id: "feed_bola_once",
-            tag: "喂食",
+            tag: "互动",
             illustrationAssetName: nil,
             placeholderSystemImage: "carrot.fill",
             detailLine1: "喂我好吃的",
             detailLine2: "完成喂食一次",
-            surfaceKind: .accentMuted
+            surfaceKind: .interaction
         ),
         GrowthDailyTaskCardDefinition(
             id: "share_mood",
-            tag: "心情",
+            tag: "聊天",
             illustrationAssetName: nil,
             placeholderSystemImage: "face.smiling.fill",
             detailLine1: "说说心情吧",
             detailLine2: "告诉我你的心情",
-            surfaceKind: .accentMuted
+            surfaceKind: .chat
         ),
         GrowthDailyTaskCardDefinition(
             id: "complete_reminder_once",
-            tag: "提醒",
+            tag: "生活",
             illustrationAssetName: nil,
             placeholderSystemImage: "bell.badge.fill",
             detailLine1: "让我来提醒你",
-            detailLine2: "完成一个提醒",
-            surfaceKind: .accentMuted
+            detailLine2: "今天设置一个提醒",
+            surfaceKind: .life
         ),
         GrowthDailyTaskCardDefinition(
             id: "chat_meal",
@@ -526,7 +691,7 @@ enum GrowthDailyTaskModels {
             placeholderSystemImage: "fork.knife.circle.fill",
             detailLine1: "和我聊聊",
             detailLine2: "告诉我吃了什么",
-            surfaceKind: .yellowPattern
+            surfaceKind: .chat
         ),
         GrowthDailyTaskCardDefinition(
             id: "life_record_two_cards",
@@ -535,7 +700,7 @@ enum GrowthDailyTaskModels {
             placeholderSystemImage: "sparkles.rectangle.stack.fill",
             detailLine1: "记录生活哦",
             detailLine2: "添加两张生活记录卡",
-            surfaceKind: .accentMuted
+            surfaceKind: .life
         )
     ]
 }

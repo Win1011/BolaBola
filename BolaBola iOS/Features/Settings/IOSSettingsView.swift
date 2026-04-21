@@ -2,9 +2,15 @@
 //  IOSSettingsView.swift
 //
 
+import Combine
+import HealthKit
 import SwiftUI
 import UIKit
 import UserNotifications
+
+extension Notification.Name {
+    static let bolaHealthDataRefreshRequested = Notification.Name("bolaHealthDataRefreshRequested")
+}
 
 /// 设置列表（由根视图以 Sheet + `NavigationStack` 呈现，或单独再包一层导航栈）。
 struct IOSSettingsListView: View {
@@ -18,6 +24,7 @@ struct IOSSettingsListView: View {
     @State private var growthSummary: String = ""
     @State private var selectedPersonality = BolaPersonalitySelectionStore.validated()
     @ObservedObject private var debugLog = BolaDebugLog.shared
+    @StateObject private var healthDiagnostics = IOSHealthDiagnosticsModel()
 
     var body: some View {
         List {
@@ -80,13 +87,51 @@ struct IOSSettingsListView: View {
             }
 
             Section {
+                Button("前往系统设置中的 BolaBola…") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                Button("我已经改好健康权限，立即重新读取") {
+                    UserDefaults.standard.set(true, forKey: IOSHealthHabitAnalysisModel.healthReadPromptCompletedKey)
+                    NotificationCenter.default.post(name: .bolaHealthDataRefreshRequested, object: nil)
+                }
+            } header: {
+                Text("健康数据")
+            } footer: {
+                Text("iOS 不会从这里直接跳到「隐私与安全性 › 健康 › BolaBola」。若要开启健康读取，请到系统的「设置 › 隐私与安全性 › 健康 › BolaBola」里打开步数、活动、心率、睡眠等权限；改完后回到 App 点一次“立即重新读取”。")
+                    .font(.caption)
+            }
+
+            Section {
+                Button("读取当前健康原始值") {
+                    Task { await healthDiagnostics.refresh() }
+                }
+                diagnosticRow("步数", healthDiagnostics.stepsText)
+                diagnosticRow("Move", healthDiagnostics.moveText)
+                diagnosticRow("锻炼", healthDiagnostics.exerciseText)
+                diagnosticRow("站立", healthDiagnostics.standText)
+                diagnosticRow("睡眠", healthDiagnostics.sleepText)
+                if let errorText = healthDiagnostics.errorText {
+                    Text(errorText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("健康数据诊断")
+            } footer: {
+                Text("这里显示的是 App 当前直接从 HealthKit 读到的原始值。如果这里也都是 0，就不是卡片文案问题，而是该类健康数据当前确实没有可读样本。")
+                    .font(.caption)
+            }
+
+            Section {
                 Button("恢复默认生活卡片…", role: .destructive) {
                     confirmResetLifeRecords = true
                 }
             } header: {
                 Text("生活记录")
             } footer: {
-                Text("删除除「天气」外的所有生活卡片，用于清理测试数据；操作后无法撤销。")
+                Text("删除所有生活卡片，用于清理测试数据；天气会在当天再次刷新时重新生成。")
             }
 
             Section {
@@ -170,6 +215,16 @@ struct IOSSettingsListView: View {
             }
 
             Section {
+                Button("重新查看引导页") {
+                    BolaOnboardingState.reset()
+                }
+            } header: {
+                Text("引导")
+            } footer: {
+                Text("重置 onboarding 完成标记，返回主界面后会立即重新弹出引导流程。")
+            }
+
+            Section {
                 HStack {
                     Text("应用名称")
                     Spacer()
@@ -202,10 +257,12 @@ struct IOSSettingsListView: View {
         }
         .task {
             await refreshNotificationStatus()
+            await healthDiagnostics.refresh()
             refreshPersonalitySelection()
         }
         .onAppear {
             Task { await refreshNotificationStatus() }
+            Task { await healthDiagnostics.refresh() }
             refreshPersonalitySelection()
         }
         .onChange(of: selectedPersonality) { _, newValue in
@@ -216,7 +273,7 @@ struct IOSSettingsListView: View {
             refreshPersonalitySelection()
         }
         .confirmationDialog(
-            "将删除除「天气」外的所有生活卡片，且无法撤销。",
+            "将删除所有生活卡片，且无法撤销。",
             isPresented: $confirmResetLifeRecords,
             titleVisibility: .visible
         ) {
@@ -307,6 +364,17 @@ struct IOSSettingsListView: View {
         let s = await UNUserNotificationCenter.current().notificationSettings()
         notificationStatus = s.authorizationStatus
     }
+
+    @ViewBuilder
+    private func diagnosticRow(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
+    }
 }
 
 /// 独立打开设置时使用的带导航栈包装（预览/深链等）。
@@ -315,5 +383,113 @@ struct IOSSettingsView: View {
         NavigationStack {
             IOSSettingsListView(includeDismissToolbar: false)
         }
+    }
+}
+
+@MainActor
+private final class IOSHealthDiagnosticsModel: ObservableObject {
+    @Published private(set) var stepsText = "—"
+    @Published private(set) var moveText = "—"
+    @Published private(set) var exerciseText = "—"
+    @Published private(set) var standText = "—"
+    @Published private(set) var sleepText = "—"
+    @Published private(set) var errorText: String?
+
+    private let store = HKHealthStore()
+
+    func refresh() async {
+        errorText = nil
+        guard HKHealthStore.isHealthDataAvailable() else {
+            stepsText = "不可用"
+            moveText = "不可用"
+            exerciseText = "不可用"
+            standText = "不可用"
+            sleepText = "不可用"
+            return
+        }
+
+        do {
+            let requestStatus = await authorizationRequestStatus()
+            guard requestStatus == .unnecessary else {
+                errorText = "尚未完成统一健康授权；请在 onboarding 或健康入口里一次性授权。"
+                return
+            }
+            async let steps = queryTodaySum(.stepCount, unit: .count(), suffix: "步")
+            async let move = queryTodaySum(.activeEnergyBurned, unit: .kilocalorie(), suffix: "kcal")
+            async let exercise = queryTodaySum(.appleExerciseTime, unit: .minute(), suffix: "分")
+            async let stand = queryTodaySum(.appleStandTime, unit: .minute(), suffix: "分")
+            async let sleep = queryLatestSleep()
+            let (stepsVal, moveVal, exerciseVal, standVal, sleepVal) = await (steps, move, exercise, stand, sleep)
+
+            stepsText = stepsVal
+            moveText = moveVal
+            exerciseText = exerciseVal
+            standText = standVal
+            sleepText = sleepVal
+        } catch {
+            errorText = (error as NSError).localizedDescription
+        }
+    }
+
+    private func authorizationRequestStatus() async -> HKAuthorizationRequestStatus {
+        var read = Set<HKObjectType>()
+        if let t = HKQuantityType.quantityType(forIdentifier: .stepCount) { read.insert(t) }
+        if let t = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) { read.insert(t) }
+        if let t = HKQuantityType.quantityType(forIdentifier: .appleExerciseTime) { read.insert(t) }
+        if let t = HKQuantityType.quantityType(forIdentifier: .appleStandTime) { read.insert(t) }
+        if let t = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) { read.insert(t) }
+
+        return await withCheckedContinuation { cont in
+            store.getRequestStatusForAuthorization(toShare: [], read: read) { status, _ in
+                DispatchQueue.main.async {
+                    cont.resume(returning: status)
+                }
+            }
+        }
+    }
+
+    private func queryTodaySum(_ identifier: HKQuantityTypeIdentifier, unit: HKUnit, suffix: String) async -> String {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return "不支持" }
+        let start = Calendar.current.startOfDay(for: Date())
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
+
+        let value: Double = await withCheckedContinuation { cont in
+            let q = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, stats, _ in
+                cont.resume(returning: stats?.sumQuantity()?.doubleValue(for: unit) ?? 0)
+            }
+            store.execute(q)
+        }
+
+        if identifier == .stepCount {
+            return "\(Int(value.rounded())) \(suffix)"
+        }
+        return value > 0.01 ? "\(Int(value.rounded())) \(suffix)" : "0 \(suffix)"
+    }
+
+    private func queryLatestSleep() async -> String {
+        guard let type = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { return "不支持" }
+        let start = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date())
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+
+        let samples: [HKCategorySample] = await withCheckedContinuation { cont in
+            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, results, _ in
+                cont.resume(returning: (results as? [HKCategorySample]) ?? [])
+            }
+            store.execute(q)
+        }
+
+        let positive = samples.filter { sample in
+            guard let value = HKCategoryValueSleepAnalysis(rawValue: sample.value) else { return false }
+            switch value {
+            case .inBed, .awake:
+                return false
+            default:
+                return sample.endDate.timeIntervalSince(sample.startDate) > 0
+            }
+        }
+        guard let last = positive.last else { return "最近 7 天无记录" }
+        let hours = last.endDate.timeIntervalSince(last.startDate) / 3600
+        return String(format: "%.1f 小时", hours)
     }
 }

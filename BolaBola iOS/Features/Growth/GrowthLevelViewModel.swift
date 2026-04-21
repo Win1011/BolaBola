@@ -24,8 +24,9 @@ struct LevelUpPresentation: Identifiable, Equatable {
     static func build(from fromLevel: Int, to toLevel: Int) -> LevelUpPresentation {
         let normalizedFrom = max(1, fromLevel)
         let normalizedTo = max(normalizedFrom, toLevel)
-        let unlockedWords = wordsUnlocked(from: normalizedFrom + 1, to: normalizedTo)
-        let unlockedFrames = framesUnlocked(from: normalizedFrom + 1, to: normalizedTo)
+        let titleRewardLevels = titleRewardRange(from: normalizedFrom + 1, to: normalizedTo)
+        let unlockedWords = wordsUnlocked(in: titleRewardLevels)
+        let unlockedFrames = framesUnlocked(in: titleRewardLevels)
         let featureRewards = featureRewardsUnlocked(from: normalizedFrom + 1, to: normalizedTo)
 
         var rewards = featureRewards
@@ -73,22 +74,32 @@ struct LevelUpPresentation: Identifiable, Equatable {
         )
     }
 
-    private static func wordsUnlocked(from startLevel: Int, to endLevel: Int) -> [TitleWord] {
-        guard startLevel <= endLevel else { return [] }
+    private static func titleRewardRange(from startLevel: Int, to endLevel: Int) -> ClosedRange<Int>? {
+        guard startLevel <= endLevel, endLevel >= 3 else { return nil }
+
+        // 称号系统在 Lv.3 才真正可用；首次跨到 Lv.3 时，把此前可见但不可用的 Lv.2 词条一起并入奖励。
+        if startLevel <= 3 {
+            return max(2, startLevel) ... endLevel
+        }
+        return startLevel ... endLevel
+    }
+
+    private static func wordsUnlocked(in levels: ClosedRange<Int>?) -> [TitleWord] {
+        guard let levels else { return [] }
         return (TitleWordBank.poolA + TitleWordBank.poolB).filter { word in
             switch word.unlockCondition {
             case .level(let level):
-                return (startLevel ... endLevel).contains(level)
+                return levels.contains(level)
             default:
                 return false
             }
         }
     }
 
-    private static func framesUnlocked(from startLevel: Int, to endLevel: Int) -> [TitleFrameDefinition] {
-        guard startLevel <= endLevel else { return [] }
+    private static func framesUnlocked(in levels: ClosedRange<Int>?) -> [TitleFrameDefinition] {
+        guard let levels else { return [] }
         return TitleFrameBank.all.filter { frame in
-            (startLevel ... endLevel).contains(frame.level)
+            levels.contains(frame.level)
         }
     }
 
@@ -113,8 +124,8 @@ struct LevelUpPresentation: Identifiable, Equatable {
                 LevelUpRewardItem(
                     id: "personality",
                     iconSystemName: "face.smiling.inverse",
-                    title: "新人格已开启",
-                    detail: "Lv.5 起解锁傲娇人格，可以去设置里切换 Bola 的个性。"
+                    title: "新性格已开启",
+                    detail: "Lv.5 起解锁傲娇性格，可以去设置里切换 Bola 的个性。"
                 )
             )
         }
