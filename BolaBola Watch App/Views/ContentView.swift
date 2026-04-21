@@ -136,6 +136,7 @@ final class PetViewModel: ObservableObject {
 
     private var currentDefaultEmotion: PetEmotion = .idle
     private var milestoneTimerCancellable: AnyCancellable?
+    private var mealHungryScheduleCancellable: AnyCancellable?
     /// 上次已结算的墙钟时刻（与 `lastCompanionWallClockKey` 同步）
     private var lastCompanionWallClockTime: TimeInterval = 0
 
@@ -943,8 +944,9 @@ final class PetViewModel: ObservableObject {
         ) { [weak self] _ in
             guard let self else { return }
             BolaDebugLog.shared.log(.meal, "received meal slots update from iPhone")
-            self.mealEngine.loadSlots()
-            self.mealEngine.refreshMealState(now: Date())
+            let updatedSlots = MealSlotStore.load(from: BolaSharedDefaults.resolved())
+            self.mealEngine.updateSlots(updatedSlots, now: Date())
+            self.scheduleMealHungryTimerIfNeeded(now: Date())
         }
     }
 
@@ -993,6 +995,24 @@ final class PetViewModel: ObservableObject {
         applyDefaultEmotionDisplay()
         currentFrameIndex = 0
         BolaWCSessionCoordinator.shared.pushPetCoreState(.idle)
+    }
+
+    private func scheduleMealHungryTimerIfNeeded(now: Date) {
+        mealHungryScheduleCancellable?.cancel()
+        mealHungryScheduleCancellable = nil
+        guard let triggerDate = mealEngine.nextPendingTriggerDate(now: now) else { return }
+        let delay = triggerDate.timeIntervalSince(now)
+        guard delay > 0 else { return }
+        mealHungryScheduleCancellable = Timer
+            .publish(every: delay, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.mealHungryScheduleCancellable?.cancel()
+                self.mealHungryScheduleCancellable = nil
+                self.mealEngine.refreshMealState(now: Date())
+            }
+        BolaDebugLog.shared.log(.meal, "scheduled hungry timer in \(Int(delay))s")
     }
 
     // MARK: - 喝水

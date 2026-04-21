@@ -1,6 +1,6 @@
 //
 //  MealRecord.swift
-//  Watch-only — daily meal record + status
+//  Shared — daily meal record + status
 //
 
 import Foundation

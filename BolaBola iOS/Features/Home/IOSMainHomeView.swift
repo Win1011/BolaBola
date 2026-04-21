@@ -37,6 +37,7 @@ struct IOSMainHomeView: View {
     @State private var petTapFeedbackScale: CGFloat = 1.0
     /// 基础交互（点击跳跃 / 喂 / 喝 / 睡）的本机动画状态机；与手表共用触发逻辑。
     @StateObject private var interactionController = PetAnimationController()
+    @StateObject private var mealCoordinator = IOSMealCoordinator.shared
 
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
@@ -107,6 +108,7 @@ struct IOSMainHomeView: View {
             healthPreview.refresh()
             weather.requestAndFetch()
             mirrorCoreStateToController(coordinator.currentPetCoreState)
+            mealCoordinator.start()
         }
         .onChange(of: coordinator.currentPetCoreState) { _, newState in
             mirrorCoreStateToController(newState)
@@ -121,6 +123,7 @@ struct IOSMainHomeView: View {
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             refreshWatchInstallHint()
+            mealCoordinator.handleScenePhaseActive()
         }
         .onChange(of: refreshSignal) { _, _ in
             Task { await performWatchSync() }
@@ -243,8 +246,8 @@ struct IOSMainHomeView: View {
     }
 
     private func triggerEat() {
+        mealCoordinator.performMealFeed(companion: &companion)
         interactionController.applyEatCommand()
-        BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.feed)
     }
 
     private func triggerDrink() {

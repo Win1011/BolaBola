@@ -1,6 +1,6 @@
 //
 //  MealEngine.swift
-//  Watch-only — authoritative meal scheduling, hunger, feeding, reward engine
+//  Shared — authoritative meal scheduling, hunger, feeding, reward engine
 //
 
 import Foundation
@@ -184,6 +184,13 @@ final class MealEngine {
         todayRecords.contains { $0.status == .hungryActive }
     }
 
+    func nextPendingTriggerDate(now: Date) -> Date? {
+        todayRecords
+            .filter { $0.status == .pending && $0.scheduledDate > now }
+            .map(\.scheduledDate)
+            .min()
+    }
+
     func nextMealInfo(now: Date = Date()) -> (mealId: String, timeString: String, isFeedable: Bool)? {
         generateTodayRecordsIfNeeded(now: now)
         guard let slot = mealSlots.sorted(by: { timeFromDate($0, now: now) < timeFromDate($1, now: now) }).first(where: { slot in
@@ -214,8 +221,12 @@ final class MealEngine {
             let scheduled = cal.date(bySettingHour: slot.hour, minute: slot.minute, second: 0, of: today) ?? today
 
             if let existing = todayRecords.first(where: { $0.mealId == slot.id }) {
-                if existing.status.isFinalized || existing.status == .hungryActive {
+                if existing.status.isFinalized {
                     newRecords.append(existing)
+                } else if existing.status == .hungryActive {
+                    var updated = existing
+                    updated.scheduledDate = scheduled
+                    newRecords.append(updated)
                 } else {
                     newRecords.append(MealRecord(
                         recordId: recordId,
