@@ -171,6 +171,14 @@ final class PetViewModel: ObservableObject {
                 self.applyRemoteCompanionValue(v)
             }
         }
+        // 只订阅「对端推送」来源的核心状态变化，避免本机 `pushPetCoreState` 自反馈
+        // （那会在本机 tap 触发吃/喝/入睡时立刻把自己的过渡动画 force-clear 掉）。
+        BolaWCSessionCoordinator.shared.onRemoteCoreStateChange = { [weak self] newState in
+            guard let self else { return }
+            Task { @MainActor in
+                self.applyRemoteCoreState(newState)
+            }
+        }
         // WCSession 已在 `BolaBolaApp.init()` 中激活；此处不再重复 activate，仅绑定回调。
         #endif
 
@@ -225,11 +233,59 @@ final class PetViewModel: ObservableObject {
         companionValueInternal = clampCompanionValue(v)
         companionValue = companionValueInternal.rounded()
         persistCompanionSnapshot(bolaDefaults, pushToPhone: false)
+        guard !isInEatingState, !isInDrinkWaterState, !isInNightSleepState else {
+            trackCompanionTierSpeechIfNeeded()
+            return
+        }
         selectDefaultEmotion()
         applyDefaultEmotionDisplay()
         currentFrameIndex = 0
         trackCompanionTierSpeechIfNeeded()
     }
+
+    #if os(watchOS)
+    /// 远程核心状态变更（iPhone → Watch）：直接跳转到目标状态，不播放中间动画。
+    /// 仅当本机正处于交互等待态且远程推送了结果状态时才生效（防止反馈循环）。
+    private func applyRemoteCoreState(_ state: PetCoreState) {
+        switch state {
+        case .idle:
+            guard isInEatingState || isInDrinkWaterState else { return }
+            isInEatingState = false
+            isInDrinkWaterState = false
+            isTapInteractionAnimating = false
+            dialogueDismissWorkItem?.cancel()
+            dialogueLine = ""
+            interactionController.forceClear()
+            selectDefaultEmotion()
+            applyDefaultEmotionDisplay()
+            currentFrameIndex = 0
+        case .hungry:
+            guard !isInEatingState else { return }
+            isInEatingState = true
+            isTapInteractionAnimating = true
+            interactionController.enterHungry()
+        case .thirsty:
+            guard !isInDrinkWaterState else { return }
+            isInDrinkWaterState = true
+            isTapInteractionAnimating = true
+            interactionController.enterThirsty()
+        case .sleepWait:
+            guard !isInNightSleepState else { return }
+            isInNightSleepState = true
+            isNightSleepAsleep = false
+            isTapInteractionAnimating = true
+            interactionController.enterSleepWait()
+        case .sleeping:
+            guard isInNightSleepState, !isNightSleepAsleep else { return }
+            isNightSleepAsleep = true
+            isTapInteractionAnimating = true
+            currentEmotion = .sleepLoop
+            currentFrameIndex = 0
+            dialogueDismissWorkItem?.cancel()
+            dialogueLine = ""
+        }
+    }
+    #endif
 
     /// Bola「开口」时轻触手腕（与文字气泡同步）
     private func playDialogueHaptic() {
@@ -257,22 +313,40 @@ final class PetViewModel: ObservableObject {
     }
 
     #if os(watchOS)
-    /// 来自 iPhone 的指令：映射到具体 wait-state 点击处理（tap 已改为本机处理）。
+    /// 来自 iPhone 的指令：直接跳转到结果状态（不播放中间动画）。
+    /// feed/eat → idle；drink → idle；sleep → sleeping。
     private func handleRemotePetCommand(_ kind: String) {
         switch kind {
-        case PetCommandKind.eat:
-            if isInEatingState, currentEmotion == .eatingWait {
-                handleEatingTap()
+        case PetCommandKind.eat, PetCommandKind.feed:
+            if isInEatingState {
+                isInEatingState = false
+                isTapInteractionAnimating = false
+                dialogueDismissWorkItem?.cancel()
+                dialogueLine = ""
+                interactionController.forceClear()
+                selectDefaultEmotion()
+                applyDefaultEmotionDisplay()
+                currentFrameIndex = 0
             }
-        case PetCommandKind.feed:
-            performMealFeed()
         case PetCommandKind.drink:
-            if isInDrinkWaterState, currentEmotion == .idleDrink1 || currentEmotion == .idleDrink2 {
-                handleDrinkWaterTap()
+            if isInDrinkWaterState {
+                isInDrinkWaterState = false
+                isTapInteractionAnimating = false
+                dialogueDismissWorkItem?.cancel()
+                dialogueLine = ""
+                interactionController.forceClear()
+                selectDefaultEmotion()
+                applyDefaultEmotionDisplay()
+                currentFrameIndex = 0
             }
         case PetCommandKind.sleep:
-            if isInNightSleepState, !isNightSleepAsleep, currentEmotion == .nightSleepWait {
-                handleNightSleepWaitTap()
+            if isInNightSleepState, !isNightSleepAsleep {
+                isNightSleepAsleep = true
+                isTapInteractionAnimating = true
+                currentEmotion = .sleepLoop
+                currentFrameIndex = 0
+                dialogueDismissWorkItem?.cancel()
+                dialogueLine = ""
             }
         default:
             break

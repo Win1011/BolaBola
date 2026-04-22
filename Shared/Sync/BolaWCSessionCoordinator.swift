@@ -17,6 +17,10 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     /// 主线程：远端较新时写入本机 `BolaSharedDefaults.resolved()` 后调用。
     public var onReceiveCompanionValue: ((Double) -> Void)?
 
+    /// 主线程：**仅**对端推送的 `PetCoreState` 变化触发（本机 `pushPetCoreState` 不触发）。
+    /// 用于对端「跳到结果状态」同步；与本机自驱的交互过渡动画区分开，避免自反馈循环。
+    public var onRemoteCoreStateChange: ((PetCoreState) -> Void)?
+
     /// 跨设备同步的宠物核心状态（idle / hungry / thirsty / sleepWait / sleeping）。
     @Published public var currentPetCoreState: PetCoreState = .idle
 
@@ -863,10 +867,14 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         // 它们由对端直接驱动，应始终应用以保证即时同步。
         if let raw = dict[WCSyncPayload.petCoreState] as? String,
            let state = PetCoreState(rawValue: raw) {
-            if currentPetCoreState != state {
+            let didChange = currentPetCoreState != state
+            if didChange {
                 BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue)")
             }
             currentPetCoreState = state
+            if didChange {
+                onRemoteCoreStateChange?(state)
+            }
         }
         #if os(iOS)
         if let label = dict[WCSyncPayload.petEmotionLabel] as? String, !label.isEmpty {
@@ -1092,6 +1100,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
                let state = PetCoreState(rawValue: raw), self.currentPetCoreState != state {
                 BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue) (userInfo early)")
                 self.currentPetCoreState = state
+                self.onRemoteCoreStateChange?(state)
             }
             #if os(iOS)
             if (userInfo[WCSyncPayload.requestSync] as? String) == WCSyncPayload.requestSyncValueLLMKeychain {
@@ -1138,6 +1147,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
                let state = PetCoreState(rawValue: raw), self.currentPetCoreState != state {
                 BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue) (message early)")
                 self.currentPetCoreState = state
+                self.onRemoteCoreStateChange?(state)
             }
             #if os(watchOS)
             if self.ingestSpeechRelayReplyIfPresent(message) {
