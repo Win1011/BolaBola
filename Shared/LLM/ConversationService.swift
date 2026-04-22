@@ -5,8 +5,8 @@
 import Foundation
 import os
 
-private let bolaConversationSyncLog = Logger(subsystem: "com.gathxr.BolaBola.sync", category: "Conversation")
-private let bolaWatchVoiceLog = Logger(subsystem: "com.gathxr.BolaBola", category: "WatchVoice")
+private let bolaConversationSyncLog = Logger(subsystem: "com.GathXRTeam.BolaBola.sync", category: "Conversation")
+private let bolaWatchVoiceLog = Logger(subsystem: "com.GathXRTeam.BolaBola", category: "WatchVoice")
 
 public enum ConversationService {
     public static func bolaSystemPrompt(companionValue: Int, growthLevel: Int? = nil) -> String {

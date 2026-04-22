@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.gathxr.BolaBola</string>
+	<string>com.GathXRTeam.BolaBola</string>
 	<key>PROJECT_ID</key>
 	<string>bolabola-6628c</string>
 	<key>STORAGE_BUCKET</key>

@@ -8,7 +8,7 @@ import Foundation
 import os
 import WatchConnectivity
 
-private let watchMicLog = Logger(subsystem: "com.gathxr.BolaBola", category: "WatchVoice")
+private let watchMicLog = Logger(subsystem: "com.GathXRTeam.BolaBola", category: "WatchVoice")
 
 // MARK: - 录音
 

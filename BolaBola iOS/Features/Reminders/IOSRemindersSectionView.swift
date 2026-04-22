@@ -68,6 +68,8 @@ struct IOSRemindersSectionView: View {
                     onSave: { slot in
                         if let idx = mealSlots.firstIndex(where: { $0.id == slot.id }) {
                             mealSlots[idx] = slot
+                        } else {
+                            mealSlots.append(slot)
                         }
                         persistMealSlots()
                     },
@@ -384,6 +386,7 @@ struct IOSRemindersSectionView: View {
     private func persistMealSlots() {
         MealSlotStore.save(mealSlots)
         BolaWCSessionCoordinator.shared.pushMealSlotsToWatchIfPossible()
+        NotificationCenter.default.post(name: .bolaMealSlotsDidUpdate, object: nil)
         BolaDebugLog.shared.log(.meal, "iPhone meal slots saved & pushed count=\(mealSlots.count)")
     }
 

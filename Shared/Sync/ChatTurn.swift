@@ -5,7 +5,7 @@
 import Foundation
 import os
 
-private let bolaChatStoreLog = Logger(subsystem: "com.gathxr.BolaBola.sync", category: "ChatStore")
+private let bolaChatStoreLog = Logger(subsystem: "com.GathXRTeam.BolaBola.sync", category: "ChatStore")
 
 public extension Notification.Name {
     /// 任意聊天记录写入本地存储后发出，供任务/列表等统一刷新。

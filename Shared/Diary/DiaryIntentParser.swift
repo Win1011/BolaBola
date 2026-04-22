@@ -5,7 +5,7 @@
 import Foundation
 import os
 
-private let bolaDiaryLog = Logger(subsystem: "com.gathxr.BolaBola", category: "Diary")
+private let bolaDiaryLog = Logger(subsystem: "com.GathXRTeam.BolaBola", category: "Diary")
 
 public struct BolaDiaryDraft: Codable, Equatable, Sendable {
     public var title: String

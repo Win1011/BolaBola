@@ -8,7 +8,7 @@ import os
 import Combine
 import WatchConnectivity
 
-private let bolaWCChatLog = Logger(subsystem: "com.gathxr.BolaBola.sync", category: "WatchConnectivity")
+private let bolaWCChatLog = Logger(subsystem: "com.GathXRTeam.BolaBola.sync", category: "WatchConnectivity")
 
 /// 通过 `updateApplicationContext`（失败时 `transferUserInfo`）同步陪伴值；激活后消费 `receivedApplicationContext`。
 public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessionDelegate {

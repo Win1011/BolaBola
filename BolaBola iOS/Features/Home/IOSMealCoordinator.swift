@@ -52,7 +52,7 @@ final class IOSMealCoordinator: ObservableObject {
         let newCompanion = addCompanionRewardLocally(result.reward)
         companion = newCompanion
 
-        coordinator.currentPetCoreState = .idle
+        coordinator.pushPetCoreState(.idle)
 
         coordinator.sendPetCommand(PetCommandKind.feed)
 
@@ -66,14 +66,14 @@ final class IOSMealCoordinator: ObservableObject {
             guard let self else { return }
             guard self.coordinator.currentPetCoreState != .hungry else { return }
             BolaDebugLog.shared.log(.meal, "iOS: meal engine → trigger hungry")
-            self.coordinator.currentPetCoreState = .hungry
+            self.coordinator.pushPetCoreState(.hungry)
         }
 
         mealEngine.onExitHungry = { [weak self] in
             guard let self else { return }
             guard self.coordinator.currentPetCoreState == .hungry else { return }
             BolaDebugLog.shared.log(.meal, "iOS: meal engine → exit hungry (auto-feed)")
-            self.coordinator.currentPetCoreState = .idle
+            self.coordinator.pushPetCoreState(.idle)
         }
     }
 
@@ -115,6 +115,7 @@ final class IOSMealCoordinator: ObservableObject {
                 self.mealHungryScheduleCancellable?.cancel()
                 self.mealHungryScheduleCancellable = nil
                 self.mealEngine.refreshMealState(now: Date())
+                self.scheduleMealHungryTimerIfNeeded(now: Date())
             }
         BolaDebugLog.shared.log(.meal, "iOS: scheduled hungry timer in \(Int(delay))s")
     }

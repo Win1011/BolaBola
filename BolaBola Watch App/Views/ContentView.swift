@@ -936,6 +936,7 @@ final class PetViewModel: ObservableObject {
         }
 
         mealEngine.refreshMealState(now: Date())
+        scheduleMealHungryTimerIfNeeded(now: Date())
 
         NotificationCenter.default.addObserver(
             forName: .bolaMealSlotsDidUpdate,
@@ -1011,6 +1012,7 @@ final class PetViewModel: ObservableObject {
                 self.mealHungryScheduleCancellable?.cancel()
                 self.mealHungryScheduleCancellable = nil
                 self.mealEngine.refreshMealState(now: Date())
+                self.scheduleMealHungryTimerIfNeeded(now: Date())
             }
         BolaDebugLog.shared.log(.meal, "scheduled hungry timer in \(Int(delay))s")
     }
@@ -1527,6 +1529,7 @@ final class PetViewModel: ObservableObject {
             #endif
             applyWallClockCompanionDeltaFromLastCredit()
             mealEngine.refreshMealState(now: Date())
+            scheduleMealHungryTimerIfNeeded(now: Date())
             speakForegroundGreetingIfNeeded()
             maybeTriggerSurpriseIfNeeded()
             Task {

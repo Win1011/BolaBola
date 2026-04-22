@@ -6,7 +6,7 @@
 import SwiftUI
 import os
 
-private let watchChromeVoiceLog = Logger(subsystem: "com.gathxr.BolaBola", category: "WatchVoice")
+private let watchChromeVoiceLog = Logger(subsystem: "com.GathXRTeam.BolaBola", category: "WatchVoice")
 
 /// watchOS 26+ → Liquid Glass；低版本 → ultraThinMaterial 圆角矩形
 private struct WatchGlassRoundedRect12: ViewModifier {

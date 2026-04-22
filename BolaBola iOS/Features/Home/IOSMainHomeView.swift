@@ -108,6 +108,7 @@ struct IOSMainHomeView: View {
             healthPreview.refresh()
             weather.requestAndFetch()
             mirrorCoreStateToController(coordinator.currentPetCoreState)
+            configureInteractionControllerSync()
             mealCoordinator.start()
         }
         .onChange(of: coordinator.currentPetCoreState) { _, newState in
@@ -395,6 +396,23 @@ struct IOSMainHomeView: View {
             return true
         default:
             return false
+        }
+    }
+
+    /// iPhone 端交互状态机过渡时，把结果核心状态推送到手表（与手表端 applyInteractionTransition 对称）。
+    /// 交互过渡动画由本机驱动，推送时机遵循逻辑结果而非动画完成：
+    /// 交互一开始即推送结果状态（如 hungry→idle、sleepWait→sleeping）。
+    private func configureInteractionControllerSync() {
+        interactionController.onTransition = { reason, _ in
+            let coordinator = BolaWCSessionCoordinator.shared
+            switch reason {
+            case .eatingStarted, .drinkingStarted:
+                coordinator.pushPetCoreState(.idle)
+            case .fallingAsleepStarted:
+                coordinator.pushPetCoreState(.sleeping)
+            default:
+                break
+            }
         }
     }
 

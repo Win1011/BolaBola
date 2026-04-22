@@ -39,7 +39,7 @@ public struct OpenAICompatibleChatResponse: Decodable, Sendable {
 }
 
 public enum LLMKeychain {
-    public static let service = "com.gathxr.BolaBola.llm"
+    public static let service = "com.GathXRTeam.BolaBola.llm"
     public static let accountAPIKey = "apiKey"
     public static let accountBaseURL = "baseURL"
     public static let accountModelId = "modelId"

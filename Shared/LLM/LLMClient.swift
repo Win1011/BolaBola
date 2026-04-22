@@ -5,7 +5,7 @@
 import Foundation
 import os
 
-private let bolaWatchVoiceLog = Logger(subsystem: "com.gathxr.BolaBola", category: "WatchVoice")
+private let bolaWatchVoiceLog = Logger(subsystem: "com.GathXRTeam.BolaBola", category: "WatchVoice")
 
 public enum LLMClientError: Error {
     case missingConfiguration

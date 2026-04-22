@@ -7,7 +7,7 @@ import os
 
 // `resolved()` 优先使用 App Group suite；若 entitlement 缺失则回退 `standard`（便于本地调试未配 group 时仍能跑）。
 
-private let bolaPrefsLog = Logger(subsystem: "com.gathxr.BolaBola.sync", category: "AppGroup")
+private let bolaPrefsLog = Logger(subsystem: "com.GathXRTeam.BolaBola.sync", category: "AppGroup")
 
 public enum BolaSharedDefaults {
     private static let suiteLogLock = NSLock()

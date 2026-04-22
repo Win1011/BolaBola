@@ -18,7 +18,9 @@ struct BolaWidgetProvider: TimelineProvider {
     }
 
     private func readCompanionValue() -> Int {
-        let defaults = UserDefaults(suiteName: "group.com.gathxr.BolaBola") ?? .standard
+        // AppGroupConfig lives in Shared/ which isn't synced to the Widget target.
+        // Keep suite name in sync with Shared/Defaults/AppGroupConfig.swift
+        let defaults = UserDefaults(suiteName: "group.com.GathXRTeam.BolaBola") ?? .standard
         return defaults.integer(forKey: "bola_companionValue")
     }
 }
