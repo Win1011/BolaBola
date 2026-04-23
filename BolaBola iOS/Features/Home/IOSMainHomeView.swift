@@ -35,10 +35,8 @@ struct IOSMainHomeView: View {
     @State private var hasPerformedInitialLoad = false
     @State private var showHeavyWatchPreview = false
     @State private var petTapFeedbackScale: CGFloat = 1.0
-    /// 基础交互（点击跳跃 / 喂 / 喝 / 睡）的本机动画状态机；与手表共用触发逻辑。
-    @StateObject private var interactionController = PetAnimationController()
+    @StateObject private var petHandler = IOSPetInteractionHandler()
     @StateObject private var mealCoordinator = IOSMealCoordinator.shared
-    @State private var actionToastText: String? = nil
 
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
@@ -108,12 +106,12 @@ struct IOSMainHomeView: View {
             }
             healthPreview.refresh()
             weather.requestAndFetch()
-            mirrorCoreStateToController(coordinator.currentPetCoreState)
-            configureInteractionControllerSync()
+            petHandler.mirrorCoreStateToController(coordinator.currentPetCoreState)
+            petHandler.configureInteractionControllerSync()
             mealCoordinator.start()
         }
         .onChange(of: coordinator.currentPetCoreState) { _, newState in
-            mirrorCoreStateToController(newState)
+            petHandler.mirrorCoreStateToController(newState)
         }
         .onChange(of: slotsConfig) { _, new in
             WatchFaceSlotsStore.save(new)
@@ -213,7 +211,7 @@ struct IOSMainHomeView: View {
     /// 只有控制器处于「等待互动」循环或无交互时，`PetCoreState.localDialogue` 才可信；
     /// 处于 eat/drink/sleep 过渡或 tap jump 期间应隐藏气泡，避免「饿了」台词盖在正吃东西的 Bola 上。
     private var shouldShowWaitDialogue: Bool {
-        switch interactionController.activeInteraction {
+        switch petHandler.interactionController.activeInteraction {
         case .none,
              .eatingWait,
              .idleDrinkOne, .idleDrinkTwo,
@@ -224,123 +222,9 @@ struct IOSMainHomeView: View {
         }
     }
 
-    private var petActionBar: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 14) {
-                petActionButton(title: "喂食", systemImage: "leaf.fill", tint: .green) { handleFeedButton() }
-                petActionButton(title: "喝水", systemImage: "drop.fill", tint: .blue) { handleDrinkButton() }
-                petActionButton(title: "睡觉", systemImage: "moon.zzz.fill", tint: .purple) { handleSleepButton() }
-            }
-            .frame(maxWidth: .infinity)
+    private var petActionBar: IOSPetActionBarView { IOSPetActionBarView(handler: petHandler) }
 
-            if let text = actionToastText {
-                Text(text)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .transition(.opacity)
-                    .animation(.easeInOut(duration: 0.25), value: actionToastText)
-            }
-        }
-    }
 
-    private func triggerEat() {
-        mealCoordinator.performMealFeed(companion: &companion)
-        interactionController.applyEatCommand()
-    }
-
-    private func triggerDrink() {
-        interactionController.applyDrinkCommand()
-        BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.drink)
-    }
-
-    private func triggerSleep() {
-        interactionController.applySleepCommand()
-        BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.sleep)
-    }
-
-    private func handleDrinkButton() {
-        interactionController.enterThirsty()
-        coordinator.pushPetCoreState(.thirsty)
-    }
-
-    private func handleFeedButton() {
-        if isWithinOneHourOfMeal() {
-            interactionController.enterHungry()
-            coordinator.pushPetCoreState(.hungry)
-        } else {
-            showActionToast("暂无可喂餐食")
-        }
-    }
-
-    private func handleSleepButton() {
-        if isPastBedtime() {
-            interactionController.enterSleepWait()
-            interactionController.applySleepCommand()
-        } else {
-            showActionToast("还没到睡觉时间哦")
-        }
-    }
-
-    private func isWithinOneHourOfMeal() -> Bool {
-        let engine = MealEngine.shared
-        let now = Date()
-        engine.generateTodayRecordsIfNeeded(now: now)
-        let oneHourFromNow = now.addingTimeInterval(3600)
-
-        return engine.todayRecords.contains { record in
-            switch record.status {
-            case .pending:
-                return record.scheduledDate > now && record.scheduledDate <= oneHourFromNow
-            case .hungryActive:
-                return true
-            default:
-                return false
-            }
-        }
-    }
-
-    // 与手表端 23:30–08:30 睡眠窗口对齐
-    private func isPastBedtime() -> Bool {
-        let cal = Calendar.current
-        let h = cal.component(.hour, from: Date())
-        let m = cal.component(.minute, from: Date())
-        if h == 23 && m >= 30 { return true }
-        if h < 8 { return true }
-        if h == 8 && m < 30 { return true }
-        return false
-    }
-
-    private func showActionToast(_ text: String) {
-        withAnimation(.easeInOut(duration: 0.25)) {
-            actionToastText = text
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            withAnimation(.easeInOut(duration: 0.25)) {
-                actionToastText = nil
-            }
-        }
-    }
-
-    private func petActionButton(title: String, systemImage: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 14, weight: .semibold))
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-            }
-            .foregroundStyle(tint)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                Capsule().fill(tint.opacity(0.14))
-            )
-            .overlay(
-                Capsule().stroke(tint.opacity(0.45), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
 
     private var watchPreviewBlock: some View {
         VStack(spacing: 10) {
@@ -370,111 +254,24 @@ struct IOSMainHomeView: View {
 
         switch coordinator.currentPetCoreState {
         case .hungry:
-            triggerEat()
+            petHandler.triggerEat(companion: &companion)
             return
         case .thirsty:
-            triggerDrink()
+            petHandler.triggerDrink()
             return
         case .sleepWait:
-            triggerSleep()
+            petHandler.triggerSleep()
             return
         default:
             break
         }
 
-        if interactionController.handleIdleTap() {
-            BolaWCSessionCoordinator.shared.incrementCompanionValueLocally(by: 1)
-            companion = BolaSharedDefaults.resolved().double(forKey: CompanionPersistenceKeys.companionValue)
-        }
+        if petHandler.handleIdleTap(companion: &companion) {}
     }
 
-    /// 把手表推送过来的核心状态投影到本机控制器：
-    /// - 等待态（hungry/thirsty/sleepWait）若本机尚未进入对应流程，则切进等待循环；
-    /// - sleeping 直接切到 sleepLoop（不重放 fallingAsleep 过渡）；
-    /// - idle 只清除「等待循环」，正在跑的本机一次性动画让它自己跑完。
-    /// 交互过渡动画（eating/drinking/fallingAsleep）由本机驱动，不作为核心状态同步；
-    /// 对端在交互开始时立即推送结果状态（idle/sleeping），本端直接对齐即可。
-    /// 若本机正处于本地过渡动画中（如 fallAsleep），不中断——让本地动画自然完成。
-    private func mirrorCoreStateToController(_ state: PetCoreState) {
-        let active = interactionController.activeInteraction
-        switch state {
-        case .idle:
-            if isInWaitingLoop(active) {
-                interactionController.returnToIdle()
-            }
-        case .hungry:
-            if !isInEatingFlow(active) {
-                interactionController.enterHungry()
-            }
-        case .thirsty:
-            if !isInDrinkingFlow(active) {
-                interactionController.enterThirsty()
-            }
-        case .sleepWait:
-            if !isInSleepFlow(active) {
-                interactionController.enterSleepWait()
-            }
-        case .sleeping:
-            if isInWaitingLoop(active) {
-                interactionController.enterSleeping()
-            } else if active == nil {
-                interactionController.enterSleeping()
-            }
-        }
-    }
 
-    private func isInWaitingLoop(_ emotion: PetInteractionEmotion?) -> Bool {
-        switch emotion {
-        case .eatingWait, .idleDrinkOne, .idleDrinkTwo, .nightSleepWait, .sleepLoop:
-            return true
-        default:
-            return false
-        }
-    }
 
-    private func isInEatingFlow(_ emotion: PetInteractionEmotion?) -> Bool {
-        switch emotion {
-        case .eatingWait, .eatingOnce, .eatingHappyIdle, .eatingLikeOne, .eatingLikeTwo:
-            return true
-        default:
-            return false
-        }
-    }
 
-    private func isInDrinkingFlow(_ emotion: PetInteractionEmotion?) -> Bool {
-        switch emotion {
-        case .idleDrinkOne, .idleDrinkTwo, .drinkOnce, .blowbubbleOne, .blowbubbleTwo:
-            return true
-        default:
-            return false
-        }
-    }
-
-    private func isInSleepFlow(_ emotion: PetInteractionEmotion?) -> Bool {
-        switch emotion {
-        case .nightSleepWait, .fallAsleep, .sleepLoop:
-            return true
-        default:
-            return false
-        }
-    }
-
-    /// iPhone 端交互状态机过渡时，把结果核心状态推送到手表（与手表端 applyInteractionTransition 对称）。
-    /// 交互过渡动画由本机驱动，推送时机遵循逻辑结果而非动画完成：
-    /// 交互一开始即推送结果状态（如 hungry→idle、sleepWait→sleeping）。
-    private func configureInteractionControllerSync() {
-        interactionController.onTransition = { reason, _ in
-            let coordinator = BolaWCSessionCoordinator.shared
-            switch reason {
-            case .eatingStarted, .drinkingStarted:
-                coordinator.pushPetCoreState(.idle)
-            case .fallingAsleepStarted:
-                coordinator.pushPetCoreState(.sleeping)
-            default:
-                break
-            }
-        }
-    }
 
     private var watchMockupCore: some View {
         Group {
@@ -522,22 +319,22 @@ struct IOSMainHomeView: View {
 
     /// 控制器处于基础交互时，以控制器的精确帧序列为准；否则回落到 `PetCoreState` 推导的默认 idle / 等待循环。
     private var currentPetAnimationPrefix: String {
-        if let active = interactionController.activeInteraction {
+        if let active = petHandler.interactionController.activeInteraction {
             return active.animationPrefix
         }
         return coordinator.currentPetCoreState.animationPrefix(companionValue: companion)
     }
 
     private var currentPetAnimationMaxFrames: Int {
-        interactionController.activeInteraction?.frameCount ?? 90
+        petHandler.interactionController.activeInteraction?.frameCount ?? 90
     }
 
     private var currentPetAnimationFPS: Double {
-        interactionController.activeInteraction?.fps ?? 24
+        petHandler.interactionController.activeInteraction?.fps ?? 24
     }
 
     private var currentPetAnimationIsLoop: Bool {
-        interactionController.activeInteraction?.isLoop ?? true
+        petHandler.interactionController.activeInteraction?.isLoop ?? true
     }
 
     private var watchHintText: String? {
