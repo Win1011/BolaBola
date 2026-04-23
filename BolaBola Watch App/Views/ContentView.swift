@@ -260,17 +260,17 @@ final class PetViewModel: ObservableObject {
             applyDefaultEmotionDisplay()
             currentFrameIndex = 0
         case .hungry:
-            guard !isInEatingState else { return }
+            guard !isInEatingState, !isInNightSleepState else { return }
             isInEatingState = true
             isTapInteractionAnimating = true
             interactionController.enterHungry()
         case .thirsty:
-            guard !isInDrinkWaterState else { return }
+            guard !isInDrinkWaterState, !isInNightSleepState, !isInEatingState else { return }
             isInDrinkWaterState = true
             isTapInteractionAnimating = true
             interactionController.enterThirsty()
         case .sleepWait:
-            guard !isInNightSleepState else { return }
+            guard !isInNightSleepState, !isInEatingState else { return }
             isInNightSleepState = true
             isNightSleepAsleep = false
             isTapInteractionAnimating = true
@@ -772,7 +772,7 @@ final class PetViewModel: ObservableObject {
             currentEmotion = currentDefaultEmotion
             return
         }
-        if isInNightSleepWindow(date), Double.random(in: 0...1) < sleepNightProbability {
+        if isInNightSleepWindow(date), !isInEatingState, Double.random(in: 0...1) < sleepNightProbability {
             enterNightSleepWaitState()
             return
         }
@@ -981,7 +981,9 @@ final class PetViewModel: ObservableObject {
     // MARK: - 吃东西
 
     /// 进入吃东西等待状态：循环 idleapple + 饿了台词
+    /// 睡眠中不触发 hungry（Sleeping 优先级最高）
     func enterEatingState() {
+        guard !isInNightSleepState else { return }
         isInDrinkWaterState = false
         isTapInteractionAnimating = true
         interactionController.enterHungry()
@@ -1094,7 +1096,9 @@ final class PetViewModel: ObservableObject {
     // MARK: - 喝水
 
     /// 进入喝水提醒等待状态：随机循环 idledrink1 / idledrink2 + 固定台词
+    /// Sleeping / Hungry 时不触发 thirsty
     func enterDrinkWaterState() {
+        guard !isInNightSleepState, !isInEatingState else { return }
         isInEatingState = false
         isInNightSleepState = false
         isNightSleepAsleep = false
@@ -1115,7 +1119,9 @@ final class PetViewModel: ObservableObject {
     // MARK: - 夜间睡眠
 
     /// 进入夜间睡眠等待：循环 sleepy + 固定台词
+    /// Hungry 时不触发 sleepy
     private func enterNightSleepWaitState() {
+        guard !isInEatingState else { return }
         isInDrinkWaterState = false
         isTapInteractionAnimating = true
         interactionController.enterSleepWait()
@@ -1194,6 +1200,7 @@ final class PetViewModel: ObservableObject {
         let d = bolaDefaults
         guard d.bool(forKey: BolaNotificationBridgeKeys.waterReminderTrigger) else { return }
         d.set(false, forKey: BolaNotificationBridgeKeys.waterReminderTrigger)
+        guard !isInNightSleepState, !isInEatingState else { return }
         enterDrinkWaterState()
     }
 
