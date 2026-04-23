@@ -38,6 +38,7 @@ struct IOSMainHomeView: View {
     /// 基础交互（点击跳跃 / 喂 / 喝 / 睡）的本机动画状态机；与手表共用触发逻辑。
     @StateObject private var interactionController = PetAnimationController()
     @StateObject private var mealCoordinator = IOSMealCoordinator.shared
+    @State private var actionToastText: String? = nil
 
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
@@ -224,26 +225,22 @@ struct IOSMainHomeView: View {
     }
 
     private var petActionBar: some View {
-        let state = coordinator.currentPetCoreState
-        return HStack(spacing: 14) {
-            if state == .hungry {
-                petActionButton(title: "喂食", systemImage: "leaf.fill", tint: .green) {
-                    triggerEat()
-                }
+        VStack(spacing: 6) {
+            HStack(spacing: 14) {
+                petActionButton(title: "喂食", systemImage: "leaf.fill", tint: .green) { handleFeedButton() }
+                petActionButton(title: "喝水", systemImage: "drop.fill", tint: .blue) { handleDrinkButton() }
+                petActionButton(title: "睡觉", systemImage: "moon.zzz.fill", tint: .purple) { handleSleepButton() }
             }
-            if state == .thirsty {
-                petActionButton(title: "喝水", systemImage: "drop.fill", tint: .blue) {
-                    triggerDrink()
-                }
-            }
-            if state == .sleepWait {
-                petActionButton(title: "睡觉", systemImage: "moon.zzz.fill", tint: .purple) {
-                    triggerSleep()
-                }
+            .frame(maxWidth: .infinity)
+
+            if let text = actionToastText {
+                Text(text)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.25), value: actionToastText)
             }
         }
-        .frame(maxWidth: .infinity)
-        .animation(.easeInOut(duration: 0.18), value: state)
     }
 
     private func triggerEat() {
@@ -259,6 +256,69 @@ struct IOSMainHomeView: View {
     private func triggerSleep() {
         interactionController.applySleepCommand()
         BolaWCSessionCoordinator.shared.sendPetCommand(PetCommandKind.sleep)
+    }
+
+    private func handleDrinkButton() {
+        interactionController.enterThirsty()
+        coordinator.pushPetCoreState(.thirsty)
+    }
+
+    private func handleFeedButton() {
+        if isWithinOneHourOfMeal() {
+            interactionController.enterHungry()
+            coordinator.pushPetCoreState(.hungry)
+        } else {
+            showActionToast("暂无可喂餐食")
+        }
+    }
+
+    private func handleSleepButton() {
+        if isPastBedtime() {
+            interactionController.enterSleepWait()
+            interactionController.applySleepCommand()
+        } else {
+            showActionToast("还没到睡觉时间哦")
+        }
+    }
+
+    private func isWithinOneHourOfMeal() -> Bool {
+        let engine = MealEngine.shared
+        let now = Date()
+        engine.generateTodayRecordsIfNeeded(now: now)
+        let oneHourFromNow = now.addingTimeInterval(3600)
+
+        return engine.todayRecords.contains { record in
+            switch record.status {
+            case .pending:
+                return record.scheduledDate > now && record.scheduledDate <= oneHourFromNow
+            case .hungryActive:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    // 与手表端 23:30–08:30 睡眠窗口对齐
+    private func isPastBedtime() -> Bool {
+        let cal = Calendar.current
+        let h = cal.component(.hour, from: Date())
+        let m = cal.component(.minute, from: Date())
+        if h == 23 && m >= 30 { return true }
+        if h < 8 { return true }
+        if h == 8 && m < 30 { return true }
+        return false
+    }
+
+    private func showActionToast(_ text: String) {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            actionToastText = text
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                actionToastText = nil
+            }
+        }
     }
 
     private func petActionButton(title: String, systemImage: String, tint: Color, action: @escaping () -> Void) -> some View {
