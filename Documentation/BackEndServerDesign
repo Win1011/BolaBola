@@ -1,0 +1,1034 @@
+# BolaBola Back-End Server Design
+
+本文档定义 BolaBola 后端服务器的首版落地方案，覆盖账号、订阅、宠物数据云同步、AI 代理转发，以及与现有 iPhone / Apple Watch 工程的接入边界。
+
+目标不是一次性把本地逻辑全部搬上云，而是在**不打断现有 watchOS 状态机**的前提下，为 App 增加一套稳定的账号与服务端能力。
+
+---
+
+## 1. Scope
+
+本期后端覆盖 3 个核心目标：
+
+1. 用户订阅能力，且与 Apple 购买体系联动
+2. 云端存储用户订阅状态与关键宠物数据
+3. 作为 AI 网关转发到 OpenRouter / OpenAI / GLM 等上游
+
+本期**不做**：
+
+- 不让 Apple Watch 直接成为主要云客户端
+- 不把 `PetViewModel` 状态机迁到服务端
+- 不把所有 `UserDefaults` 键一次性改造成实时云数据库
+- 不在服务端保存用户原始 Apple ID 邮箱作为唯一身份
+
+---
+
+## 2. Design Principles
+
+### 2.1 Identity principle
+
+后端账号主键必须是 Bola 自己的 `user_id`，不能把 Apple ID 邮箱当主键。
+
+Apple 侧只作为外部身份与交易来源，后端保存：
+
+- `apple_sub`: Sign in with Apple 返回的稳定用户标识
+- `original_transaction_id`: 订阅链唯一标识
+- `app_account_token`: Bola 侧生成并传给 Apple 的 UUID
+
+### 2.2 Sync principle
+
+Apple Watch 继续做宠物状态机与动画主驱动。  
+iPhone 负责：
+
+- 登录
+- 订阅
+- 与后端同步
+- AI 请求
+
+Watch 继续通过现有 `BolaWCSessionCoordinator` 跟 iPhone 交换状态，不直接承担复杂鉴权和云同步。
+
+### 2.3 Subscription principle
+
+订阅状态以**后端数据库**为准，不以客户端本地状态为准。  
+客户端可本地缓存，但服务权限判断最终取决于服务端记录。
+
+### 2.4 AI principle
+
+客户端不再长期持有第三方模型供应商密钥。  
+客户端只调用 Bola 后端，后端决定转发到：
+
+- OpenRouter
+- OpenAI
+- Zhipu GLM
+
+---
+
+## 3. Current App Integration Context
+
+当前工程的关键事实如下：
+
+- LLM 客户端位于 `Shared/LLM/LLMClient.swift`
+- 目前 LLM 使用 OpenAI-compatible 协议，适合平滑接入自建代理
+- 宠物核心状态与陪伴值由 Watch 侧驱动，见 `BolaBola Watch App/Views/ContentView.swift`
+- iPhone / Watch 通信统一走 `Shared/Sync/BolaWCSessionCoordinator.swift`
+- 本地持久化当前主要落在 `UserDefaults` / `App Group` / `Keychain`
+
+因此首版后端接入建议是：
+
+- iPhone 新增云端登录与同步
+- Watch 继续依赖 iPhone 作为外部网络与账号桥梁
+- LLM Base URL 可从当前第三方地址切到 Bola 后端地址
+
+---
+
+## 4. High-Level Architecture
+
+### 4.1 Components
+
+建议首版采用以下组件：
+
+- API Server: `FastAPI`
+- Database: `PostgreSQL`
+- Optional cache / queue: `Redis`（MVP 可不启用）
+- Object storage: 暂不需要
+- Deployment: `Railway` / `Render` / `Fly.io` / `AWS ECS`
+
+### 4.2 Service boundaries
+
+后端拆分为 5 个逻辑模块：
+
+1. `Auth Service`
+   - 校验 Sign in with Apple 身份
+   - 签发 Bola 自有 session / JWT
+
+2. `Subscription Service`
+   - 接收客户端订阅同步
+   - 调用 App Store Server API
+   - 处理 App Store Server Notifications V2
+
+3. `Pet Data Service`
+   - 存用户云端宠物档案
+   - 存宠物快照、日记、生活记录、提醒配置等
+
+4. `AI Gateway Service`
+   - 校验用户登录与订阅权限
+   - 限流
+   - 计费 / 用量统计
+   - 转发到 OpenRouter / OpenAI / GLM
+
+5. `Admin / Ops`
+   - 环境配置
+   - Webhook 监控
+   - 失败重试
+   - 审计日志
+
+### 4.3 Request flow
+
+#### 登录
+
+`iPhone -> Bola API (/auth/apple) -> verify Apple identity token -> create/load user -> issue Bola token`
+
+#### 订阅
+
+`iPhone StoreKit purchase -> send transaction/originalTransactionId/appAccountToken -> Bola API -> Apple App Store Server API -> update subscription table`
+
+#### 宠物数据同步
+
+`Watch -> WCSession -> iPhone -> Bola API (/pets/state or /sync/*) -> PostgreSQL`
+
+#### AI 请求
+
+`iPhone or Watch relay -> Bola API (/v1/chat/completions) -> upstream provider -> Bola API -> client`
+
+---
+
+## 5. Authentication Design
+
+### 5.1 Login method
+
+使用 `Sign in with Apple` 建立 Bola 账号。
+
+客户端流程：
+
+1. iPhone 拉起 Sign in with Apple
+2. 获取 `identityToken`
+3. 将 `identityToken` 和必要 metadata 发给后端
+4. 后端验证 token 签名、`aud`、`iss`、`exp`、`nonce`
+5. 后端提取 `sub`
+6. 若不存在则创建 `users` 记录
+7. 返回 Bola 自有 `access_token` / `refresh_token`
+
+### 5.2 Why not use Apple email
+
+原因：
+
+- Apple 邮箱可能是 relay 地址
+- 用户可能隐藏真实邮箱
+- 邮箱不是稳定主键
+- Apple 官方推荐以 token 中的稳定标识做账户关联
+
+### 5.3 Session model
+
+建议使用：
+
+- 短期 `access_token`，有效期 1 小时
+- 长期 `refresh_token`，有效期 30 天
+- refresh token 存数据库并支持吊销
+
+### 5.4 Device records
+
+后端可记录设备信息：
+
+- `device_id`
+- `platform` (`ios`, `watchos`)
+- `app_version`
+- `build_number`
+- `last_seen_at`
+
+用于调试同步问题，但不作为核心身份。
+
+---
+
+## 6. Subscription Design
+
+### 6.1 Core rule
+
+订阅权限由服务端根据 Apple 交易数据计算，不由客户端单方面上报 `isPro`。
+
+### 6.2 Purchase-time binding
+
+当用户发起订阅购买时，iPhone 应传入服务端生成的 `app_account_token`：
+
+- 用户登录成功后，后端为该用户分配一个稳定的 UUID
+- iPhone 发起 StoreKit 2 购买时使用 `.appAccountToken(...)`
+- 后续 Apple 交易链即可回到 Bola 用户
+
+### 6.3 Client purchase flow
+
+1. 用户登录 Bola
+2. iPhone 请求 `/subscriptions/context`
+3. 后端返回当前 `app_account_token`
+4. iPhone 使用 StoreKit 2 发起购买并附带该 token
+5. 购买完成后将以下信息发给后端：
+   - `transaction_id`
+   - `original_transaction_id`
+   - `product_id`
+   - `app_account_token`
+   - `environment`
+   - 可选 `signedTransactionInfo`
+
+### 6.4 Server verification flow
+
+后端收到购买信息后：
+
+1. 校验请求用户已登录
+2. 确认 `app_account_token` 属于当前用户
+3. 调用 App Store Server API 查询订阅状态
+4. 解析返回的签名交易与续费信息
+5. 更新本地订阅表
+6. 返回最新 entitlement 给客户端
+
+### 6.5 Notification flow
+
+必须配置 `App Store Server Notifications V2`。
+
+作用：
+
+- 自动续费
+- 续费失败
+- 退款
+- 撤销
+- 过期
+- 恢复购买
+
+后端 webhook 收到通知后：
+
+1. 校验 `signedPayload`
+2. 解析 `originalTransactionId` / `appAccountToken`
+3. 找到对应用户
+4. 更新 `subscriptions` 表和 `user_entitlements`
+5. 记录原始 webhook 便于审计和补偿
+
+### 6.6 Entitlement model
+
+建议显式建一层 `user_entitlements`，不要每次都直接从原始交易表计算。
+
+示例字段：
+
+- `user_id`
+- `entitlement_code`，如 `bola_pro`
+- `is_active`
+- `source`
+- `starts_at`
+- `expires_at`
+- `grace_period_expires_at`
+- `updated_at`
+
+客户端读权限时优先使用该表对应接口。
+
+---
+
+## 7. Data Storage Design
+
+### 7.1 What should move to the cloud first
+
+首批建议上云的数据：
+
+- 用户基本资料
+- 订阅状态
+- 宠物显示名
+- 陪伴值与核心快照
+- 日记
+- 生活记录
+- 餐食时间配置
+- 可选：提醒配置
+
+### 7.2 What should stay local first
+
+首版仍建议本地优先的数据：
+
+- Watch 实时动画状态
+- 高频 tick 状态
+- 临时交互中间态
+- 本地 UI 偏好
+
+原因是这些数据高频、强时序，而且当前由 Watch 状态机主导，上云收益低、复杂度高。
+
+### 7.3 Data ownership model
+
+| Data domain | Source of truth | Sync direction |
+|-------------|-----------------|----------------|
+| 账号 | Server | Server -> iPhone |
+| 订阅权限 | Server | Server -> iPhone -> Watch |
+| 陪伴值快照 | Watch runtime / Server snapshot | Watch -> iPhone -> Server |
+| 日记 | Local first, server replicated | iPhone <-> Server |
+| 生活记录 | Local first, server replicated | iPhone <-> Server |
+| LLM provider config | Server or server env | Server -> iPhone |
+
+---
+
+## 8. Suggested Database Schema
+
+### 8.1 users
+
+```sql
+create table users (
+  id uuid primary key,
+  apple_sub text unique not null,
+  app_account_token uuid unique not null,
+  display_name text,
+  email_relay text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  last_login_at timestamptz
+);
+```
+
+说明：
+
+- `email_relay` 可为空
+- `display_name` 是 Bola 账号展示名，不等于宠物名
+
+### 8.2 user_sessions
+
+```sql
+create table user_sessions (
+  id uuid primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  refresh_token_hash text not null,
+  device_id text,
+  platform text not null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  revoked_at timestamptz
+);
+```
+
+### 8.3 devices
+
+```sql
+create table devices (
+  id uuid primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  device_id text not null,
+  platform text not null,
+  app_version text,
+  build_number text,
+  last_seen_at timestamptz,
+  unique(user_id, device_id, platform)
+);
+```
+
+### 8.4 subscriptions
+
+```sql
+create table subscriptions (
+  id uuid primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  product_id text not null,
+  original_transaction_id text not null unique,
+  latest_transaction_id text,
+  app_account_token uuid,
+  status text not null,
+  environment text not null,
+  purchased_at timestamptz,
+  expires_at timestamptz,
+  grace_period_expires_at timestamptz,
+  revoked_at timestamptz,
+  raw_last_payload jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+`status` 建议值：
+
+- `active`
+- `grace_period`
+- `billing_retry`
+- `expired`
+- `revoked`
+- `refunded`
+
+### 8.5 user_entitlements
+
+```sql
+create table user_entitlements (
+  id uuid primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  entitlement_code text not null,
+  is_active boolean not null,
+  source text not null,
+  starts_at timestamptz,
+  expires_at timestamptz,
+  updated_at timestamptz not null default now(),
+  unique(user_id, entitlement_code)
+);
+```
+
+### 8.6 pets
+
+```sql
+create table pets (
+  id uuid primary key,
+  user_id uuid not null unique references users(id) on delete cascade,
+  display_name text not null default 'Bola',
+  companion_value double precision not null default 0,
+  core_state text,
+  max_ever_companion_value double precision,
+  last_synced_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+### 8.7 pet_state_snapshots
+
+```sql
+create table pet_state_snapshots (
+  id uuid primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  device_id text,
+  snapshot_kind text not null,
+  payload jsonb not null,
+  device_timestamp timestamptz,
+  server_received_at timestamptz not null default now()
+);
+```
+
+### 8.8 diary_entries
+
+```sql
+create table diary_entries (
+  id uuid primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  created_at timestamptz not null,
+  title text not null,
+  summary text not null,
+  emoji text,
+  source_text text,
+  updated_at timestamptz not null default now()
+);
+```
+
+### 8.9 life_records
+
+```sql
+create table life_records (
+  id uuid primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  kind text not null,
+  title text not null,
+  subtitle text,
+  detail_note text,
+  icon_emoji text,
+  created_at timestamptz not null,
+  updated_at timestamptz not null default now()
+);
+```
+
+### 8.10 meal_slots
+
+```sql
+create table meal_slots (
+  id uuid primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  slot_key text not null,
+  hour int not null,
+  minute int not null,
+  updated_at timestamptz not null default now(),
+  unique(user_id, slot_key)
+);
+```
+
+### 8.11 app_store_notifications
+
+```sql
+create table app_store_notifications (
+  id uuid primary key,
+  notification_uuid text unique,
+  notification_type text,
+  subtype text,
+  original_transaction_id text,
+  app_account_token uuid,
+  signed_payload text not null,
+  processed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+```
+
+### 8.12 ai_request_logs
+
+```sql
+create table ai_request_logs (
+  id uuid primary key,
+  user_id uuid references users(id) on delete set null,
+  provider text not null,
+  model text not null,
+  endpoint text not null,
+  request_tokens int,
+  response_tokens int,
+  status_code int,
+  latency_ms int,
+  created_at timestamptz not null default now()
+);
+```
+
+---
+
+## 9. API Design
+
+### 9.1 Auth endpoints
+
+#### `POST /auth/apple`
+
+请求：
+
+```json
+{
+  "identityToken": "jwt-from-apple",
+  "authorizationCode": "optional",
+  "nonce": "client-nonce",
+  "device": {
+    "deviceId": "ios-device-id",
+    "platform": "ios",
+    "appVersion": "1.0.0",
+    "buildNumber": "100"
+  }
+}
+```
+
+响应：
+
+```json
+{
+  "accessToken": "bola-access-token",
+  "refreshToken": "bola-refresh-token",
+  "user": {
+    "id": "uuid",
+    "appleSub": "stable-apple-sub",
+    "appAccountToken": "uuid"
+  }
+}
+```
+
+#### `POST /auth/refresh`
+
+刷新 access token。
+
+#### `POST /auth/logout`
+
+吊销 refresh token。
+
+### 9.2 Profile endpoints
+
+#### `GET /me`
+
+返回：
+
+- 用户信息
+- 宠物基础资料
+- 当前 entitlement
+
+#### `PATCH /me`
+
+可更新 Bola 账号展示名等非敏感资料。
+
+### 9.3 Subscription endpoints
+
+#### `GET /subscriptions/context`
+
+返回购买前上下文：
+
+```json
+{
+  "appAccountToken": "uuid",
+  "entitlements": [
+    {
+      "code": "bola_pro",
+      "isActive": true,
+      "expiresAt": "2026-05-01T10:00:00Z"
+    }
+  ]
+}
+```
+
+#### `POST /subscriptions/sync`
+
+客户端在购买成功或恢复购买后上报：
+
+```json
+{
+  "transactionId": "1234567890",
+  "originalTransactionId": "1234567890",
+  "productId": "com.bolabola.pro.monthly",
+  "appAccountToken": "uuid",
+  "environment": "sandbox"
+}
+```
+
+服务端校验 Apple 后，返回最新 entitlement。
+
+#### `GET /subscriptions/status`
+
+返回当前用户的服务端订阅状态。
+
+#### `POST /webhooks/apple/subscriptions`
+
+App Store Server Notifications V2 webhook 入口。
+
+### 9.4 Pet data endpoints
+
+#### `GET /pets/me`
+
+返回宠物基础档案与最新快照。
+
+#### `PUT /pets/me`
+
+更新宠物展示名等低频资料。
+
+#### `PUT /pets/state`
+
+提交最新宠物状态快照：
+
+```json
+{
+  "companionValue": 42.5,
+  "coreState": "idle",
+  "maxEverCompanionValue": 60,
+  "snapshot": {
+    "lastCompanionWallClock": 1234567890,
+    "lastTickTimestamp": 1234567890,
+    "totalActiveSeconds": 3600
+  },
+  "deviceTimestamp": "2026-04-25T10:00:00Z"
+}
+```
+
+#### `GET /pets/state`
+
+客户端冷启动时拉最近一次服务端状态。
+
+### 9.5 Diary endpoints
+
+#### `GET /diary`
+#### `PUT /diary/bulk`
+#### `POST /diary`
+#### `DELETE /diary/{id}`
+
+首版可先做 `bulk upsert`，降低客户端同步复杂度。
+
+### 9.6 Life record endpoints
+
+#### `GET /life-records`
+#### `PUT /life-records/bulk`
+#### `POST /life-records`
+#### `DELETE /life-records/{id}`
+
+### 9.7 Meal slot endpoints
+
+#### `GET /meal-slots`
+#### `PUT /meal-slots`
+
+### 9.8 AI proxy endpoints
+
+为了兼容当前 `LLMClient.swift`，建议保持 OpenAI-compatible 形状。
+
+#### `POST /v1/chat/completions`
+
+客户端仍使用现有 `OpenAICompatibleChatRequest`。
+
+后端逻辑：
+
+1. 鉴权
+2. 校验订阅 / 配额
+3. 注入 provider 凭证
+4. 转发到上游
+5. 记录 usage log
+6. 将兼容响应返回客户端
+
+#### `POST /v1/audio/transcriptions`
+
+保持与当前 `LLMClient.transcribeAudio` 兼容。  
+后端收到音频后可路由到：
+
+- OpenAI Whisper 类接口
+- GLM ASR
+- 未来自有 ASR
+
+---
+
+## 10. AI Gateway Strategy
+
+### 10.1 Why a proxy layer is needed
+
+AI 请求走自家后端有几个直接好处：
+
+- 不把第三方 API Key 发到客户端
+- 可以切换上游供应商而不改客户端
+- 可以做按用户限流
+- 可以做订阅分级
+- 可以做日志与故障切换
+
+### 10.2 Provider strategy
+
+建议支持三类 provider：
+
+1. `openrouter`
+2. `openai`
+3. `zhipu`
+
+配置可以是：
+
+```env
+AI_PROVIDER_DEFAULT=openrouter
+OPENROUTER_API_KEY=...
+OPENAI_API_KEY=...
+ZHIPU_API_KEY=...
+```
+
+### 10.3 Model routing
+
+可建立一张逻辑模型映射表：
+
+| Client model | Provider | Upstream model |
+|--------------|----------|----------------|
+| `bola-chat-fast` | openrouter | `openai/gpt-4o-mini` |
+| `bola-chat-quality` | openrouter | `anthropic/claude-sonnet-4` |
+| `bola-asr-default` | zhipu | `glm-asr-2512` |
+
+这样客户端不需要知道真实供应商模型名。
+
+### 10.4 Access policy
+
+建议：
+
+- 免费用户：每日低额度聊天
+- 订阅用户：更高额度 / 更高质量模型
+- 服务端按用户 + endpoint 做 rate limit
+
+### 10.5 Failure strategy
+
+建议顺序：
+
+1. 主 provider 请求失败
+2. 若为可重试错误，自动切备用 provider
+3. 若仍失败，返回标准化错误给客户端
+
+---
+
+## 11. Sync Strategy With Current App
+
+### 11.1 Phase 1
+
+保持当前本地行为不变，只增加云备份与账号能力。
+
+iPhone 接入后端：
+
+- 登录
+- 订阅同步
+- 宠物快照上报
+- 日记 / 生活记录同步
+- AI 走后端代理
+
+Watch 不直接接后端。
+
+### 11.2 iOS integration points
+
+建议在以下位置逐步接入：
+
+- `Shared/LLM/LLMClient.swift`
+  - Base URL 指向 Bola API
+  - 不再从本地长期保存第三方上游 Key
+
+- `Shared/Sync/BolaWCSessionCoordinator.swift`
+  - iPhone 端收到 Watch 快照后，异步推送 `/pets/state`
+
+- `Shared/Diary/BolaDiaryStore.swift`
+  - iPhone 侧保存后，触发云同步
+
+- `Shared/LifeRecords/LifeRecordListStore.swift`
+  - iPhone 侧保存后，触发云同步
+
+- `Shared/Meals/MealSlot.swift`
+  - iPhone 侧设置变更后同步 `/meal-slots`
+
+- 设置页 / 账号页
+  - 增加登录态、订阅态、恢复购买入口
+
+### 11.3 Watch integration points
+
+Watch 首版不直接改网络层，只通过以下方式受益：
+
+- iPhone 获取最新 entitlement 后通过 WC 同步给 Watch
+- iPhone 代理 ASR / 聊天继续为 Watch 提供服务
+- 宠物状态仍由 Watch 本地驱动，不依赖网络可用性
+
+---
+
+## 12. Merge Rules
+
+### 12.1 Pet snapshot merge
+
+首版建议采用保守规则：
+
+- `companionValue` 以最新 `deviceTimestamp` 为准
+- 服务端只保留最近一次完整快照
+- 需要审计时写入 `pet_state_snapshots`
+
+### 12.2 Diary merge
+
+以 `id` 为主键做 upsert。  
+客户端已有 `UUID`，适合直接复用。
+
+### 12.3 Life record merge
+
+同样以 `id` 为主键 upsert。
+
+### 12.4 Meal slots merge
+
+以整组覆盖为主，不做复杂 patch。
+
+---
+
+## 13. Security Requirements
+
+### 13.1 Secrets
+
+以下密钥只能在服务端：
+
+- OpenRouter key
+- OpenAI key
+- Zhipu key
+- Apple App Store Server API key
+- Sign in with Apple server-side key
+
+### 13.2 Token verification
+
+后端必须验证：
+
+- Apple `identityToken`
+- App Store Server Notifications V2 `signedPayload`
+- App Store Server API 返回的 JWS 数据
+
+### 13.3 JWT
+
+建议：
+
+- access token 使用非对称签名或高强度 HMAC
+- refresh token 只存 hash
+
+### 13.4 Rate limiting
+
+至少按以下维度限流：
+
+- `user_id`
+- `IP`
+- `endpoint`
+
+### 13.5 PII minimization
+
+避免保存不必要的个人信息：
+
+- 不依赖真实邮箱
+- 不存 Apple ID 明文
+- 对原始 webhook 与交易载荷设置保留策略
+
+---
+
+## 14. Recommended Deployment Layout
+
+### 14.1 Environments
+
+至少分：
+
+- `dev`
+- `staging`
+- `prod`
+
+并明确区分：
+
+- Apple Sandbox
+- Apple Production
+
+### 14.2 Environment variables
+
+示例：
+
+```env
+APP_ENV=production
+DATABASE_URL=postgres://...
+JWT_SECRET=...
+APPLE_TEAM_ID=...
+APPLE_KEY_ID=...
+APPLE_PRIVATE_KEY=...
+APPLE_BUNDLE_ID=com.GathXRTeam.BolaBola
+APP_STORE_ISSUER_ID=...
+APP_STORE_KEY_ID=...
+APP_STORE_PRIVATE_KEY=...
+AI_PROVIDER_DEFAULT=openrouter
+OPENROUTER_API_KEY=...
+OPENAI_API_KEY=...
+ZHIPU_API_KEY=...
+```
+
+### 14.3 Background jobs
+
+建议至少有两个后台任务：
+
+1. 订阅补偿同步任务
+   - 定时扫描即将过期和异常状态订阅
+   - 重新向 Apple 拉状态
+
+2. webhook 重试任务
+   - 处理解析失败或数据库暂时失败的通知
+
+---
+
+## 15. Implementation Phases
+
+### Phase 0: Infrastructure
+
+- 建 FastAPI 服务骨架
+- 接 PostgreSQL
+- 建迁移系统
+- 建基础鉴权中间件
+
+### Phase 1: Auth + Subscription
+
+- `POST /auth/apple`
+- `GET /subscriptions/context`
+- `POST /subscriptions/sync`
+- `GET /subscriptions/status`
+- `POST /webhooks/apple/subscriptions`
+
+这是最优先阶段，因为订阅权限会影响商业闭环。
+
+### Phase 2: AI Proxy
+
+- `POST /v1/chat/completions`
+- `POST /v1/audio/transcriptions`
+- provider 抽象层
+- usage log
+- rate limit
+
+### Phase 3: Pet Cloud Data
+
+- `GET /pets/state`
+- `PUT /pets/state`
+- `GET/PUT /meal-slots`
+- `GET/PUT /diary`
+- `GET/PUT /life-records`
+
+### Phase 4: Product hardening
+
+- entitlement push 到 Watch
+- dashboard / admin tools
+- billing analytics
+- quota strategy
+
+---
+
+## 16. Recommended First Release Cut
+
+如果目标是尽快上线，建议只做下面这一组：
+
+1. Sign in with Apple 登录
+2. App Store 订阅服务端校验
+3. Apple 订阅 webhook
+4. OpenAI-compatible AI proxy
+5. 宠物基础资料与陪伴值快照上云
+
+这一版已经足够支撑：
+
+- 用户账号
+- Pro 权限
+- 隐藏上游模型密钥
+- 多设备恢复核心数据
+
+---
+
+## 17. Risks
+
+### 17.1 Risk: Treating Apple email as identity
+
+会导致后续账号绑定和迁移混乱。  
+必须坚持 `apple_sub + Bola user_id` 模型。
+
+### 17.2 Risk: Letting Watch call backend directly too early
+
+watchOS 端网络、鉴权、重试、后台行为都更脆弱。  
+首版不要让 Watch 承担主云客户端角色。
+
+### 17.3 Risk: Mixing local truth and cloud truth without explicit rules
+
+如果没有明确 source of truth，很容易出现：
+
+- iPhone 看起来已订阅
+- Watch 看起来未订阅
+- 云端和本地数据来回覆盖
+
+因此必须明确：
+
+- 订阅权限 -> Server
+- 宠物运行态 -> Watch
+- 云端宠物档案 -> Server snapshot
+
+### 17.4 Risk: Keeping third-party model keys in Keychain long term
+
+这会让“后端代理”意义变弱，也不利于后续计费与风控。  
+建议逐步把上游 provider key 从客户端迁走。
+
+---
+
+## 18. Final Recommendation
+
+对 Bola 来说，最合理的后端路线是：
+
+- 用 `Sign in with Apple` 建立 Bola 账号体系
+- 用 `appAccountToken + originalTransactionId + App Store Server API` 管订阅
+- 用 `FastAPI + PostgreSQL` 承担账号、订阅、宠物云存档
+- 用 OpenAI-compatible AI proxy 对接 OpenRouter / OpenAI / GLM
+- 保持 `Watch local runtime -> iPhone bridge -> Server sync` 的整体拓扑
+
+这条路线兼容你当前工程结构，改动成本可控，而且能先把最关键的商业与服务端能力建起来。
