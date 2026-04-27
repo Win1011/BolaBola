@@ -109,20 +109,20 @@ public struct TitleFrameDefinition: Identifiable, Hashable, Sendable {
 public enum TitleWordBank {
     // MARK: A 组（形容词修饰语）
     public static let poolA: [TitleWord] = [
-        // 基础（初始全解锁，对应原 BolaTitlePhraseBank.groupA）
+        // 基础（仅少量起始词默认拥有，剩余随等级逐步积累）
         TitleWord("a_base_0", "路过的",      pool: .a, category: .base,     condition: .always),
-        TitleWord("a_base_1", "认真的",      pool: .a, category: .base,     condition: .always),
-        TitleWord("a_base_2", "熬夜的",      pool: .a, category: .base,     condition: .always),
-        TitleWord("a_base_3", "爱喝水的",    pool: .a, category: .base,     condition: .always),
-        TitleWord("a_base_4", "正在减肥的",  pool: .a, category: .base,     condition: .always),
-        TitleWord("a_base_5", "随缘的",      pool: .a, category: .base,     condition: .always),
-        TitleWord("a_base_6", "元气满满的",  pool: .a, category: .base,     condition: .always),
-        TitleWord("a_base_7", "低调的",      pool: .a, category: .base,     condition: .always),
+        TitleWord("a_base_1", "认真的",      pool: .a, category: .base,     condition: .level(3)),
+        TitleWord("a_base_2", "熬夜的",      pool: .a, category: .base,     condition: .level(4)),
+        TitleWord("a_base_3", "爱喝水的",    pool: .a, category: .base,     condition: .level(5)),
+        TitleWord("a_base_4", "正在减肥的",  pool: .a, category: .base,     condition: .level(6)),
+        TitleWord("a_base_5", "随缘的",      pool: .a, category: .base,     condition: .level(7)),
+        TitleWord("a_base_6", "元气满满的",  pool: .a, category: .base,     condition: .level(8)),
+        TitleWord("a_base_7", "低调的",      pool: .a, category: .base,     condition: .level(9)),
         // 成长解锁
-        TitleWord("a_growth_0", "升级中的",  pool: .a, category: .growth,   condition: .level(2)),
-        TitleWord("a_growth_1", "勤奋的",    pool: .a, category: .growth,   condition: .level(3)),
-        TitleWord("a_growth_2", "越来越好的",pool: .a, category: .growth,   condition: .level(5)),
-        TitleWord("a_growth_3", "传说级别的",pool: .a, category: .growth,   condition: .level(10)),
+        TitleWord("a_growth_0", "升级中的",  pool: .a, category: .growth,   condition: .level(6)),
+        TitleWord("a_growth_1", "勤奋的",    pool: .a, category: .growth,   condition: .level(7)),
+        TitleWord("a_growth_2", "越来越好的",pool: .a, category: .growth,   condition: .level(8)),
+        TitleWord("a_growth_3", "传说级别的",pool: .a, category: .growth,   condition: .level(9)),
         TitleWord("a_growth_4", "满级的",    pool: .a, category: .growth,   condition: .level(20)),
         // 行为解锁
         TitleWord("a_behavior_0", "爱说话的",pool: .a, category: .behavior, condition: .milestone(BolaGrowthMilestone.firstIOSChat.rawValue)),
@@ -143,20 +143,20 @@ public enum TitleWordBank {
 
     // MARK: B 组（名词角色）
     public static let poolB: [TitleWord] = [
-        // 基础（对应原 BolaTitlePhraseBank.groupB）
+        // 基础（仅少量起始词默认拥有，剩余随等级逐步积累）
         TitleWord("b_base_0", "打工人",      pool: .b, category: .base,     condition: .always),
-        TitleWord("b_base_1", "大学生",      pool: .b, category: .base,     condition: .always),
-        TitleWord("b_base_2", "夜猫子",      pool: .b, category: .base,     condition: .always),
-        TitleWord("b_base_3", "运动健将",    pool: .b, category: .base,     condition: .always),
-        TitleWord("b_base_4", "摸鱼选手",    pool: .b, category: .base,     condition: .always),
-        TitleWord("b_base_5", "养生党",      pool: .b, category: .base,     condition: .always),
-        TitleWord("b_base_6", "铲屎官",      pool: .b, category: .base,     condition: .always),
-        TitleWord("b_base_7", "干饭人",      pool: .b, category: .base,     condition: .always),
+        TitleWord("b_base_1", "大学生",      pool: .b, category: .base,     condition: .level(3)),
+        TitleWord("b_base_2", "夜猫子",      pool: .b, category: .base,     condition: .level(4)),
+        TitleWord("b_base_3", "运动健将",    pool: .b, category: .base,     condition: .level(5)),
+        TitleWord("b_base_4", "摸鱼选手",    pool: .b, category: .base,     condition: .level(6)),
+        TitleWord("b_base_5", "养生党",      pool: .b, category: .base,     condition: .level(7)),
+        TitleWord("b_base_6", "铲屎官",      pool: .b, category: .base,     condition: .level(8)),
+        TitleWord("b_base_7", "干饭人",      pool: .b, category: .base,     condition: .level(9)),
         // 成长解锁
-        TitleWord("b_growth_0", "练习生",    pool: .b, category: .growth,   condition: .level(2)),
-        TitleWord("b_growth_1", "探险家",    pool: .b, category: .growth,   condition: .level(3)),
-        TitleWord("b_growth_2", "冒险者",    pool: .b, category: .growth,   condition: .level(5)),
-        TitleWord("b_growth_3", "勇者",      pool: .b, category: .growth,   condition: .level(8)),
+        TitleWord("b_growth_0", "练习生",    pool: .b, category: .growth,   condition: .level(6)),
+        TitleWord("b_growth_1", "探险家",    pool: .b, category: .growth,   condition: .level(7)),
+        TitleWord("b_growth_2", "冒险者",    pool: .b, category: .growth,   condition: .level(8)),
+        TitleWord("b_growth_3", "勇者",      pool: .b, category: .growth,   condition: .level(9)),
         TitleWord("b_growth_4", "传说",      pool: .b, category: .growth,   condition: .level(10)),
         TitleWord("b_growth_5", "神",        pool: .b, category: .growth,   condition: .level(20)),
         // 行为解锁
@@ -217,11 +217,14 @@ public enum TitleUnlockStore {
     public static func loadUnlockedIds() -> Set<String> {
         guard let data = defaults.data(forKey: defaultsKey),
               let arr = try? JSONDecoder().decode([String].self, from: data) else {
-            // 首次：基础词全部解锁
-            let baseIds = (TitleWordBank.poolA + TitleWordBank.poolB)
-                .filter { $0.category == .base }
+            // 首次：仅默认起始词解锁
+            let starterIds = (TitleWordBank.poolA + TitleWordBank.poolB)
+                .filter {
+                    if case .always = $0.unlockCondition { return true }
+                    return false
+                }
                 .map(\.id)
-            return Set(baseIds)
+            return Set(starterIds)
         }
         return Set(arr)
     }
@@ -258,6 +261,7 @@ public enum TitleUnlockManager {
         var newCount = 0
 
         for word in TitleWordBank.poolA + TitleWordBank.poolB {
+            guard !isRandomizedLevelWord(word) else { continue }
             guard !unlocked.contains(word.id) else { continue }
             if evaluate(word.unlockCondition, level: level, milestones: milestones,
                         maxCompanion: maxCompanion, personality: personality) {
@@ -265,6 +269,23 @@ public enum TitleUnlockManager {
                 newCount += 1
             }
         }
+
+        newCount += unlockRandomizedLevelWords(
+            in: .a,
+            level: level,
+            milestones: milestones,
+            maxCompanion: maxCompanion,
+            personality: personality,
+            unlocked: &unlocked
+        )
+        newCount += unlockRandomizedLevelWords(
+            in: .b,
+            level: level,
+            milestones: milestones,
+            maxCompanion: maxCompanion,
+            personality: personality,
+            unlocked: &unlocked
+        )
 
         if newCount > 0 {
             TitleUnlockStore.save(unlocked)
@@ -287,6 +308,46 @@ public enum TitleUnlockManager {
         case .levelAndCompanion(let l, let cv):
             return level >= l && maxCompanion >= cv
         }
+    }
+
+    private static func isRandomizedLevelWord(_ word: TitleWord) -> Bool {
+        word.category == .base || word.category == .growth
+    }
+
+    private static func randomUnlockTarget(for level: Int) -> Int {
+        max(1, level - 1)
+    }
+
+    private static func unlockRandomizedLevelWords(
+        in pool: TitleWord.Pool,
+        level: Int,
+        milestones: Set<String>,
+        maxCompanion: Int,
+        personality: String?,
+        unlocked: inout Set<String>
+    ) -> Int {
+        let regularWords = (TitleWordBank.poolA + TitleWordBank.poolB)
+            .filter { $0.pool == pool && isRandomizedLevelWord($0) }
+        let eligibleWords = regularWords.filter {
+            evaluate($0.unlockCondition, level: level, milestones: milestones,
+                     maxCompanion: maxCompanion, personality: personality)
+        }
+
+        let targetCount = min(randomUnlockTarget(for: level), eligibleWords.count)
+        let alreadyUnlocked = eligibleWords.filter { unlocked.contains($0.id) }
+        guard alreadyUnlocked.count < targetCount else { return 0 }
+
+        let candidates = eligibleWords
+            .filter { !unlocked.contains($0.id) }
+            .shuffled()
+
+        let neededCount = min(targetCount - alreadyUnlocked.count, candidates.count)
+        guard neededCount > 0 else { return 0 }
+
+        for word in candidates.prefix(neededCount) {
+            unlocked.insert(word.id)
+        }
+        return neededCount
     }
 }
 

@@ -11,7 +11,6 @@ struct IOSRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: IOSRootTab = .mine
     @State private var growthSegment: IOSGrowthSubPage = .growth
-    @AppStorage("bola_life_bubble_mode_v1") private var lifeBubbleMode = false
 
     @State private var companion: Double = 50
     /// 主界面左上角刷新：递增触发 `IOSMainHomeView` 内同步与健康/天气刷新。
@@ -38,7 +37,7 @@ struct IOSRootView: View {
     private var lifeTabRoot: some View {
         NavigationStack {
             IOSLifeContainerView(
-                bubbleMode: $lifeBubbleMode,
+                bubbleMode: .constant(false),
                 reminders: $reminders,
                 rhythm: lifeRhythm,
                 weather: lifeWeather,
@@ -272,17 +271,6 @@ struct IOSRootView: View {
 
     @ToolbarContentBuilder
     private var lifeToolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            IOSNavigationGlassIconButton(
-                systemName: "arrow.left.arrow.right",
-                font: .system(size: 17, weight: .semibold),
-                accessibilityLabel: "生活泡泡"
-            ) {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                    lifeBubbleMode.toggle()
-                }
-            }
-        }
         ToolbarItem(placement: .principal) {
             Text("生活")
                 .font(.system(size: 20, weight: .semibold))

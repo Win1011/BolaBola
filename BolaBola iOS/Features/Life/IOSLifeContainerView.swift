@@ -229,7 +229,11 @@ struct IOSLifeContainerView: View {
             addDashboardCardSheet
         }
         .sheet(item: $selectedBubbleRecord) { record in
-            LifeRecordBubbleDetailSheet(record: record)
+            let isPersistedRecord = lifeRecords.contains(where: { $0.id == record.id })
+            LifeRecordBubbleDetailSheet(
+                record: record,
+                onDelete: isPersistedRecord ? { deleteLifeRecord(record) } : nil
+            )
         }
         .alert("节奏条", isPresented: $showRhythmInfo) {
             Button("好的", role: .cancel) {}
@@ -323,7 +327,7 @@ struct IOSLifeContainerView: View {
             let theta = CGFloat.pi * (1 - CGFloat(progress))
             let markerX = arcWidth / 2 + arcR * cos(theta)
             let markerY = arcFrameH - arcR * sin(theta)
-            let markerOutset: CGFloat = 5
+            let markerOutset: CGFloat = 6
             let radialX = markerX - arcWidth / 2
             let radialY = markerY - arcFrameH
             let radialLen = max(0.001, sqrt(radialX * radialX + radialY * radialY))
@@ -1119,21 +1123,16 @@ struct IOSLifeContainerView: View {
 
     private var filteredLifeRecords: [LifeRecordCard] {
         let cal = Calendar.current
-        let dayRecords = lifeRecords.filter { cal.isDate($0.createdAt, inSameDayAs: selectedDashboardDate) }
-        guard cal.isDateInToday(selectedDashboardDate) else { return dayRecords }
+        let dayRecords = lifeRecords.filter {
+            $0.kind != .weather &&
+                cal.isDate($0.createdAt, inSameDayAs: selectedDashboardDate)
+        }
+        guard cal.isDateInToday(selectedDashboardDate) else { return dayRecords.sorted { $0.createdAt > $1.createdAt } }
         return mergedTodayRecordsWithRealtimeWeather(dayRecords)
     }
 
     private func mergedTodayRecordsWithRealtimeWeather(_ dayRecords: [LifeRecordCard]) -> [LifeRecordCard] {
-        let todayWeatherCard = realtimeWeatherLifeRecordCard()
-        let weatherHistory = dayRecords.filter {
-            !($0.kind == .weather && $0.title == WeatherDiaryRecorder.dailyWeatherLifeTitle)
-        }
-        return [todayWeatherCard] + weatherHistory.sorted { lhs, rhs in
-            if lhs.kind == .weather, rhs.kind != .weather { return true }
-            if rhs.kind == .weather, lhs.kind != .weather { return false }
-            return lhs.createdAt > rhs.createdAt
-        }
+        [realtimeWeatherLifeRecordCard()] + dayRecords.sorted { $0.createdAt > $1.createdAt }
     }
 
     private func realtimeWeatherLifeRecordCard() -> LifeRecordCard {
@@ -1238,9 +1237,7 @@ struct IOSLifeContainerView: View {
                 .stroke(Color(uiColor: .separator).opacity(0.25), lineWidth: 1)
         )
         .onTapGesture {
-            if card.kind == .weather, Calendar.current.isDateInToday(card.createdAt) {
-                weather.requestAndFetch()
-            }
+            selectedBubbleRecord = card
         }
     }
 
@@ -1504,6 +1501,12 @@ struct IOSLifeContainerView: View {
         guard let ch = t.first else { return nil }
         return String(ch)
     }
+
+    private func deleteLifeRecord(_ record: LifeRecordCard) {
+        lifeRecords.removeAll { $0.id == record.id }
+        LifeRecordListStore.save(lifeRecords)
+        selectedBubbleRecord = nil
+    }
 }
 
 private struct LifeBubbleView: View {
@@ -1677,33 +1680,47 @@ private struct LifeBubbleView: View {
 
 private struct LifeRecordBubbleDetailSheet: View {
     let record: LifeRecordCard
+    var onDelete: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 18) {
-                Text(record.iconEmoji ?? defaultEmoji(for: record.kind))
-                    .font(.system(size: 52))
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(record.title)
-                        .font(.title2.weight(.bold))
-                    Text(Self.dateFormatter.string(from: record.createdAt))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            Form {
+                Section {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text(record.iconEmoji ?? defaultEmoji(for: record.kind))
+                            .font(.system(size: 52))
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(record.title)
+                                .font(.title2.weight(.bold))
+                            Text(Self.dateFormatter.string(from: record.createdAt))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let detail = record.detailNote ?? record.subtitle, !detail.isEmpty {
+                            Text(detail)
+                                .font(.body)
+                                .lineSpacing(5)
+                        } else {
+                            Text("这是一张还没写详情的小卡片。")
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                if let detail = record.detailNote ?? record.subtitle, !detail.isEmpty {
-                    Text(detail)
-                        .font(.body)
-                        .lineSpacing(5)
-                } else {
-                    Text("这是一张还没写详情的小卡片。")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
+
+                if let onDelete {
+                    Section {
+                        Button(role: .destructive) {
+                            onDelete()
+                            dismiss()
+                        } label: {
+                            Text("删除此卡片")
+                        }
+                    }
                 }
-                Spacer()
             }
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .navigationTitle(kindLabel(for: record.kind))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1952,11 +1969,12 @@ private struct LifeDashboardCalendarSheet: View {
                                 Text(dayLabel(for: date))
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundStyle(Calendar.current.isDate(date, inSameDayAs: selectedDate) ? AnyShapeStyle(.black) : AnyShapeStyle(.primary))
-                                    .frame(maxWidth: .infinity, minHeight: 38)
+                                    .frame(width: 38, height: 38)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        Circle()
                                             .fill(Calendar.current.isDate(date, inSameDayAs: selectedDate) ? BolaTheme.accent : .clear)
                                     )
+                                    .frame(maxWidth: .infinity, minHeight: 38)
                             }
                             .buttonStyle(.plain)
                         } else {

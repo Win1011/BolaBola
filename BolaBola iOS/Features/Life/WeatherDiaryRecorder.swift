@@ -18,7 +18,6 @@ enum WeatherDiaryRecorder {
         guard shouldRecordDailyWeather(at: date) else { return }
 
         let entries = BolaDiaryStore.load(from: defaults)
-        let lifeRecords = LifeRecordListStore.load(from: defaults)
         let dayKey = Self.dayKey(for: date)
         let temperature = roundedTemperature(weather.temperatureC)
 
@@ -35,21 +34,6 @@ enum WeatherDiaryRecorder {
             )
         }
 
-        if !hasDailyWeatherLifeRecord(on: date, records: lifeRecords) {
-            var updatedRecords = lifeRecords
-            updatedRecords.append(
-                LifeRecordCard(
-                    kind: .weather,
-                    title: dailyWeatherLifeTitle,
-                    subtitle: "\(weather.conditionText) · \(temperature)°C",
-                    detailNote: "主人今天这边是\(weather.conditionText)，大概\(temperature)度。",
-                    iconEmoji: weather.emoji,
-                    createdAt: date
-                )
-            )
-            LifeRecordListStore.save(updatedRecords, to: defaults)
-        }
-
         guard shouldRecordChange(for: weather, at: date, entries: entries) else { return }
         BolaDiaryStore.append(
             BolaDiaryEntry(
@@ -61,72 +45,13 @@ enum WeatherDiaryRecorder {
             ),
             to: defaults
         )
-
-        if !hasMatchingWeatherChangeRecord(on: date, weather: weather, records: LifeRecordListStore.load(from: defaults)) {
-            var updatedRecords = LifeRecordListStore.load(from: defaults)
-            updatedRecords.append(
-                LifeRecordCard(
-                    kind: .weather,
-                    title: changedWeatherLifeTitle,
-                    subtitle: "\(weather.conditionText) · \(temperature)°C",
-                    detailNote: "Bola发现今天的天气变成了\(weather.conditionText)，现在大概\(temperature)度。",
-                    iconEmoji: weather.emoji,
-                    createdAt: date
-                )
-            )
-            LifeRecordListStore.save(updatedRecords, to: defaults)
-        }
     }
 
     static func syncLifeRecordsFromDiary(defaults: UserDefaults = BolaSharedDefaults.resolved()) {
-        let diaryEntries = BolaDiaryStore.load(from: defaults)
-        var records = LifeRecordListStore.load(from: defaults)
-        var didChange = false
-
-        for entry in diaryEntries.sorted(by: { $0.createdAt < $1.createdAt }) {
-            if entry.sourceText.hasPrefix(dailyPrefix) {
-                if !records.contains(where: {
-                    $0.kind == .weather &&
-                        $0.title == dailyWeatherLifeTitle &&
-                        Calendar.current.isDate($0.createdAt, inSameDayAs: entry.createdAt)
-                }) {
-                    records.append(
-                        LifeRecordCard(
-                            kind: .weather,
-                            title: dailyWeatherLifeTitle,
-                            subtitle: weatherSubtitle(from: entry),
-                            detailNote: entry.summary,
-                            iconEmoji: entry.emoji,
-                            createdAt: entry.createdAt
-                        )
-                    )
-                    didChange = true
-                }
-            } else if entry.sourceText.hasPrefix(changePrefix) {
-                let subtitle = weatherSubtitle(from: entry)
-                if !records.contains(where: {
-                    $0.kind == .weather &&
-                        $0.title == changedWeatherLifeTitle &&
-                        $0.subtitle == subtitle &&
-                        Calendar.current.isDate($0.createdAt, inSameDayAs: entry.createdAt)
-                }) {
-                    records.append(
-                        LifeRecordCard(
-                            kind: .weather,
-                            title: changedWeatherLifeTitle,
-                            subtitle: subtitle,
-                            detailNote: entry.summary,
-                            iconEmoji: entry.emoji,
-                            createdAt: entry.createdAt
-                        )
-                    )
-                    didChange = true
-                }
-            }
-        }
-
-        if didChange {
-            LifeRecordListStore.save(records, to: defaults)
+        let records = LifeRecordListStore.load(from: defaults)
+        let filteredRecords = records.filter { $0.kind != .weather }
+        if filteredRecords.count != records.count {
+            LifeRecordListStore.save(filteredRecords, to: defaults)
         }
     }
 
@@ -170,28 +95,6 @@ enum WeatherDiaryRecorder {
         Calendar.current.component(.hour, from: date) >= 8
     }
 
-    private static func hasDailyWeatherLifeRecord(on date: Date, records: [LifeRecordCard]) -> Bool {
-        records.contains {
-            $0.kind == .weather &&
-                $0.title == dailyWeatherLifeTitle &&
-                Calendar.current.isDate($0.createdAt, inSameDayAs: date)
-        }
-    }
-
-    private static func hasMatchingWeatherChangeRecord(
-        on date: Date,
-        weather: BolaLifePageWeather,
-        records: [LifeRecordCard]
-    ) -> Bool {
-        let expectedSubtitle = "\(weather.conditionText) · \(roundedTemperature(weather.temperatureC))°C"
-        return records.contains {
-            $0.kind == .weather &&
-                $0.title == changedWeatherLifeTitle &&
-                $0.subtitle == expectedSubtitle &&
-                Calendar.current.isDate($0.createdAt, inSameDayAs: date)
-        }
-    }
-
     private static func parseCondition(from sourceText: String) -> String? {
         let parts = sourceText.components(separatedBy: ":")
         guard parts.count >= 4 else { return nil }
@@ -202,14 +105,6 @@ enum WeatherDiaryRecorder {
         let parts = sourceText.components(separatedBy: ":")
         guard let last = parts.last else { return nil }
         return Int(last)
-    }
-
-    private static func weatherSubtitle(from entry: BolaDiaryEntry) -> String? {
-        guard let condition = parseCondition(from: entry.sourceText),
-              let temperature = parseTemperature(from: entry.sourceText) else {
-            return nil
-        }
-        return "\(condition) · \(temperature)°C"
     }
 
     private static func roundedTemperature(_ value: Double) -> Int {

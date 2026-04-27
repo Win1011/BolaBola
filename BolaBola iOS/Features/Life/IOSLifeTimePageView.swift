@@ -191,8 +191,11 @@ private struct DiaryCalendarSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
+                Spacer(minLength: 0)
             }
             .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(BolaTheme.backgroundGrouped)
             .navigationTitle("选择日期")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -274,11 +277,12 @@ private struct DiaryCalendarSheet: View {
             Text("\(Calendar.current.component(.day, from: date))")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(dayForeground(isSelected: isSelected, hasEntry: hasEntry))
-                .frame(maxWidth: .infinity, minHeight: 38)
+                .frame(width: 38, height: 38)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    Circle()
                         .fill(dayBackground(isSelected: isSelected, hasEntry: hasEntry))
                 )
+                .frame(maxWidth: .infinity, minHeight: 38)
         }
         .buttonStyle(.plain)
     }
