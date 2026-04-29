@@ -5,12 +5,14 @@
 import AuthenticationServices
 import HealthKit
 import SwiftUI
+import UIKit
 import UserNotifications
 
 struct IOSOnboardingView: View {
     var onDone: () -> Void
 
     @State private var stepIndex = 0
+    @State private var visibleStepID: Int? = 0
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var healthRequested = false
     @State private var userNickname = ""
@@ -19,61 +21,106 @@ struct IOSOnboardingView: View {
     @State private var bolaNickname = ""
 
     private let healthStore = HKHealthStore()
+    private let stepCount = 11
 
     var body: some View {
         ZStack(alignment: .top) {
-            BolaLifeAmbientBackground()
+            BolaOnboardingAmbientBackground()
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 topChrome
 
-                TabView(selection: $stepIndex) {
-                    WelcomeLoginPage(onContinue: { stepIndex = 1 })
-                        .tag(0)
-                    IntroCompanionPage(onContinue: { stepIndex = 2 })
-                        .tag(1)
-                    LevelUpPage(onContinue: { stepIndex = 3 })
-                        .tag(2)
-                    NotificationPermissionPage(
-                        status: notificationStatus,
-                        onAllow: requestNotifications,
-                        onSkip: { stepIndex = 4 }
-                    )
-                    .tag(3)
-                    HealthRhythmPage(
-                        requested: healthRequested,
-                        onContinue: requestHealthAccess
-                    )
-                    .tag(4)
-                    QuestionIntroPage(onContinue: { stepIndex = 6 })
-                        .tag(5)
-                    UserNicknamePage(
-                        nickname: $userNickname,
-                        onContinue: { stepIndex = 7 }
-                    )
-                    .tag(6)
-                    BirthdayPage(
-                        birthDate: $birthDate,
-                        onContinue: { stepIndex = 8 }
-                    )
-                    .tag(7)
-                    GenderPage(
-                        selectedGender: $selectedGender,
-                        onContinue: { stepIndex = 9 }
-                    )
-                    .tag(8)
-                    BolaNicknamePage(
-                        nickname: $bolaNickname,
-                        onContinue: { stepIndex = 10 }
-                    )
-                    .tag(9)
-                    ReadyPage(onEnter: finishOnboarding)
-                        .tag(10)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 0) {
+                        WelcomeLoginPage(isActive: stepIndex == 0, onContinue: { goToStep(1) })
+                            .onboardingPage(id: 0)
+                        IntroCompanionPage(
+                            isActive: stepIndex == 1,
+                            onContinue: { goToStep(2) }
+                        )
+                            .onboardingPage(id: 1)
+                        LevelUpPage(isActive: stepIndex == 2, onContinue: { goToStep(3) })
+                            .onboardingPage(id: 2)
+                        NotificationPermissionPage(
+                            isActive: stepIndex == 3,
+                            status: notificationStatus,
+                            onAllow: requestNotifications,
+                            onSkip: { goToStep(4) }
+                        )
+                        .onboardingPage(id: 3)
+                        HealthRhythmPage(
+                            isActive: stepIndex == 4,
+                            requested: healthRequested,
+                            onContinue: requestHealthAccess
+                        )
+                        .onboardingPage(id: 4)
+                        QuestionIntroPage(isActive: stepIndex == 5, onContinue: { goToStep(6) })
+                            .onboardingPage(id: 5)
+                        UserNicknamePage(
+                            isActive: stepIndex == 6,
+                            nickname: $userNickname,
+                            onContinue: { goToStep(7) }
+                        )
+                        .onboardingPage(id: 6)
+                        BirthdayPage(
+                            isActive: stepIndex == 7,
+                            birthDate: $birthDate,
+                            onContinue: { goToStep(8) }
+                        )
+                        .onboardingPage(id: 7)
+                        GenderPage(
+                            isActive: stepIndex == 8,
+                            selectedGender: $selectedGender,
+                            onContinue: { goToStep(9) }
+                        )
+                        .onboardingPage(id: 8)
+                        BolaNicknamePage(
+                            isActive: stepIndex == 9,
+                            nickname: $bolaNickname,
+                            onContinue: { goToStep(10) }
+                        )
+                        .onboardingPage(id: 9)
+                        ReadyPage(isActive: stepIndex == 10, onEnter: finishOnboarding)
+                            .onboardingPage(id: 10)
+                    }
+                    .scrollTargetLayout()
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $visibleStepID)
+                .scrollDisabled(!(5...9).contains(stepIndex))
                 .animation(.spring(response: 0.34, dampingFraction: 0.86), value: stepIndex)
+                .onChange(of: visibleStepID) { _, newID in
+                    guard let newID, (5...9).contains(newID), newID != stepIndex else { return }
+                    stepIndex = newID
+                }
             }
+
+            #if DEBUG
+            VStack(spacing: 8) {
+                Button {
+                    goToStep(stepIndex - 1)
+                } label: {
+                    Text("上一页")
+                        .onboardingDebugButtonLabel()
+                }
+                .opacity(stepIndex > 0 ? 1 : 0)
+                .disabled(stepIndex <= 0)
+
+                Button {
+                    goToStep(stepIndex + 1)
+                } label: {
+                    Text("下一页")
+                        .onboardingDebugButtonLabel()
+                }
+                .opacity(stepIndex < stepCount - 1 ? 1 : 0)
+                .disabled(stepIndex >= stepCount - 1)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 54)
+            .padding(.trailing, 18)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            #endif
         }
         .task {
             let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -88,18 +135,22 @@ struct IOSOnboardingView: View {
         .onChange(of: birthDate) { _, _ in persistDraft() }
         .onChange(of: selectedGender) { _, _ in persistDraft() }
         .onChange(of: bolaNickname) { _, _ in persistDraft() }
+        .onChange(of: visibleStepID) { _, newValue in
+            guard let newValue, (0 ..< stepCount).contains(newValue) else { return }
+            stepIndex = newValue
+        }
     }
 
     @ViewBuilder
     private var topChrome: some View {
         if (5 ... 9).contains(stepIndex) {
-            VStack(spacing: 0) {
-                ProgressPills(currentIndex: stepIndex - 5, total: 4)
-                    .padding(.top, 52)
+            VStack {
+                Spacer()
+                ProgressPills(currentIndex: min(max(stepIndex - 5, 0), 3), total: 4)
                     .padding(.horizontal, 58)
                 Spacer()
             }
-            .frame(height: 78)
+            .frame(height: 56)
         } else {
             Color.clear
                 .frame(height: 28)
@@ -107,19 +158,24 @@ struct IOSOnboardingView: View {
     }
 
     private func requestNotifications() {
+        guard notificationStatus != .authorized && notificationStatus != .provisional else {
+            goToStep(4)
+            return
+        }
+
         Task {
             _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             await MainActor.run {
                 notificationStatus = settings.authorizationStatus
-                stepIndex = 4
+                goToStep(4)
             }
         }
     }
 
     private func requestHealthAccess() {
         guard HKHealthStore.isHealthDataAvailable() else {
-            stepIndex = 5
+            goToStep(5)
             return
         }
 
@@ -136,7 +192,7 @@ struct IOSOnboardingView: View {
             DispatchQueue.main.async {
                 healthRequested = true
                 UserDefaults.standard.set(true, forKey: IOSHealthHabitAnalysisModel.healthReadPromptCompletedKey)
-                stepIndex = 5
+                goToStep(5)
             }
         }
     }
@@ -155,6 +211,65 @@ struct IOSOnboardingView: View {
         persistDraft()
         BolaOnboardingState.markCompleted()
         onDone()
+    }
+
+    private func goToStep(_ index: Int) {
+        let clampedIndex = min(max(index, 0), stepCount - 1)
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+            stepIndex = clampedIndex
+            visibleStepID = clampedIndex
+        }
+    }
+}
+
+private struct BolaOnboardingAmbientBackground: View {
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let topDiameter = min(max(width * 1.9, 700), 820)
+            let bottomDiameter = max(width * 2.35, 880)
+
+            Color.white
+                .overlay(alignment: .top) {
+                    Ellipse()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    BolaTheme.accent.opacity(0.98),
+                                    BolaTheme.accent.opacity(0.6),
+                                    BolaTheme.accent.opacity(0.16),
+                                    Color.white.opacity(0)
+                                ],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: topDiameter * 0.5
+                            )
+                        )
+                        .frame(width: topDiameter, height: topDiameter * 0.62)
+                        .blur(radius: 34)
+                        .offset(y: -topDiameter * 0.35)
+                }
+                .overlay(alignment: .bottom) {
+                    Ellipse()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    BolaTheme.accent.opacity(0.98),
+                                    BolaTheme.accent.opacity(0.6),
+                                    Color.white.opacity(0)
+                                ],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: bottomDiameter * 0.5
+                            )
+                        )
+                        .frame(width: bottomDiameter, height: bottomDiameter * 0.62)
+                        .blur(radius: 34)
+                        .offset(y: bottomDiameter * 0.43 + 60)
+                }
+        }
+        .background(Color.white)
+        .allowsHitTesting(false)
     }
 }
 
@@ -182,10 +297,10 @@ private struct OnboardingDraft {
 
     func save() {
         let defaults = UserDefaults.standard
-        defaults.set(userNickname, forKey: Self.userNicknameKey)
+        defaults.set(userNickname.trimmingCharacters(in: .whitespacesAndNewlines), forKey: Self.userNicknameKey)
         defaults.set(birthDate.timeIntervalSinceReferenceDate, forKey: Self.birthDateKey)
         defaults.set(gender?.rawValue, forKey: Self.genderKey)
-        defaults.set(bolaNickname, forKey: Self.bolaNicknameKey)
+        defaults.set(bolaNickname.trimmingCharacters(in: .whitespacesAndNewlines), forKey: Self.bolaNicknameKey)
     }
 }
 
@@ -223,21 +338,33 @@ private struct ProgressPills: View {
 
 private struct OnboardingScreen<Content: View>: View {
     @ViewBuilder let content: Content
+    let isActive: Bool
+    var animateEntrance: Bool = true
+    var scrollsWithKeyboard: Bool = false
     let primaryTitle: String
     let primaryAction: () -> Void
+    var isPrimaryDisabled = false
     var secondaryTitle: String? = nil
     var secondaryAction: (() -> Void)? = nil
 
     init(
+        isActive: Bool = true,
+        animateEntrance: Bool = true,
+        scrollsWithKeyboard: Bool = false,
         primaryTitle: String,
         primaryAction: @escaping () -> Void,
+        isPrimaryDisabled: Bool = false,
         secondaryTitle: String? = nil,
         secondaryAction: (() -> Void)? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.content = content()
+        self.isActive = isActive
+        self.animateEntrance = animateEntrance
+        self.scrollsWithKeyboard = scrollsWithKeyboard
         self.primaryTitle = primaryTitle
         self.primaryAction = primaryAction
+        self.isPrimaryDisabled = isPrimaryDisabled
         self.secondaryTitle = secondaryTitle
         self.secondaryAction = secondaryAction
     }
@@ -250,6 +377,7 @@ private struct OnboardingScreen<Content: View>: View {
                     .padding(.top, 8)
                     .padding(.bottom, 28)
             }
+            .scrollDisabled(!scrollsWithKeyboard)
 
             VStack(spacing: 10) {
                 if let secondaryTitle, let secondaryAction {
@@ -264,206 +392,515 @@ private struct OnboardingScreen<Content: View>: View {
                         .foregroundStyle(BolaTheme.onAccentForeground)
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
-                        .background(BolaTheme.accent)
+                        .background(isPrimaryDisabled ? Color.black.opacity(0.08) : BolaTheme.accent)
                         .clipShape(Capsule())
                 }
+                .disabled(isPrimaryDisabled)
+                .opacity(isPrimaryDisabled ? 0.72 : 1)
             }
+            .modifier(ConditionalEntranceModifier(isActive: isActive, index: 4, animate: animateEntrance))
             .padding(.horizontal, 36)
             .padding(.bottom, 18)
         }
     }
 }
 
+private extension View {
+    func onboardingBlockEntrance(
+        isActive: Bool,
+        index: Int,
+        baseDelay: TimeInterval = 0.16,
+        stepDelay: TimeInterval = 0.18
+    ) -> some View {
+        modifier(
+            OnboardingBlockEntranceModifier(
+                isActive: isActive,
+                delay: baseDelay + Double(index) * stepDelay
+            )
+        )
+    }
+
+    func onboardingDebugButtonLabel() -> some View {
+        font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(.black.opacity(0.78))
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background(Color.white.opacity(0.86))
+            .clipShape(Capsule())
+    }
+
+    func onboardingPage(id: Int) -> some View {
+        self
+            .containerRelativeFrame(.horizontal)
+            .id(id)
+    }
+}
+
+private struct ConditionalEntranceModifier: ViewModifier {
+    let isActive: Bool
+    let index: Int
+    let animate: Bool
+
+    func body(content: Content) -> some View {
+        if animate {
+            content.onboardingBlockEntrance(isActive: isActive, index: index)
+        } else {
+            content
+        }
+    }
+}
+
+private struct OnboardingBlockEntranceModifier: ViewModifier {
+    let isActive: Bool
+    let delay: TimeInterval
+
+    @State private var isVisible = false
+    @State private var runID = 0
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .offset(y: isVisible ? 0 : 12)
+            .animation(.spring(response: 0.82, dampingFraction: 0.93), value: isVisible)
+            .onAppear {
+                if isActive {
+                    replay(after: delay)
+                }
+            }
+            .onChange(of: isActive) { _, newValue in
+                if newValue {
+                    replay(after: delay)
+                } else {
+                    reset()
+                }
+            }
+    }
+
+    private func replay(after delay: TimeInterval) {
+        reset()
+        let currentRunID = runID
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            guard currentRunID == runID, isActive else { return }
+            isVisible = true
+        }
+    }
+
+    private func reset() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            runID += 1
+            isVisible = false
+        }
+    }
+}
+
 private struct WelcomeLoginPage: View {
+    let isActive: Bool
     let onContinue: () -> Void
+    @State private var signInErrorMessage: String?
+    @State private var hasSignedInWithApple = BolaAppleSignInState.isSignedIn
+    @State private var hasAcceptedLegal = true
+
+    private let termsURL = URL(string: "https://bolabola.app/terms")!
+    private let privacyURL = URL(string: "https://bolabola.app/privacy")!
+    private let legalLinkColor = Color(red: 0x5D / 255, green: 0x6A / 255, blue: 0x07 / 255)
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 46)
+            Spacer(minLength: 10)
 
-            VStack(spacing: 16) {
+            VStack(spacing: 10) {
                 Text("欢迎来到")
-                    .font(.system(size: 30, weight: .medium))
+                    .font(.system(size: 32, weight: .regular))
                     .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity, alignment: .center)
 
                 Text("BolaBola")
-                    .font(.system(size: 44, weight: .black))
+                    .font(.system(size: 48, weight: .semibold))
                     .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, -15)
 
-                Text("一个会陪你一起生活成长的\n手表宠物")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(.black)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(6)
-                    .padding(.top, 6)
-            }
-
-            Spacer(minLength: 18)
-
-            HeroHalfDome {
-                Image("bola手拿玫瑰")
+                Image("OnboardingWelcomeTagline")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 238)
-                    .offset(x: -6, y: 16)
+                    .frame(width: 279, height: 101)
+                    .padding(.top, 5)
             }
-            .padding(.horizontal, 8)
+            .onboardingBlockEntrance(isActive: isActive, index: 0)
+
+            Spacer(minLength: 12)
+
+            GeometryReader { proxy in
+                Image("OnboardingWelcomeHero")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: min(402, proxy.size.width))
+                    .frame(maxWidth: .infinity)
+            }
+            .frame(height: min(290, UIScreen.main.bounds.width * 290 / 402))
+            .onboardingBlockEntrance(isActive: isActive, index: 1)
 
             Spacer(minLength: 30)
 
-            Image(systemName: "apple.logo")
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(.black)
+            VStack(spacing: 0) {
+                OnboardingBundleImage(
+                    filename: "OnboardingBolaMark",
+                    size: CGSize(width: 40, height: 28)
+                )
+                .offset(y: -6)
 
-            Text("欢迎来到BolaBola")
-                .font(.system(size: 26, weight: .black))
-                .foregroundStyle(.black)
-                .padding(.top, 10)
+                Text("欢迎来到BolaBola")
+                    .font(.system(size: 32, weight: .semibold))
+                    .foregroundStyle(.black)
+                    .padding(.top, 10)
 
-            Text("和 Bola 一起让每一天变得更好吧！")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.black.opacity(0.34))
-                .padding(.top, 4)
-
-            Button(action: onContinue) {
-                HStack(spacing: 10) {
-                    Image(systemName: "apple.logo")
-                        .font(.system(size: 20, weight: .bold))
-                    Text("使用 Apple 继续")
-                        .font(.system(size: 18, weight: .medium))
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(Color.black)
-                .clipShape(Capsule())
+                Text("和 Bola 一起让每一天变得更好吧！")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color(red: 0xA5 / 255, green: 0xAE / 255, blue: 0x66 / 255))
+                    .padding(.top, 4)
             }
+            .onboardingBlockEntrance(isActive: isActive, index: 2)
+
+            SignInWithAppleButton(hasSignedInWithApple ? .continue : .signIn) { request in
+                signInErrorMessage = nil
+                request.requestedScopes = [.fullName, .email]
+            } onCompletion: { result in
+                handleAppleSignInCompletion(result)
+            }
+            .signInWithAppleButtonStyle(.black)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .clipShape(Capsule())
+            .disabled(!hasAcceptedLegal)
+            .opacity(hasAcceptedLegal ? 1 : 0.42)
             .padding(.horizontal, 36)
             .padding(.top, 24)
+            .onboardingBlockEntrance(isActive: isActive, index: 3)
+            .onAppear {
+                hasSignedInWithApple = BolaAppleSignInState.isSignedIn
+            }
+
+            if let signInErrorMessage {
+                Text(signInErrorMessage)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.red.opacity(0.82))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 36)
+                    .padding(.top, 10)
+            }
 
             HStack(spacing: 8) {
-                Image(systemName: "checkmark.square.fill")
-                    .font(.system(size: 10))
-                Text("点击登录即表示你同意《用户协议》和《隐私政策》。")
+                Button {
+                    hasAcceptedLegal.toggle()
+                } label: {
+                    Image(systemName: hasAcceptedLegal ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 10))
+                        .foregroundStyle(hasAcceptedLegal ? legalLinkColor : Color.black.opacity(0.28))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(hasAcceptedLegal ? "取消同意用户协议和隐私政策" : "同意用户协议和隐私政策")
+
+                HStack(spacing: 0) {
+                    Text("点击登录即表示你同意《")
+                    Link("用户协议", destination: termsURL)
+                        .foregroundStyle(legalLinkColor)
+                    Text("》和《")
+                    Link("隐私政策", destination: privacyURL)
+                        .foregroundStyle(legalLinkColor)
+                    Text("》。")
+                }
                     .font(.system(size: 10, weight: .medium))
             }
             .foregroundStyle(Color.black.opacity(0.35))
             .padding(.top, 14)
             .padding(.bottom, 10)
+            .onboardingBlockEntrance(isActive: isActive, index: 4)
         }
+    }
+
+    private func handleAppleSignInCompletion(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case .success(let authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+                signInErrorMessage = "Apple 登录没有返回有效凭证，请再试一次。"
+                return
+            }
+            BolaAppleSignInState.markSignedIn(
+                userIdentifier: credential.user,
+                fullName: credential.fullName,
+                email: credential.email
+            )
+            hasSignedInWithApple = true
+            onContinue()
+        case .failure(let error):
+            if let authorizationError = error as? ASAuthorizationError,
+               authorizationError.code == .canceled {
+                return
+            }
+            signInErrorMessage = "Apple 登录暂时没有完成，请再试一次。"
+        }
+    }
+}
+
+private struct OnboardingBundleImage: View {
+    let filename: String
+    let size: CGSize
+
+    var body: some View {
+        Group {
+            if let image = resolvedImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Color.black
+            }
+        }
+        .frame(width: size.width, height: size.height)
+    }
+
+    private var resolvedImage: UIImage? {
+        if let image = UIImage(named: filename) {
+            return image
+        }
+        if let url = Bundle.main.url(forResource: filename, withExtension: "png"),
+           let image = UIImage(contentsOfFile: url.path) {
+            return image
+        }
+        #if DEBUG
+        let previewPath = "/Users/xinyuewang/BolaBola/BolaBola iOS/\(filename).png"
+        if let image = UIImage(contentsOfFile: previewPath) {
+            return image
+        }
+        #endif
+        return nil
     }
 }
 
 private struct IntroCompanionPage: View {
+    let isActive: Bool
     let onContinue: () -> Void
+    @State private var entrancePhase = 0
+    @State private var entranceRunID = 0
 
     var body: some View {
         OnboardingScreen(primaryTitle: "继续", primaryAction: onContinue) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Hi!")
-                    .font(.system(size: 48, weight: .black, design: .rounded))
-                    .foregroundStyle(BolaTheme.accent.opacity(0.82))
-                    .padding(.top, 18)
-
-                Text("我是 Bola")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.black)
-                    .padding(.top, 8)
-
-                Text("我来自一个和你有点不一样的世界。\n现在，我会陪在你身边。\n如果你愿意，我会一点点了解你。")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(.black.opacity(0.9))
-                    .lineSpacing(5)
-                    .padding(.top, 20)
-
-                VStack(alignment: .leading, spacing: 18) {
-                    IntroFeatureRow(
-                        symbol: "heart.text.square.fill",
-                        title: "我会陪伴你",
-                        detail: "和你互动，慢慢熟悉，记住你的喜好"
+            ZStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 0) {
+                    OnboardingBundleImage(
+                        filename: "OnboardingIntroHi",
+                        size: CGSize(width: 65, height: 42)
                     )
-                    IntroFeatureRow(
-                        symbol: "sparkles.rectangle.stack.fill",
-                        title: "我会慢慢成长",
-                        detail: "每次陪伴都会让我变得不一样"
-                    )
-                    IntroFeatureRow(
-                        symbol: "note.text",
-                        title: "我会记住关于你的一切",
-                        detail: "一起生活的那些日常，都会成为我们的记忆"
-                    )
-                }
-                .padding(.top, 28)
-
-                HStack {
-                    Spacer()
-                    Image("sticker_gathxr")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 180)
                         .padding(.top, 18)
-                    Spacer()
+                        .introEntrance(active: entrancePhase >= 1)
+                        .offset(x: 2)
+
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("我是")
+                            .font(.system(size: 20, weight: .regular))
+                        Text("Bola")
+                            .font(.system(size: 30, weight: .semibold))
+                    }
+                    .foregroundStyle(.black)
+                        .padding(.top, 8)
+                        .introEntrance(active: entrancePhase >= 2)
+                        .offset(x: 2)
+
+                    OnboardingBundleImage(
+                        filename: "OnboardingIntroNameUnderline",
+                        size: CGSize(width: 105, height: 5)
+                    )
+                    .padding(.top, -2)
+                    .introEntrance(active: entrancePhase >= 3)
+                    .offset(x: 2)
+
+                    VStack(alignment: .leading, spacing: 9) {
+                        Text("我来自一个和你有点不一样的世界。")
+                            .introEntrance(active: entrancePhase >= 4, response: 1.85)
+                        Text("现在，我会陪在你身边。")
+                            .introEntrance(active: entrancePhase >= 5, response: 1.85)
+                        Text("如果你愿意，我会一点点了解你。")
+                            .introEntrance(active: entrancePhase >= 6, response: 1.85)
+                    }
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(.black.opacity(0.9))
+                        .padding(.top, 17)
+                        .offset(x: 2)
+
+                    VStack(alignment: .leading, spacing: 18) {
+                        IntroFeatureRow(
+                            imageName: "OnboardingIntroFeatureHearts",
+                            imageSize: CGSize(width: 26, height: 26),
+                            title: "我会陪伴你",
+                            detail: "和你互动，慢慢熟悉，记住你的喜好"
+                        )
+                        IntroFeatureRow(
+                            imageName: "OnboardingIntroFeatureSoil",
+                            imageSize: CGSize(width: 28.5, height: 28.5),
+                            title: "我会慢慢成长",
+                            detail: "每次陪伴都会让我变得不一样"
+                        )
+                        IntroFeatureRow(
+                            imageName: "OnboardingIntroFeatureEdit",
+                            imageSize: CGSize(width: 31, height: 25.5),
+                            title: "我会记住关于你的一切",
+                            detail: "一起生活的那些日常，都会成为我们的记忆"
+                        )
+                    }
+                    .padding(.top, 28)
+                    .introEntrance(active: entrancePhase >= 7)
+                    .offset(x: 2)
+
+                    Spacer(minLength: 250)
                 }
-                .padding(.bottom, 12)
+
+                OnboardingBundleImage(
+                    filename: "OnboardingIntroSlime",
+                    size: CGSize(width: 378, height: 271)
+                )
+                .frame(maxWidth: .infinity)
+                .offset(y: -25)
+                .introEntrance(active: entrancePhase >= 8)
             }
+            .frame(minHeight: 690, alignment: .top)
+            .onAppear {
+                if isActive {
+                    replayEntrance(after: 0.28)
+                }
+            }
+            .onChange(of: isActive) { _, newValue in
+                if newValue {
+                    replayEntrance(after: 0.28)
+                } else {
+                    resetEntrance()
+                }
+            }
+        }
+    }
+
+    private func replayEntrance(after delay: TimeInterval) {
+        resetEntrance()
+        let runID = entranceRunID
+        let steps: [(Int, TimeInterval)] = [
+            (1, 0.08),
+            (2, 0.3),
+            (3, 0.36),
+            (4, 1.31),
+            (5, 2.09),
+            (6, 2.83),
+            (7, 3.75),
+            (8, 3.93)
+        ]
+        for (phase, phaseDelay) in steps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay + phaseDelay) {
+                guard entranceRunID == runID, isActive else { return }
+                entrancePhase = max(entrancePhase, phase)
+            }
+        }
+    }
+
+    private func resetEntrance() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            entranceRunID += 1
+            entrancePhase = 0
         }
     }
 }
 
+private extension View {
+    func introEntrance(active: Bool, response: Double = 0.86) -> some View {
+        opacity(active ? 1 : 0)
+            .offset(y: active ? 0 : 10)
+            .animation(.spring(response: response, dampingFraction: 0.94), value: active)
+    }
+}
+
 private struct LevelUpPage: View {
+    let isActive: Bool
     let onContinue: () -> Void
 
     var body: some View {
-        OnboardingScreen(primaryTitle: "继续", primaryAction: onContinue) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("多和 Bola 互动来提升")
-                    .font(.system(size: 26, weight: .black))
-                    .foregroundStyle(.black)
-                    .padding(.top, 58)
+        GeometryReader { geo in
+            let w = geo.size.width
+            VStack(spacing: 0) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        Text("多和 Bola 互动来提升")
+                            .font(.system(size: 32.5, weight: .regular))
+                            .foregroundStyle(.black)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.horizontal, 28)
+                            .padding(.top, 36)
+                            .onboardingBlockEntrance(isActive: isActive, index: 0)
 
-                ZStack {
-                    VStack(spacing: -8) {
-                        Image("LevelUpHero")
+                        Image("OnboardingLevelUpHero")
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 245)
-                        Text("LEVEL UP!")
-                            .font(.system(size: 28, weight: .black, design: .rounded))
-                            .foregroundStyle(Color(red: 0.98, green: 0.79, blue: 0.33))
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, -w * 0.10)
+                            .padding(.top, -w * 0.32)
+                            .padding(.bottom, -w * 0.30 + 25)
+                            .onboardingBlockEntrance(isActive: isActive, index: 1)
+
+                        VStack(alignment: .leading, spacing: 20) {
+                            MetricExplainRow(
+                                imageName: "OnboardingLevelUpStairs",
+                                title: "成长值",
+                                detail: "通过完成任务和日常互动获得，用于提升\nBola 的成长等级。"
+                            )
+                            MetricExplainRow(
+                                imageName: "OnboardingLevelUpHeart",
+                                title: "陪伴值",
+                                detail: "平时与 Bola 的陪伴时间越长，数值越高。",
+                                iconSize: 52,
+                                iconOffsetY: -8
+                            )
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.leading, 15)
+                        .padding(.top, 16)
+                        .onboardingBlockEntrance(isActive: isActive, index: 2)
                     }
+                    .padding(.bottom, 28)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 6)
-
-                VStack(alignment: .leading, spacing: 20) {
-                    MetricExplainRow(
-                        symbol: "arrow.up.right",
-                        title: "成长值",
-                        detail: "通过完成任务和日常互动获得，用于提升 Bola 的成长等级。"
-                    )
-                    MetricExplainRow(
-                        symbol: "heart",
-                        title: "陪伴值",
-                        detail: "平时与 Bola 的陪伴时间越长，数值越高。"
-                    )
+                .scrollDisabled(true)
+                .overlay(alignment: .bottom) {
+                    GrowingBars()
+                        .allowsHitTesting(false)
+                        .onboardingBlockEntrance(isActive: isActive, index: 3)
                 }
-                .padding(.top, 8)
 
-                GrowingBars()
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 20)
+                Button(action: onContinue) {
+                    Text("继续")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(BolaTheme.onAccentForeground)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(BolaTheme.accent)
+                        .clipShape(Capsule())
+                }
+                .onboardingBlockEntrance(isActive: isActive, index: 4)
+                .padding(.horizontal, 36)
+                .padding(.bottom, 18)
             }
         }
     }
 }
 
 private struct NotificationPermissionPage: View {
+    let isActive: Bool
     let status: UNAuthorizationStatus
     let onAllow: () -> Void
     let onSkip: () -> Void
 
     var body: some View {
         OnboardingScreen(
+            isActive: isActive,
             primaryTitle: status == .authorized ? "继续" : "允许通知",
             primaryAction: onAllow,
             secondaryTitle: "跳过",
@@ -471,171 +908,189 @@ private struct NotificationPermissionPage: View {
         ) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("让 Bola 更好的陪伴你")
-                    .font(.system(size: 26, weight: .black))
+                    .font(.system(size: 32.5, weight: .regular))
                     .foregroundStyle(.black)
-                    .padding(.top, 58)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 28)
+                    .onboardingBlockEntrance(isActive: isActive, index: 0)
 
                 Text("允许 BolaBola 发送通知，更好的了解你的健康数据")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 12.3, weight: .regular))
                     .foregroundStyle(Color.black.opacity(0.34))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, 12)
+                    .onboardingBlockEntrance(isActive: isActive, index: 1)
 
                 NotificationPlaceholderCard()
                     .padding(.top, 34)
+                    .onboardingBlockEntrance(isActive: isActive, index: 2)
 
-                HStack {
-                    Spacer()
-                    Image("sticker_gathxr")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 196)
-                    Spacer()
-                }
+                OnboardingBundleImage(
+                    filename: "OnboardingNotificationHero",
+                    size: CGSize(width: 220, height: 220)
+                )
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.trailing, -28)
                 .padding(.top, 26)
+                .onboardingBlockEntrance(isActive: isActive, index: 3)
             }
         }
     }
 }
 
 private struct HealthRhythmPage: View {
+    let isActive: Bool
     let requested: Bool
     let onContinue: () -> Void
 
     var body: some View {
         OnboardingScreen(
+            isActive: isActive,
             primaryTitle: requested ? "继续" : "继续",
             primaryAction: onContinue
         ) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Bola 正在感知你的状态")
-                    .font(.system(size: 26, weight: .black))
+                    .font(.system(size: 32.5, weight: .regular))
                     .foregroundStyle(.black)
-                    .padding(.top, 38)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 28)
+                    .onboardingBlockEntrance(isActive: isActive, index: 0)
 
                 Text("通过 HRV（心率变异性），Bola 会感知你现在的状态")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 12.3, weight: .regular))
                     .foregroundStyle(Color.black.opacity(0.34))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, 12)
+                    .onboardingBlockEntrance(isActive: isActive, index: 1)
 
-                RhythmArcShowcase()
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 34)
+                HStack {
+                    Spacer(minLength: 0)
+                    RhythmArcShowcase()
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, 24)
+                .onboardingBlockEntrance(isActive: isActive, index: 2)
 
-                RhythmLegendGrid()
-                    .padding(.top, 26)
+                HStack {
+                    Spacer(minLength: 0)
+                    RhythmLegendGrid()
+                        .frame(width: 260)
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, 75)
+                .onboardingBlockEntrance(isActive: isActive, index: 3)
             }
         }
     }
 }
 
 private struct QuestionIntroPage: View {
+    let isActive: Bool
     let onContinue: () -> Void
 
     var body: some View {
-        OnboardingScreen(primaryTitle: "继续", primaryAction: onContinue) {
+        OnboardingScreen(isActive: isActive, primaryTitle: "继续", primaryAction: onContinue) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("最后\n还有一些简单的问题")
-                    .font(.system(size: 28, weight: .black))
+                    .font(.system(size: 32.5, weight: .regular))
                     .foregroundStyle(.black)
                     .lineSpacing(6)
-                    .padding(.top, 26)
+                    .padding(.top, 20)
+                    .padding(.leading, 30)
+                    .onboardingBlockEntrance(isActive: isActive, index: 0)
 
                 HStack {
                     Spacer()
                     QuestionBoxHero()
                         .frame(width: 220, height: 250)
-                        .padding(.top, 56)
+                        .padding(.top, 66)
                     Spacer()
                 }
+                .onboardingBlockEntrance(isActive: isActive, index: 1)
             }
         }
     }
 }
 
 private struct UserNicknamePage: View {
+    let isActive: Bool
     @Binding var nickname: String
     let onContinue: () -> Void
 
     var body: some View {
-        OnboardingScreen(primaryTitle: "继续", primaryAction: onContinue) {
+        OnboardingScreen(
+            isActive: isActive,
+            animateEntrance: false,
+            scrollsWithKeyboard: true,
+            primaryTitle: "继续",
+            primaryAction: onContinue
+        ) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("让我更了解一下你吧")
-                    .font(.system(size: 28, weight: .black))
+                    .font(.system(size: 32.5, weight: .regular))
                     .foregroundStyle(.black)
-                    .padding(.top, 24)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 20)
 
-                HStack(alignment: .center) {
-                    Text("我该如何称呼你呢")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.black.opacity(0.92))
-                    Spacer()
-                    Image("sticker_gathxr")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 146)
-                }
+                QuestionStickerRow(bubble: "我该如何称呼你呢")
                 .padding(.top, 34)
 
                 RoundedTextField(text: $nickname, placeholder: "输入你的名字或昵称")
-                    .padding(.top, 98)
+                    .padding(.top, 20)
             }
         }
     }
 }
 
 private struct BirthdayPage: View {
+    let isActive: Bool
     @Binding var birthDate: Date
     let onContinue: () -> Void
 
     var body: some View {
-        OnboardingScreen(primaryTitle: "继续", primaryAction: onContinue) {
+        OnboardingScreen(isActive: isActive, animateEntrance: false, primaryTitle: "继续", primaryAction: onContinue) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("让我更了解一下你吧")
-                    .font(.system(size: 28, weight: .black))
+                    .font(.system(size: 32.5, weight: .regular))
                     .foregroundStyle(.black)
-                    .padding(.top, 24)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 20)
 
-                HStack(alignment: .center) {
-                    Text("请问你的生日是？")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.black.opacity(0.92))
-                    Spacer()
-                    Image("sticker_gathxr")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 146)
-                }
+                QuestionStickerRow(bubble: "请问你的生日是？")
                 .padding(.top, 34)
 
                 BirthdayPickerCard(birthDate: $birthDate)
-                    .padding(.top, 56)
+                    .padding(.top, 20)
             }
         }
     }
 }
 
 private struct GenderPage: View {
+    let isActive: Bool
     @Binding var selectedGender: OnboardingGender?
     let onContinue: () -> Void
 
     var body: some View {
-        OnboardingScreen(primaryTitle: "继续", primaryAction: onContinue) {
+        OnboardingScreen(
+            isActive: isActive,
+            animateEntrance: false,
+            primaryTitle: "继续",
+            primaryAction: onContinue
+        ) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("让我更了解一下你吧")
-                    .font(.system(size: 28, weight: .black))
+                    .font(.system(size: 32.5, weight: .regular))
                     .foregroundStyle(.black)
-                    .padding(.top, 24)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 20)
 
-                HStack(alignment: .center) {
-                    Text("请问你的性别是？")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.black.opacity(0.92))
-                    Spacer()
-                    Image("sticker_gathxr")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 146)
-                }
+                QuestionStickerRow(bubble: "请问你的性别是？")
                 .padding(.top, 34)
 
                 VStack(spacing: 14) {
@@ -668,47 +1123,54 @@ private struct GenderPage: View {
 }
 
 private struct BolaNicknamePage: View {
+    let isActive: Bool
     @Binding var nickname: String
     let onContinue: () -> Void
 
     var body: some View {
-        OnboardingScreen(primaryTitle: "继续", primaryAction: onContinue) {
-            VStack(alignment: .leading, spacing: 0) {
+        OnboardingScreen(
+            isActive: isActive,
+            animateEntrance: false,
+            scrollsWithKeyboard: true,
+            primaryTitle: "继续",
+            primaryAction: onContinue
+        ) {
+            VStack(alignment: .center, spacing: 0) {
                 Text("给 Bola 起个专属名称吧")
-                    .font(.system(size: 28, weight: .black))
+                    .font(.system(size: 32.5, weight: .regular))
                     .foregroundStyle(.black)
-                    .padding(.top, 60)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 20)
 
                 Text("它会记住这个名字哦")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Color.black.opacity(0.4))
-                    .padding(.top, 14)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 34)
 
                 ClearableRoundedField(text: $nickname, placeholder: "比如：波拉 / 小黑 / Bobo")
                     .padding(.top, 44)
 
-                HStack {
-                    Spacer()
-                    GlowingMascotCard()
-                        .frame(width: 260, height: 230)
-                        .padding(.top, 58)
-                    Spacer()
-                }
+                GlowingMascotCard()
+                    .frame(width: 260, height: 230)
+                    .padding(.top, 58)
             }
         }
     }
 }
 
 private struct ReadyPage: View {
+    let isActive: Bool
     let onEnter: () -> Void
 
     var body: some View {
-        OnboardingScreen(primaryTitle: "进入 Bola 的空间", primaryAction: onEnter) {
+        OnboardingScreen(isActive: isActive, primaryTitle: "进入 Bola 的空间", primaryAction: onEnter) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("一切准备就绪！")
-                    .font(.system(size: 28, weight: .black))
+                    .font(.system(size: 32.5, weight: .regular))
                     .foregroundStyle(.black)
-                    .padding(.top, 88)
+                    .padding(.top, 108)
+                    .onboardingBlockEntrance(isActive: isActive, index: 0)
 
                 HStack {
                     Spacer()
@@ -717,29 +1179,29 @@ private struct ReadyPage: View {
                         .padding(.top, 66)
                     Spacer()
                 }
+                .onboardingBlockEntrance(isActive: isActive, index: 1)
             }
         }
     }
 }
 
 private struct IntroFeatureRow: View {
-    let symbol: String
+    let imageName: String
+    let imageSize: CGSize
     let title: String
     let detail: String
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: symbol)
-                .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(.black)
-                .frame(width: 28, height: 28)
+            OnboardingBundleImage(filename: imageName, size: imageSize)
+                .frame(width: 32, height: 32)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 16, weight: .black))
-                    .foregroundStyle(BolaTheme.accent.opacity(0.88))
+                    .font(.system(size: 18.8, weight: .bold))
+                    .foregroundStyle(Color(red: 0xC0 / 255, green: 0xE1 / 255, blue: 0))
                 Text(detail)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(Color.black.opacity(0.35))
             }
         }
@@ -747,26 +1209,30 @@ private struct IntroFeatureRow: View {
 }
 
 private struct MetricExplainRow: View {
-    let symbol: String
+    let imageName: String
     let title: String
     let detail: String
+    var iconSize: CGFloat = 42
+    var iconOffsetY: CGFloat = 0
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
-            Image(systemName: symbol)
-                .font(.system(size: 28, weight: .medium))
-                .foregroundStyle(BolaTheme.accent)
-                .frame(width: 42)
+            Image(imageName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: iconSize, height: iconSize)
+                .offset(y: iconOffsetY)
+                .frame(width: 52)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
-                    .font(.system(size: 18, weight: .black))
+                    .font(.system(size: 20, weight: .regular))
                     .foregroundStyle(.black)
                 Text(detail)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(Color.black.opacity(0.35))
-                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -811,67 +1277,68 @@ private struct NotificationPlaceholderCard: View {
 private struct RhythmArcShowcase: View {
     var body: some View {
         ZStack {
-            ArcShape()
-                .stroke(
-                    AngularGradient(
-                        colors: [
-                            Color(red: 0.98, green: 0.61, blue: 0.12),
-                            Color(red: 1.0, green: 0.87, blue: 0.12),
-                            Color(red: 0.58, green: 0.95, blue: 0.32),
-                            Color(red: 0.42, green: 0.9, blue: 0.75)
-                        ],
-                        center: .center,
-                        startAngle: .degrees(180),
-                        endAngle: .degrees(0)
-                    ),
-                    style: StrokeStyle(lineWidth: 16, lineCap: .round)
-                )
-                .frame(width: 330, height: 180)
+            ZStack {
+                ArcShape()
+                    .stroke(
+                        AngularGradient(
+                            colors: [
+                                Color(red: 0.98, green: 0.61, blue: 0.12),
+                                Color(red: 1.0, green: 0.87, blue: 0.12),
+                                Color(red: 0.58, green: 0.95, blue: 0.32),
+                                Color(red: 0.42, green: 0.9, blue: 0.75)
+                            ],
+                            center: .center,
+                            startAngle: .degrees(180),
+                            endAngle: .degrees(0)
+                        ),
+                        style: StrokeStyle(lineWidth: 16, lineCap: .round)
+                    )
+                    .frame(width: 330, height: 180)
 
-            Circle()
-                .fill(Color.white)
-                .frame(width: 20, height: 20)
-                .offset(y: -78)
-
-            VStack(spacing: -8) {
-                ZStack {
-                    Image("GrowthHeroIsland")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 170)
-                    Image("sticker_gathxr")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 92)
-                        .offset(x: -14, y: -18)
-                }
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 20, height: 20)
+                    .offset(y: -76)
             }
-            .offset(y: 42)
+
+            Image("GrowthHeroIsland")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 224)
+                .offset(x: 10, y: 42)
         }
     }
 }
 
 private struct RhythmLegendGrid: View {
     private let items: [(Color, String)] = [
-        (Color(red: 0.42, green: 0.9, blue: 0.75), "节奏满满"),
-        (Color(red: 0.58, green: 0.95, blue: 0.32), "节奏平稳"),
         (Color(red: 1.0, green: 0.87, blue: 0.12), "节奏起伏"),
+        (Color(red: 0.58, green: 0.95, blue: 0.32), "节奏平稳"),
         (Color(red: 0.98, green: 0.61, blue: 0.12), "节奏不稳"),
+        (Color(red: 0.42, green: 0.9, blue: 0.75), "节奏满满"),
     ]
 
     var body: some View {
-        LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], alignment: .leading, spacing: 20) {
-            ForEach(items, id: \.1) { item in
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(item.0)
-                        .frame(width: 20, height: 20)
-                    Text(item.1)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Color.black.opacity(0.56))
+        VStack(spacing: 22) {
+            ForEach(Array(stride(from: 0, to: items.count, by: 2)), id: \.self) { i in
+                HStack(spacing: 26) {
+                    legendItem(items[i])
+                    legendItem(items[i + 1])
                 }
             }
         }
+    }
+
+    private func legendItem(_ item: (Color, String)) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(item.0)
+                .frame(width: 20, height: 20)
+            Text(item.1)
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(Color.black.opacity(0.56))
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -891,40 +1358,62 @@ private struct ArcShape: Shape {
 
 private struct QuestionBoxHero: View {
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(red: 0.78, green: 0.83, blue: 0.08), BolaTheme.accent],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+        OnboardingBundleImage(
+            filename: "OnboardingQuestionHero",
+            size: CGSize(width: 260, height: 260)
+        )
+    }
+}
+
+private struct BolaChatBubble: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 20, weight: .semibold))
+            .foregroundStyle(.black.opacity(0.88))
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(
+                Color(uiColor: .systemBackground).opacity(0.88),
+                in: UnevenRoundedRectangle(
+                    topLeadingRadius: 16,
+                    bottomLeadingRadius: 16,
+                    bottomTrailingRadius: 6,
+                    topTrailingRadius: 18,
+                    style: .continuous
                 )
-                .shadow(color: BolaTheme.accent.opacity(0.3), radius: 28, x: 0, y: 18)
-                .frame(width: 126, height: 126)
-                .overlay {
-                    Text("?")
-                        .font(.system(size: 86, weight: .black))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.14), radius: 6, x: 0, y: 3)
-                }
+            )
+            .overlay(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 16,
+                    bottomLeadingRadius: 16,
+                    bottomTrailingRadius: 6,
+                    topTrailingRadius: 18,
+                    style: .continuous
+                )
+                .stroke(Color.white.opacity(0.74), lineWidth: 0.8)
+            )
+            .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 3)
+    }
+}
 
-            Image("sticker_gathxr")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 80)
-                .offset(y: -2)
+private struct QuestionStickerRow: View {
+    let bubble: String
 
-            Text("?")
-                .font(.system(size: 44, weight: .black))
-                .foregroundStyle(BolaTheme.accent)
-                .offset(x: 74, y: -54)
-
-            Text("?")
-                .font(.system(size: 32, weight: .black))
-                .foregroundStyle(BolaTheme.accent)
-                .offset(x: 102, y: -30)
+    var body: some View {
+        OnboardingBundleImage(
+            filename: "OnboardingQuestionSticker",
+            size: CGSize(width: 200, height: 200)
+        )
+        .overlay(alignment: .topLeading) {
+            BolaChatBubble(text: bubble)
+                .fixedSize()
+                .offset(x: -140, y: -10)
         }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.trailing, -28)
+        .padding(.top, 34)
     }
 }
 
@@ -954,7 +1443,15 @@ private struct BirthdayPickerCard: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 190)
 
-            Rectangle()
+            UnevenRoundedRectangle(
+                cornerRadii: RectangleCornerRadii(
+                    topLeading: 0,
+                    bottomLeading: 32,
+                    bottomTrailing: 32,
+                    topTrailing: 0
+                ),
+                style: .continuous
+            )
                 .fill(Color.white.opacity(0.92))
                 .frame(height: 34)
                 .overlay {
@@ -964,7 +1461,9 @@ private struct BirthdayPickerCard: View {
                 }
         }
         .background(Color.black.opacity(0.06))
+        .compositingGroup()
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .mask(RoundedRectangle(cornerRadius: 32, style: .continuous))
     }
 
     private var formattedDate: String {
@@ -1133,3 +1632,9 @@ private struct HalfCircle: Shape {
         return path
     }
 }
+
+#if DEBUG
+#Preview("Onboarding") {
+    IOSOnboardingView {}
+}
+#endif
