@@ -20,7 +20,7 @@ struct IOSRootView: View {
     @State private var showDigestSheet = false
     @State private var digestBody = ""
     @State private var showSettingsSheet = false
-    @State private var showOnboarding = !BolaOnboardingState.isCompleted
+    @State private var isOnboardingCompleted = BolaOnboardingState.isCompleted
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
     // 提前在根视图创建，避免 Life tab 首次显示时在主线程同步初始化 HealthKit / CoreLocation 导致卡顿
@@ -94,6 +94,23 @@ struct IOSRootView: View {
     }
 
     var body: some View {
+        Group {
+            if isOnboardingCompleted {
+                mainAppBody
+            } else if BolaOnboardingState.hasRegisteredBefore {
+                IOSSignInReturnView {
+                    BolaOnboardingState.markCompleted()
+                    isOnboardingCompleted = true
+                }
+            } else {
+                IOSOnboardingView {
+                    isOnboardingCompleted = true
+                }
+            }
+        }
+    }
+
+    private var mainAppBody: some View {
         ZStack {
             TabView(selection: $selectedTab) {
                 /// `TabSection` 与独立「对话」Tab 之间间距与三格胶囊宽度由系统绘制，无公开微调 API。
@@ -153,11 +170,6 @@ struct IOSRootView: View {
                 IOSSettingsListView()
             }
         }
-        .fullScreenCover(isPresented: $showOnboarding) {
-            IOSOnboardingView {
-                showOnboarding = false
-            }
-        }
         .sheet(isPresented: $showDigestSheet) {
             NavigationStack {
                 ScrollView {
@@ -212,7 +224,7 @@ struct IOSRootView: View {
             selectedTab = tab
         }
         .onReceive(NotificationCenter.default.publisher(for: BolaOnboardingState.didRequestReplayNotification)) { _ in
-            showOnboarding = true
+            isOnboardingCompleted = false
         }
         .task {
             BolaSharedDefaults.migrateStandardToGroupIfNeeded()

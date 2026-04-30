@@ -21,6 +21,7 @@ struct IOSSettingsListView: View {
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var confirmResetLifeRecords = false
     @State private var confirmResetGrowth = false
+    @State private var showHelpCenter = false
     @State private var growthSummary: String = ""
     @State private var selectedPersonality = BolaPersonalitySelectionStore.validated()
     @ObservedObject private var debugLog = BolaDebugLog.shared
@@ -238,10 +239,19 @@ struct IOSSettingsListView: View {
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
+                Button {
+                    showHelpCenter = true
+                } label: {
+                    Label("帮助中心", systemImage: "questionmark.circle")
+                }
             } header: {
                 Text("关于")
             } footer: {
                 Text("性格与用户档案等功能将后续在此扩展。")
+            }
+            .sheet(isPresented: $showHelpCenter) {
+                IOSHelpCenterView()
+                    .presentationDragIndicator(.visible)
             }
         }
         .navigationTitle("设置")

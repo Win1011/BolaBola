@@ -34,6 +34,9 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        if !BolaOnboardingState.hasRegisteredBefore {
+            IOSKeyboardPrewarmer.prewarmAfterLaunch()
+        }
         FirebaseApp.configure()
         UNUserNotificationCenter.current().delegate = IOSNotificationRouter.shared
         BolaWCSessionCoordinator.shared.activate()
@@ -49,5 +52,73 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
             ])
         }
         return true
+    }
+}
+
+@MainActor
+private enum IOSKeyboardPrewarmer {
+    private static var didPrewarm = false
+    private static var windowObserver: NSObjectProtocol?
+
+    static func prewarmAfterLaunch() {
+        guard !didPrewarm else { return }
+
+        if let window = keyWindow {
+            prewarm(in: window)
+            return
+        }
+
+        windowObserver = NotificationCenter.default.addObserver(
+            forName: UIWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            guard let window = notification.object as? UIWindow else { return }
+            Task { @MainActor in
+                prewarm(in: window)
+            }
+        }
+    }
+
+    @MainActor
+    private static func prewarm(in window: UIWindow) {
+        guard !didPrewarm else { return }
+        didPrewarm = true
+
+        if let windowObserver {
+            NotificationCenter.default.removeObserver(windowObserver)
+            self.windowObserver = nil
+        }
+
+        DispatchQueue.main.async {
+            guard window.isKeyWindow else {
+                didPrewarm = false
+                prewarmAfterLaunch()
+                return
+            }
+
+            let field = UITextField(frame: CGRect(x: -16, y: -16, width: 1, height: 1))
+            field.alpha = 0.01
+            field.textContentType = .none
+            field.autocorrectionType = .no
+            field.spellCheckingType = .no
+            field.autocapitalizationType = .none
+            field.inputAssistantItem.leadingBarButtonGroups = []
+            field.inputAssistantItem.trailingBarButtonGroups = []
+            window.addSubview(field)
+
+            field.becomeFirstResponder()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                field.resignFirstResponder()
+                field.removeFromSuperview()
+            }
+        }
+    }
+
+    private static var keyWindow: UIWindow? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }
     }
 }

@@ -528,20 +528,20 @@ struct IOSMainHomeView: View {
                 NavigationStack {
                     VStack(spacing: 18) {
                         Image(systemName: "lock.fill")
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundStyle(BolaTheme.accent)
-                            .frame(width: 62, height: 62)
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(.black.opacity(0.78))
+                            .padding(12)
                             .background(
                                 Circle()
-                                    .fill(BolaTheme.accent.opacity(0.12))
+                                    .fill(BolaTheme.accent.opacity(0.82))
                             )
 
-                        Text("快去升级吧就能解锁称号啦")
+                        Text("达到等级就能解锁称号啦")
                             .font(.title3.weight(.semibold))
                             .multilineTextAlignment(.center)
 
                         Text("升到 Lv.3 之后，就可以进入称号页面选择称号和边框样式。")
-                            .font(.body)
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
 
@@ -550,10 +550,58 @@ struct IOSMainHomeView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(BolaTheme.accent)
+                        .foregroundStyle(Color.black)
                     }
                     .padding(24)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .background(BolaLifeAmbientBackground().ignoresSafeArea())
+                    .background(
+                        ZStack {
+                            BolaTheme.backgroundGrouped
+                            LinearGradient(
+                                colors: [
+                                    BolaTheme.accent.opacity(BolaTheme.accentGlowTopOpacity),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: UnitPoint(x: 0.5, y: 0.42)
+                            )
+                        }
+                        .overlay(alignment: .top) {
+                            Circle()
+                                .fill(RadialGradient(
+                                    colors: [
+                                        BolaTheme.accent.opacity(0.36),
+                                        BolaTheme.accent.opacity(0.19),
+                                        Color.clear
+                                    ],
+                                    center: .center,
+                                    startRadius: 40,
+                                    endRadius: 196
+                                ))
+                                .frame(width: 392, height: 392)
+                                .blur(radius: 18)
+                                .offset(y: -130)
+                                .allowsHitTesting(false)
+                        }
+                        .overlay(alignment: .bottom) {
+                            Circle()
+                                .fill(RadialGradient(
+                                    colors: [
+                                        BolaTheme.accent.opacity(0.36),
+                                        BolaTheme.accent.opacity(0.19),
+                                        Color.clear
+                                    ],
+                                    center: .center,
+                                    startRadius: 40,
+                                    endRadius: 127
+                                ))
+                                .frame(width: 254, height: 254)
+                                .blur(radius: 9)
+                                .offset(y: 100)
+                                .allowsHitTesting(false)
+                        }
+                        .ignoresSafeArea()
+                    )
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
@@ -561,7 +609,7 @@ struct IOSMainHomeView: View {
                         }
                     }
                 }
-                .presentationDetents([.height(280)])
+                .presentationDetents([.height(300)])
                 .presentationDragIndicator(.visible)
             }
     }

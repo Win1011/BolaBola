@@ -19,9 +19,14 @@ struct IOSOnboardingView: View {
     @State private var birthDate = Calendar.current.date(from: DateComponents(year: 2000, month: 1, day: 1)) ?? .now
     @State private var selectedGender: OnboardingGender?
     @State private var bolaNickname = ""
+    @State private var isFinishingOnboarding = false
+    @State private var autoFocusStep: Int?
+    @State private var autoFocusRequestID = 0
 
     private let healthStore = HKHealthStore()
     private let stepCount = 11
+    private let questionFlowVerticalNudge: CGFloat = 0
+    private let onboardingPrimaryButtonHeight: CGFloat = 52
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -31,70 +36,10 @@ struct IOSOnboardingView: View {
             VStack(spacing: 0) {
                 topChrome
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 0) {
-                        WelcomeLoginPage(isActive: stepIndex == 0, onContinue: { goToStep(1) })
-                            .onboardingPage(id: 0)
-                        IntroCompanionPage(
-                            isActive: stepIndex == 1,
-                            onContinue: { goToStep(2) }
-                        )
-                            .onboardingPage(id: 1)
-                        LevelUpPage(isActive: stepIndex == 2, onContinue: { goToStep(3) })
-                            .onboardingPage(id: 2)
-                        NotificationPermissionPage(
-                            isActive: stepIndex == 3,
-                            status: notificationStatus,
-                            onAllow: requestNotifications,
-                            onSkip: { goToStep(4) }
-                        )
-                        .onboardingPage(id: 3)
-                        HealthRhythmPage(
-                            isActive: stepIndex == 4,
-                            requested: healthRequested,
-                            onContinue: requestHealthAccess
-                        )
-                        .onboardingPage(id: 4)
-                        QuestionIntroPage(isActive: stepIndex == 5, onContinue: { goToStep(6) })
-                            .onboardingPage(id: 5)
-                        UserNicknamePage(
-                            isActive: stepIndex == 6,
-                            nickname: $userNickname,
-                            onContinue: { goToStep(7) }
-                        )
-                        .onboardingPage(id: 6)
-                        BirthdayPage(
-                            isActive: stepIndex == 7,
-                            birthDate: $birthDate,
-                            onContinue: { goToStep(8) }
-                        )
-                        .onboardingPage(id: 7)
-                        GenderPage(
-                            isActive: stepIndex == 8,
-                            selectedGender: $selectedGender,
-                            onContinue: { goToStep(9) }
-                        )
-                        .onboardingPage(id: 8)
-                        BolaNicknamePage(
-                            isActive: stepIndex == 9,
-                            nickname: $bolaNickname,
-                            onContinue: { goToStep(10) }
-                        )
-                        .onboardingPage(id: 9)
-                        ReadyPage(isActive: stepIndex == 10, onEnter: finishOnboarding)
-                            .onboardingPage(id: 10)
-                    }
-                    .scrollTargetLayout()
-                }
-                .scrollTargetBehavior(.paging)
-                .scrollPosition(id: $visibleStepID)
-                .scrollDisabled(!(5...9).contains(stepIndex))
-                .animation(.spring(response: 0.34, dampingFraction: 0.86), value: stepIndex)
-                .onChange(of: visibleStepID) { _, newID in
-                    guard let newID, (5...9).contains(newID), newID != stepIndex else { return }
-                    stepIndex = newID
-                }
+                pageArea
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .ignoresSafeArea(.keyboard)
 
             #if DEBUG
             VStack(spacing: 8) {
@@ -122,6 +67,8 @@ struct IOSOnboardingView: View {
             .frame(maxWidth: .infinity, alignment: .trailing)
             #endif
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(.keyboard)
         .task {
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             notificationStatus = settings.authorizationStatus
@@ -136,7 +83,7 @@ struct IOSOnboardingView: View {
         .onChange(of: selectedGender) { _, _ in persistDraft() }
         .onChange(of: bolaNickname) { _, _ in persistDraft() }
         .onChange(of: visibleStepID) { _, newValue in
-            guard let newValue, (0 ..< stepCount).contains(newValue) else { return }
+            guard let newValue, (0 ..< 5).contains(newValue) else { return }
             stepIndex = newValue
         }
     }
@@ -148,12 +95,112 @@ struct IOSOnboardingView: View {
                 Spacer()
                 ProgressPills(currentIndex: min(max(stepIndex - 5, 0), 3), total: 4)
                     .padding(.horizontal, 58)
+                    .offset(y: questionFlowVerticalNudge / 2)
                 Spacer()
             }
-            .frame(height: 56)
+            .frame(height: 56 + questionFlowVerticalNudge)
         } else {
             Color.clear
                 .frame(height: 28)
+        }
+    }
+
+    private var canSwipeCurrentStep: Bool {
+        (5 ... 10).contains(stepIndex)
+    }
+
+    private var pageArea: some View {
+        pagingPageArea
+    }
+
+    private var pagingPageArea: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                WelcomeLoginPage(isActive: stepIndex == 0, onContinue: { goToStep(1) })
+                    .onboardingPage(id: 0)
+                IntroCompanionPage(
+                    isActive: stepIndex == 1,
+                    buttonHeight: onboardingPrimaryButtonHeight,
+                    onContinue: { goToStep(2) }
+                )
+                .onboardingPage(id: 1)
+                LevelUpPage(
+                    isActive: stepIndex == 2,
+                    buttonHeight: onboardingPrimaryButtonHeight,
+                    onContinue: { goToStep(3) }
+                )
+                    .onboardingPage(id: 2)
+                NotificationPermissionPage(
+                    isActive: stepIndex == 3,
+                    buttonHeight: onboardingPrimaryButtonHeight,
+                    status: notificationStatus,
+                    onAllow: requestNotifications,
+                    onSkip: { goToStep(4) }
+                )
+                .onboardingPage(id: 3)
+                HealthRhythmPage(
+                    isActive: stepIndex == 4,
+                    buttonHeight: onboardingPrimaryButtonHeight,
+                    requested: healthRequested,
+                    onContinue: requestHealthAccess
+                )
+                .onboardingPage(id: 4)
+                QuestionIntroPage(
+                    isActive: stepIndex == 5,
+                    buttonHeight: onboardingPrimaryButtonHeight,
+                    onContinue: { goToStep(6) }
+                )
+                .onboardingPage(id: 5)
+                UserNicknamePage(
+                    isActive: stepIndex == 6,
+                    buttonHeight: onboardingPrimaryButtonHeight,
+                    autoFocusRequestID: autoFocusStep == 6 ? autoFocusRequestID : 0,
+                    nickname: $userNickname,
+                    onContinue: { goToStep(7) }
+                )
+                .onboardingPage(id: 6)
+                BirthdayPage(
+                    isActive: stepIndex == 7,
+                    buttonHeight: onboardingPrimaryButtonHeight,
+                    birthDate: $birthDate,
+                    onContinue: { goToStep(8) }
+                )
+                .onboardingPage(id: 7)
+                GenderPage(
+                    isActive: stepIndex == 8,
+                    buttonHeight: onboardingPrimaryButtonHeight,
+                    selectedGender: $selectedGender,
+                    onContinue: { goToStep(9) }
+                )
+                .onboardingPage(id: 8)
+                BolaNicknamePage(
+                    isActive: stepIndex == 9,
+                    buttonHeight: onboardingPrimaryButtonHeight,
+                    autoFocusRequestID: autoFocusStep == 9 ? autoFocusRequestID : 0,
+                    nickname: $bolaNickname,
+                    onContinue: { goToStep(10) }
+                )
+                .onboardingPage(id: 9)
+                ReadyPage(
+                    isActive: stepIndex == 10,
+                    buttonHeight: onboardingPrimaryButtonHeight,
+                    onEnter: finishOnboarding
+                )
+                .onboardingPage(id: 10)
+            }
+            .scrollTargetLayout()
+            .frame(maxHeight: .infinity)
+        }
+        .scrollTargetBehavior(.paging)
+        .scrollPosition(id: $visibleStepID)
+        .scrollDisabled(!canSwipeCurrentStep)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(.keyboard)
+        .animation(.spring(response: 0.34, dampingFraction: 0.86), value: stepIndex)
+        .onChange(of: visibleStepID) { _, newID in
+            guard let newID, (0 ..< stepCount).contains(newID), newID != stepIndex else { return }
+            dismissKeyboard()
+            stepIndex = newID
         }
     }
 
@@ -208,18 +255,39 @@ struct IOSOnboardingView: View {
     }
 
     private func finishOnboarding() {
+        isFinishingOnboarding = true
+        dismissKeyboard()
         persistDraft()
         BolaOnboardingState.markCompleted()
         onDone()
     }
 
     private func goToStep(_ index: Int) {
+        dismissKeyboard()
+        autoFocusStep = nil
         let clampedIndex = min(max(index, 0), stepCount - 1)
+
         withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
             stepIndex = clampedIndex
             visibleStepID = clampedIndex
         }
+
+        scheduleAutoFocusIfNeeded(for: clampedIndex)
     }
+
+    private func scheduleAutoFocusIfNeeded(for index: Int) {
+        guard index == 6 || index == 9 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) {
+            guard stepIndex == index else { return }
+            autoFocusStep = index
+            autoFocusRequestID += 1
+        }
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
 }
 
 private struct BolaOnboardingAmbientBackground: View {
@@ -313,9 +381,26 @@ private enum OnboardingGender: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .female: return "女生"
-        case .male: return "男生"
-        case .nonBinary: return "其他"
+        case .female: return "女性"
+        case .male: return "男性"
+        case .nonBinary: return "保密"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .female: return "OnboardingGenderFemale"
+        case .male: return "OnboardingGenderMale"
+        case .nonBinary: return "OnboardingGenderSecret"
+        }
+    }
+
+    var iconSize: CGSize {
+        switch self {
+        case .female, .male:
+            return CGSize(width: 40, height: 28)
+        case .nonBinary:
+            return CGSize(width: 40, height: 49)
         }
     }
 }
@@ -341,6 +426,9 @@ private struct OnboardingScreen<Content: View>: View {
     let isActive: Bool
     var animateEntrance: Bool = true
     var scrollsWithKeyboard: Bool = false
+    var usesScrollContainer: Bool = true
+    var buttonHeight: CGFloat = 48
+    var buttonBottomPadding: CGFloat = 18
     let primaryTitle: String
     let primaryAction: () -> Void
     var isPrimaryDisabled = false
@@ -351,6 +439,9 @@ private struct OnboardingScreen<Content: View>: View {
         isActive: Bool = true,
         animateEntrance: Bool = true,
         scrollsWithKeyboard: Bool = false,
+        usesScrollContainer: Bool = true,
+        buttonHeight: CGFloat = 48,
+        buttonBottomPadding: CGFloat = 18,
         primaryTitle: String,
         primaryAction: @escaping () -> Void,
         isPrimaryDisabled: Bool = false,
@@ -362,6 +453,9 @@ private struct OnboardingScreen<Content: View>: View {
         self.isActive = isActive
         self.animateEntrance = animateEntrance
         self.scrollsWithKeyboard = scrollsWithKeyboard
+        self.usesScrollContainer = usesScrollContainer
+        self.buttonHeight = buttonHeight
+        self.buttonBottomPadding = buttonBottomPadding
         self.primaryTitle = primaryTitle
         self.primaryAction = primaryAction
         self.isPrimaryDisabled = isPrimaryDisabled
@@ -370,7 +464,32 @@ private struct OnboardingScreen<Content: View>: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
+            contentArea
+                .padding(.bottom, bottomActionReservedHeight)
+
+            OnboardingBottomAction(
+                title: primaryTitle,
+                height: buttonHeight,
+                bottomPadding: buttonBottomPadding,
+                isDisabled: isPrimaryDisabled,
+                secondaryTitle: secondaryTitle,
+                secondaryAction: secondaryAction,
+                action: primaryAction
+            )
+            .modifier(ConditionalEntranceModifier(isActive: isActive, index: 4, animate: animateEntrance))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(.keyboard)
+    }
+
+    private var bottomActionReservedHeight: CGFloat {
+        buttonHeight + buttonBottomPadding + (secondaryTitle == nil ? 0 : 28)
+    }
+
+    @ViewBuilder
+    private var contentArea: some View {
+        if usesScrollContainer {
             ScrollView(.vertical, showsIndicators: false) {
                 content
                     .padding(.horizontal, 28)
@@ -378,30 +497,48 @@ private struct OnboardingScreen<Content: View>: View {
                     .padding(.bottom, 28)
             }
             .scrollDisabled(!scrollsWithKeyboard)
-
-            VStack(spacing: 10) {
-                if let secondaryTitle, let secondaryAction {
-                    Button(secondaryTitle, action: secondaryAction)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Color.black.opacity(0.35))
-                }
-
-                Button(action: primaryAction) {
-                    Text(primaryTitle)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(BolaTheme.onAccentForeground)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .background(isPrimaryDisabled ? Color.black.opacity(0.08) : BolaTheme.accent)
-                        .clipShape(Capsule())
-                }
-                .disabled(isPrimaryDisabled)
-                .opacity(isPrimaryDisabled ? 0.72 : 1)
-            }
-            .modifier(ConditionalEntranceModifier(isActive: isActive, index: 4, animate: animateEntrance))
-            .padding(.horizontal, 36)
-            .padding(.bottom, 18)
+            .scrollDismissesKeyboard(.interactively)
+        } else {
+            content
+                .padding(.horizontal, 28)
+                .padding(.top, 8)
+                .padding(.bottom, 28)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+    }
+}
+
+private struct OnboardingBottomAction: View {
+    let title: String
+    let height: CGFloat
+    var bottomPadding: CGFloat = 18
+    let isDisabled: Bool
+    let secondaryTitle: String?
+    let secondaryAction: (() -> Void)?
+    let action: () -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            if let secondaryTitle, let secondaryAction {
+                Button(secondaryTitle, action: secondaryAction)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.black.opacity(0.35))
+            }
+
+            Button(action: action) {
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(BolaTheme.onAccentForeground)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: height)
+                    .background(isDisabled ? Color.black.opacity(0.08) : BolaTheme.accent)
+                    .clipShape(Capsule())
+            }
+            .disabled(isDisabled)
+            .opacity(isDisabled ? 0.72 : 1)
+        }
+        .padding(.horizontal, 36)
+        .padding(.bottom, bottomPadding)
     }
 }
 
@@ -432,6 +569,8 @@ private extension View {
     func onboardingPage(id: Int) -> some View {
         self
             .containerRelativeFrame(.horizontal)
+            .frame(maxHeight: .infinity)
+            .ignoresSafeArea(.keyboard)
             .id(id)
     }
 }
@@ -495,7 +634,7 @@ private struct OnboardingBlockEntranceModifier: ViewModifier {
     }
 }
 
-private struct WelcomeLoginPage: View {
+struct WelcomeLoginPage: View {
     let isActive: Bool
     let onContinue: () -> Void
     @State private var signInErrorMessage: String?
@@ -681,12 +820,13 @@ private struct OnboardingBundleImage: View {
 
 private struct IntroCompanionPage: View {
     let isActive: Bool
+    let buttonHeight: CGFloat
     let onContinue: () -> Void
     @State private var entrancePhase = 0
     @State private var entranceRunID = 0
 
     var body: some View {
-        OnboardingScreen(primaryTitle: "继续", primaryAction: onContinue) {
+        OnboardingScreen(buttonHeight: buttonHeight, primaryTitle: "继续", primaryAction: onContinue) {
             ZStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 0) {
                     OnboardingBundleImage(
@@ -821,6 +961,7 @@ private extension View {
 
 private struct LevelUpPage: View {
     let isActive: Bool
+    let buttonHeight: CGFloat
     let onContinue: () -> Void
 
     var body: some View {
@@ -875,18 +1016,15 @@ private struct LevelUpPage: View {
                         .onboardingBlockEntrance(isActive: isActive, index: 3)
                 }
 
-                Button(action: onContinue) {
-                    Text("继续")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(BolaTheme.onAccentForeground)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .background(BolaTheme.accent)
-                        .clipShape(Capsule())
-                }
+                OnboardingBottomAction(
+                    title: "继续",
+                    height: buttonHeight,
+                    isDisabled: false,
+                    secondaryTitle: nil,
+                    secondaryAction: nil,
+                    action: onContinue
+                )
                 .onboardingBlockEntrance(isActive: isActive, index: 4)
-                .padding(.horizontal, 36)
-                .padding(.bottom, 18)
             }
         }
     }
@@ -894,6 +1032,7 @@ private struct LevelUpPage: View {
 
 private struct NotificationPermissionPage: View {
     let isActive: Bool
+    let buttonHeight: CGFloat
     let status: UNAuthorizationStatus
     let onAllow: () -> Void
     let onSkip: () -> Void
@@ -901,6 +1040,7 @@ private struct NotificationPermissionPage: View {
     var body: some View {
         OnboardingScreen(
             isActive: isActive,
+            buttonHeight: buttonHeight,
             primaryTitle: status == .authorized ? "继续" : "允许通知",
             primaryAction: onAllow,
             secondaryTitle: "跳过",
@@ -912,7 +1052,7 @@ private struct NotificationPermissionPage: View {
                     .foregroundStyle(.black)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 28)
+                    .padding(.top, 20)
                     .onboardingBlockEntrance(isActive: isActive, index: 0)
 
                 Text("允许 BolaBola 发送通知，更好的了解你的健康数据")
@@ -923,9 +1063,16 @@ private struct NotificationPermissionPage: View {
                     .padding(.top, 12)
                     .onboardingBlockEntrance(isActive: isActive, index: 1)
 
-                NotificationPlaceholderCard()
-                    .padding(.top, 34)
-                    .onboardingBlockEntrance(isActive: isActive, index: 2)
+                OnboardingBundleImage(
+                    filename: "OnboardingNotificationCard",
+                    size: CGSize(
+                        width: min(346, UIScreen.main.bounds.width - 56),
+                        height: min(148, (UIScreen.main.bounds.width - 56) * 148 / 346)
+                    )
+                )
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 34)
+                .onboardingBlockEntrance(isActive: isActive, index: 2)
 
                 OnboardingBundleImage(
                     filename: "OnboardingNotificationHero",
@@ -942,12 +1089,14 @@ private struct NotificationPermissionPage: View {
 
 private struct HealthRhythmPage: View {
     let isActive: Bool
+    let buttonHeight: CGFloat
     let requested: Bool
     let onContinue: () -> Void
 
     var body: some View {
         OnboardingScreen(
             isActive: isActive,
+            buttonHeight: buttonHeight,
             primaryTitle: requested ? "继续" : "继续",
             primaryAction: onContinue
         ) {
@@ -991,10 +1140,11 @@ private struct HealthRhythmPage: View {
 
 private struct QuestionIntroPage: View {
     let isActive: Bool
+    let buttonHeight: CGFloat
     let onContinue: () -> Void
 
     var body: some View {
-        OnboardingScreen(isActive: isActive, primaryTitle: "继续", primaryAction: onContinue) {
+        OnboardingScreen(isActive: isActive, animateEntrance: false, buttonHeight: buttonHeight, buttonBottomPadding: 40, primaryTitle: "继续", primaryAction: onContinue) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("最后\n还有一些简单的问题")
                     .font(.system(size: 32.5, weight: .regular))
@@ -1002,7 +1152,6 @@ private struct QuestionIntroPage: View {
                     .lineSpacing(6)
                     .padding(.top, 20)
                     .padding(.leading, 30)
-                    .onboardingBlockEntrance(isActive: isActive, index: 0)
 
                 HStack {
                     Spacer()
@@ -1011,7 +1160,6 @@ private struct QuestionIntroPage: View {
                         .padding(.top, 66)
                     Spacer()
                 }
-                .onboardingBlockEntrance(isActive: isActive, index: 1)
             }
         }
     }
@@ -1019,16 +1167,23 @@ private struct QuestionIntroPage: View {
 
 private struct UserNicknamePage: View {
     let isActive: Bool
+    let buttonHeight: CGFloat
+    let autoFocusRequestID: Int
     @Binding var nickname: String
     let onContinue: () -> Void
+    private let focusedKeyboardCounterOffset: CGFloat = 120
+    @State private var isFieldFocused = false
+    @State private var shouldBounceField = false
 
     var body: some View {
         OnboardingScreen(
             isActive: isActive,
             animateEntrance: false,
-            scrollsWithKeyboard: true,
+            usesScrollContainer: false,
+            buttonHeight: buttonHeight,
+            buttonBottomPadding: 40,
             primaryTitle: "继续",
-            primaryAction: onContinue
+            primaryAction: finishInput
         ) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("让我更了解一下你吧")
@@ -1036,12 +1191,67 @@ private struct UserNicknamePage: View {
                     .foregroundStyle(.black)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, 20)
+                    .onTapGesture {
+                        isFieldFocused = false
+                        dismissKeyboard()
+                    }
 
                 QuestionStickerRow(bubble: "我该如何称呼你呢")
-                .padding(.top, 34)
+                    .padding(.top, 34)
+                    .onTapGesture {
+                        isFieldFocused = false
+                        dismissKeyboard()
+                    }
 
-                RoundedTextField(text: $nickname, placeholder: "输入你的名字或昵称")
-                    .padding(.top, 20)
+                RoundedTextField(
+                    text: $nickname,
+                    placeholder: "输入你的名字或昵称",
+                    isFocused: $isFieldFocused,
+                    onSubmit: finishInput
+                )
+                .scaleEffect(shouldBounceField ? 1.035 : 1)
+                .animation(.interpolatingSpring(stiffness: 360, damping: 14), value: shouldBounceField)
+                .padding(.top, 10)
+            }
+            .offset(y: isFieldFocused ? focusedKeyboardCounterOffset : 0)
+            .animation(.spring(response: 0.28, dampingFraction: 0.9), value: isFieldFocused)
+        }
+        .background {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    isFieldFocused = false
+                    dismissKeyboard()
+                }
+        }
+        .onChange(of: isActive) { _, newValue in
+            if !newValue {
+                isFieldFocused = false
+            }
+        }
+        .task(id: autoFocusRequestID) {
+            guard isActive, autoFocusRequestID > 0 else { return }
+            await Task.yield()
+            guard isActive, autoFocusRequestID > 0 else { return }
+            isFieldFocused = true
+        }
+    }
+
+    private func finishInput() {
+        guard !nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            bounceField()
+            return
+        }
+        isFieldFocused = false
+        onContinue()
+    }
+
+    private func bounceField() {
+        shouldBounceField = false
+        DispatchQueue.main.async {
+            shouldBounceField = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                shouldBounceField = false
             }
         }
     }
@@ -1049,11 +1259,12 @@ private struct UserNicknamePage: View {
 
 private struct BirthdayPage: View {
     let isActive: Bool
+    let buttonHeight: CGFloat
     @Binding var birthDate: Date
     let onContinue: () -> Void
 
     var body: some View {
-        OnboardingScreen(isActive: isActive, animateEntrance: false, primaryTitle: "继续", primaryAction: onContinue) {
+        OnboardingScreen(isActive: isActive, animateEntrance: false, buttonHeight: buttonHeight, buttonBottomPadding: 40, primaryTitle: "继续", primaryAction: onContinue) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("让我更了解一下你吧")
                     .font(.system(size: 32.5, weight: .regular))
@@ -1073,6 +1284,7 @@ private struct BirthdayPage: View {
 
 private struct GenderPage: View {
     let isActive: Bool
+    let buttonHeight: CGFloat
     @Binding var selectedGender: OnboardingGender?
     let onContinue: () -> Void
 
@@ -1080,6 +1292,8 @@ private struct GenderPage: View {
         OnboardingScreen(
             isActive: isActive,
             animateEntrance: false,
+            buttonHeight: buttonHeight,
+            buttonBottomPadding: 40,
             primaryTitle: "继续",
             primaryAction: onContinue
         ) {
@@ -1098,25 +1312,32 @@ private struct GenderPage: View {
                         Button {
                             selectedGender = option
                         } label: {
-                            HStack {
+                            HStack(spacing: 16) {
+                                Image(option.iconName)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: option.iconSize.width, height: option.iconSize.height)
+                                    .frame(width: 48, height: 48)
+
                                 Text(option.title)
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(.black.opacity(0.88))
+
                                 Spacer()
-                                if selectedGender == option {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 22))
-                                        .foregroundStyle(BolaTheme.accent)
-                                }
                             }
                             .padding(.horizontal, 24)
-                            .frame(height: 60)
-                            .background(Color.white.opacity(selectedGender == option ? 0.96 : 0.72))
+                            .frame(height: 68)
+                            .background(Color.black.opacity(selectedGender == option ? 0.065 : 0.045))
                             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                                    .stroke(selectedGender == option ? BolaTheme.accent : Color.clear, lineWidth: 2)
+                            }
                         }
+                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.top, 94)
+                .padding(.top, 20)
             }
         }
     }
@@ -1124,36 +1345,110 @@ private struct GenderPage: View {
 
 private struct BolaNicknamePage: View {
     let isActive: Bool
+    let buttonHeight: CGFloat
+    let autoFocusRequestID: Int
     @Binding var nickname: String
     let onContinue: () -> Void
+    private let focusedKeyboardCounterOffset: CGFloat = 120
+    @State private var shouldBounceField = false
+    @State private var isFieldFocused = false
 
     var body: some View {
         OnboardingScreen(
             isActive: isActive,
             animateEntrance: false,
-            scrollsWithKeyboard: true,
+            usesScrollContainer: false,
+            buttonHeight: buttonHeight,
+            buttonBottomPadding: 40,
             primaryTitle: "继续",
-            primaryAction: onContinue
+            primaryAction: finishInput
         ) {
-            VStack(alignment: .center, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text("给 Bola 起个专属名称吧")
                     .font(.system(size: 32.5, weight: .regular))
                     .foregroundStyle(.black)
+                    .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, 20)
+                    .onTapGesture {
+                        isFieldFocused = false
+                        dismissKeyboard()
+                    }
 
                 Text("它会记住这个名字哦")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.black.opacity(0.4))
+                    .font(.system(size: 12.3, weight: .regular))
+                    .foregroundStyle(Color.black.opacity(0.34))
+                    .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 34)
+                    .padding(.top, 12)
+                    .onTapGesture {
+                        isFieldFocused = false
+                        dismissKeyboard()
+                    }
 
-                ClearableRoundedField(text: $nickname, placeholder: "比如：波拉 / 小黑 / Bobo")
-                    .padding(.top, 44)
+                RoundedTextField(
+                    text: $nickname,
+                    placeholder: "比如：波拉 / Bola ",
+                    isFocused: $isFieldFocused,
+                    onSubmit: finishInput
+                )
+                .scaleEffect(shouldBounceField ? 1.035 : 1)
+                .animation(.interpolatingSpring(stiffness: 360, damping: 14), value: shouldBounceField)
+                .padding(.top, 30)
 
-                GlowingMascotCard()
-                    .frame(width: 260, height: 230)
-                    .padding(.top, 58)
+                Image("OnboardingWelcomeHero")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: min(402, UIScreen.main.bounds.width))
+                    .frame(height: min(290, UIScreen.main.bounds.width * 290 / 402))
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, -28)
+                    .padding(.top, 57)
+                    .onTapGesture {
+                        isFieldFocused = false
+                        dismissKeyboard()
+                    }
+            }
+            .offset(y: isFieldFocused ? focusedKeyboardCounterOffset : 0)
+            .animation(.spring(response: 0.28, dampingFraction: 0.9), value: isFieldFocused)
+        }
+        .background {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    isFieldFocused = false
+                    dismissKeyboard()
+                }
+        }
+        .onChange(of: isActive) { _, newValue in
+            if !newValue {
+                isFieldFocused = false
+            }
+        }
+        .task(id: autoFocusRequestID) {
+            guard isActive, autoFocusRequestID > 0 else { return }
+            await Task.yield()
+            guard isActive, autoFocusRequestID > 0 else { return }
+            isFieldFocused = true
+        }
+    }
+
+    private func finishInput() {
+        guard !nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            bounceField()
+            return
+        }
+
+        isFieldFocused = false
+        onContinue()
+    }
+
+    private func bounceField() {
+        shouldBounceField = false
+        DispatchQueue.main.async {
+            shouldBounceField = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                shouldBounceField = false
             }
         }
     }
@@ -1161,21 +1456,30 @@ private struct BolaNicknamePage: View {
 
 private struct ReadyPage: View {
     let isActive: Bool
+    let buttonHeight: CGFloat
     let onEnter: () -> Void
 
     var body: some View {
-        OnboardingScreen(isActive: isActive, primaryTitle: "进入 Bola 的空间", primaryAction: onEnter) {
+        OnboardingScreen(isActive: isActive, buttonHeight: buttonHeight, primaryTitle: "进入 Bola 的空间", primaryAction: onEnter) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("一切准备就绪！")
                     .font(.system(size: 32.5, weight: .regular))
                     .foregroundStyle(.black)
-                    .padding(.top, 108)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 20)
                     .onboardingBlockEntrance(isActive: isActive, index: 0)
 
                 HStack {
                     Spacer()
-                    ReadyHeroScene()
-                        .frame(width: 320, height: 300)
+                    OnboardingBundleImage(
+                        filename: "OnboardingReadyHero",
+                        size: CGSize(
+                            width: min(402, UIScreen.main.bounds.width),
+                            height: min(339, UIScreen.main.bounds.width * 339 / 402)
+                        )
+                    )
+                        .offset(x: -3)
+                        .padding(.horizontal, -28)
                         .padding(.top, 66)
                     Spacer()
                 }
@@ -1280,16 +1584,14 @@ private struct RhythmArcShowcase: View {
             ZStack {
                 ArcShape()
                     .stroke(
-                        AngularGradient(
+                        LinearGradient(
                             colors: [
-                                Color(red: 0.98, green: 0.61, blue: 0.12),
-                                Color(red: 1.0, green: 0.87, blue: 0.12),
-                                Color(red: 0.58, green: 0.95, blue: 0.32),
-                                Color(red: 0.42, green: 0.9, blue: 0.75)
+                                Color(red: 1.00, green: 0.63, blue: 0.25),
+                                Color(red: 0.86, green: 0.99, blue: 0.18),
+                                Color(red: 0.10, green: 0.82, blue: 0.26)
                             ],
-                            center: .center,
-                            startAngle: .degrees(180),
-                            endAngle: .degrees(0)
+                            startPoint: .leading,
+                            endPoint: .trailing
                         ),
                         style: StrokeStyle(lineWidth: 16, lineCap: .round)
                     )
@@ -1312,10 +1614,10 @@ private struct RhythmArcShowcase: View {
 
 private struct RhythmLegendGrid: View {
     private let items: [(Color, String)] = [
-        (Color(red: 1.0, green: 0.87, blue: 0.12), "节奏起伏"),
-        (Color(red: 0.58, green: 0.95, blue: 0.32), "节奏平稳"),
-        (Color(red: 0.98, green: 0.61, blue: 0.12), "节奏不稳"),
-        (Color(red: 0.42, green: 0.9, blue: 0.75), "节奏满满"),
+        (Color(red: 1.00, green: 0.63, blue: 0.25), "节奏不稳"),
+        (Color(red: 0.94, green: 0.82, blue: 0.22), "节奏起伏"),
+        (BolaTheme.rhythmBarStrong, "节奏平稳"),
+        (Color(red: 0.10, green: 0.82, blue: 0.26), "节奏满满"),
     ]
 
     var body: some View {
@@ -1370,7 +1672,7 @@ private struct BolaChatBubble: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 20, weight: .semibold))
+            .font(.system(size: 20, weight: .regular))
             .foregroundStyle(.black.opacity(0.88))
             .padding(.horizontal, 18)
             .padding(.vertical, 14)
@@ -1420,50 +1722,113 @@ private struct QuestionStickerRow: View {
 private struct RoundedTextField: View {
     @Binding var text: String
     let placeholder: String
+    @Binding var isFocused: Bool
+    let onSubmit: () -> Void
 
     var body: some View {
-        TextField(placeholder, text: $text)
-            .font(.system(size: 18, weight: .medium))
-            .foregroundStyle(.black)
+        FastTextField(text: $text, placeholder: placeholder, isFocused: $isFocused, onSubmit: onSubmit)
             .padding(.horizontal, 26)
             .frame(height: 60)
-            .background(Color.black.opacity(0.06))
+            .background(Color.black.opacity(0.045))
             .clipShape(Capsule())
     }
+}
+
+private struct FastTextField: UIViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    @Binding var isFocused: Bool
+    let onSubmit: () -> Void
+
+    func makeUIView(context: Context) -> UITextField {
+        let tf = UITextField()
+        tf.delegate = context.coordinator
+        tf.placeholder = placeholder
+        tf.font = .systemFont(ofSize: 18, weight: .medium)
+        tf.textColor = .black
+        tf.tintColor = .systemBlue
+        tf.backgroundColor = .clear
+        tf.borderStyle = .none
+        tf.returnKeyType = .done
+        tf.clearButtonMode = .whileEditing
+        tf.autocorrectionType = .no
+        tf.spellCheckingType = .no
+        tf.autocapitalizationType = .none
+        tf.textContentType = .none
+        tf.smartDashesType = .no
+        tf.smartQuotesType = .no
+        tf.smartInsertDeleteType = .no
+        if #available(iOS 17.0, *) {
+            tf.inlinePredictionType = .no
+        }
+        // 清空 QuickType bar 候选词——这是造成 5 秒延迟的根本原因
+        tf.inputAssistantItem.leadingBarButtonGroups = []
+        tf.inputAssistantItem.trailingBarButtonGroups = []
+        tf.addTarget(context.coordinator, action: #selector(Coordinator.textChanged(_:)), for: .editingChanged)
+        return tf
+    }
+
+    func updateUIView(_ tf: UITextField, context: Context) {
+        context.coordinator.parent = self
+        if tf.text != text { tf.text = text }
+        if tf.placeholder != placeholder { tf.placeholder = placeholder }
+        if isFocused && !tf.isFirstResponder {
+            context.coordinator.log("updateUIView -> becomeFirstResponder")
+            tf.becomeFirstResponder()
+        } else if !isFocused && tf.isFirstResponder {
+            tf.resignFirstResponder()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: FastTextField
+        init(_ parent: FastTextField) { self.parent = parent }
+
+        @objc func textChanged(_ tf: UITextField) { parent.text = tf.text ?? "" }
+        func textFieldShouldBeginEditing(_ tf: UITextField) -> Bool {
+            log("textFieldShouldBeginEditing")
+            return true
+        }
+
+        func textFieldDidBeginEditing(_ tf: UITextField) {
+            log("textFieldDidBeginEditing")
+            parent.isFocused = true
+        }
+        func textFieldDidEndEditing(_ tf: UITextField) { parent.isFocused = false }
+        func textFieldShouldReturn(_ tf: UITextField) -> Bool { parent.onSubmit(); return false }
+
+        func log(_ message: String) {
+            #if DEBUG
+            print("[OnboardingKeyboard] \(String(format: "%.3f", CACurrentMediaTime())) \(message)")
+            #endif
+        }
+    }
+}
+
+private func dismissKeyboard() {
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
 }
 
 private struct BirthdayPickerCard: View {
     @Binding var birthDate: Date
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 10) {
             DatePicker("", selection: $birthDate, displayedComponents: .date)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
                 .frame(maxWidth: .infinity)
                 .frame(height: 190)
+                .background(Color.black.opacity(0.045))
+                .compositingGroup()
+                .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
 
-            UnevenRoundedRectangle(
-                cornerRadii: RectangleCornerRadii(
-                    topLeading: 0,
-                    bottomLeading: 32,
-                    bottomTrailing: 32,
-                    topTrailing: 0
-                ),
-                style: .continuous
-            )
-                .fill(Color.white.opacity(0.92))
-                .frame(height: 34)
-                .overlay {
-                    Text(formattedDate)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.black.opacity(0.46))
-                }
+            Text(formattedDate)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.black.opacity(0.46))
         }
-        .background(Color.black.opacity(0.06))
-        .compositingGroup()
-        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-        .mask(RoundedRectangle(cornerRadius: 32, style: .continuous))
     }
 
     private var formattedDate: String {
@@ -1633,8 +1998,26 @@ private struct HalfCircle: Shape {
     }
 }
 
+/// Shown to returning users who have completed onboarding before but are not currently signed in.
+/// Skips the full onboarding flow and goes straight to the Apple Sign In screen.
+struct IOSSignInReturnView: View {
+    var onDone: () -> Void
+
+    var body: some View {
+        ZStack {
+            BolaOnboardingAmbientBackground()
+                .ignoresSafeArea()
+            WelcomeLoginPage(isActive: true, onContinue: onDone)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 #if DEBUG
 #Preview("Onboarding") {
     IOSOnboardingView {}
+}
+#Preview("SignInReturn") {
+    IOSSignInReturnView {}
 }
 #endif

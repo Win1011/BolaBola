@@ -279,20 +279,18 @@ struct IOSChatTestSection: View {
     private var guidedIntro: some View {
         VStack(spacing: 18) {
             Spacer(minLength: 4)
-            ZStack {
-                Circle()
-                    .fill(Color(red: 0.88, green: 0.94, blue: 0.78))
-                    .frame(width: 76, height: 76)
-                Image(systemName: "cpu")
-                    .font(.system(size: 34, weight: .medium))
-                    .foregroundStyle(Color(red: 0.12, green: 0.38, blue: 0.22))
-            }
+            Image("BolaLogo")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 76, height: 76)
+                .clipShape(Circle())
+                .shadow(color: Color.black.opacity(0.12), radius: 10, y: 4)
 
-            Text("认识 Bola，你的健康 AI")
+            Text("👋我在这呢，和我聊聊吧")
                 .font(.title3.weight(.bold))
                 .multilineTextAlignment(.center)
 
-            Text("可以询问睡眠、营养或今天如何完成活动目标。")
+            Text("有空多和我聊聊你的生活中的事情呀")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -300,9 +298,9 @@ struct IOSChatTestSection: View {
                 .padding(.horizontal, 12)
 
             VStack(spacing: 10) {
-                guidedPromptButton("今天有点累，想和你说说")
-                guidedPromptButton("帮我记一下我晚饭吃了什么")
-                guidedPromptButton("我想养成早睡习惯")
+                guidedPromptButton("今天心情很不错")
+                guidedPromptButton("你猜猜我今天吃了什么")
+                guidedPromptButton("我最近的HRV状态怎么样")
             }
             .padding(.top, 4)
             Spacer(minLength: 4)
@@ -441,49 +439,55 @@ struct IOSChatTestSection: View {
     }
 
     private var chatInputBar: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            voiceButton
+        VStack(spacing: 0) {
+            if isRecordingVoice {
+                voiceRecordingBadge
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
 
-            TextField(isRecordingVoice ? "正在听你说…" : "输入消息…", text: $input, axis: .vertical)
-                .lineLimit(1 ... 3)
-                .font(.body)
-                .textFieldStyle(.plain)
-                .tint(Color(uiColor: .systemBlue))
-                .focused($isInputFocused)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .frame(minHeight: 42, alignment: .topLeading)
+            HStack(alignment: .bottom, spacing: 8) {
+                voiceButton
+
+                HStack(alignment: .bottom, spacing: 0) {
+                    TextField(isRecordingVoice ? "正在听你说…" : "输入消息…", text: $input, axis: .vertical)
+                        .lineLimit(1 ... 5)
+                        .font(.body)
+                        .textFieldStyle(.plain)
+                        .tint(Color(uiColor: .systemBlue))
+                        .focused($isInputFocused)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 10)
+                        .padding(.bottom, 10)
+                        .disabled(!dialogueCaps.canDialogue || !isLLMConfigured)
+
+                    sendButton
+                        .padding(.trailing, 6)
+                        .padding(.bottom, 6)
+                }
                 .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(Color(uiColor: .tertiarySystemBackground))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .stroke(Color.white.opacity(0.82), lineWidth: 1)
                 )
-                .disabled(!dialogueCaps.canDialogue || !isLLMConfigured)
-
-            sendButton
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(Color(uiColor: .systemBackground).opacity(0.64))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .stroke(Color.white.opacity(0.76), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.06), radius: 18, y: 8)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color(uiColor: .systemBackground).opacity(0.64))
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .stroke(Color.white.opacity(0.76), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.06), radius: 18, y: 8)
         .padding(.top, 8)
         .padding(.bottom, inputBarBottomLift)
-        .overlay(alignment: .top) {
-            if isRecordingVoice {
-                voiceRecordingBadge
-                    .offset(y: -30)
-            }
-        }
     }
 
     private var voiceRecordingBadge: some View {
@@ -536,16 +540,16 @@ struct IOSChatTestSection: View {
         } label: {
             Circle()
                 .fill(BolaTheme.accent)
-                .frame(width: 42, height: 42)
+                .frame(width: 34, height: 34)
                 .overlay {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(Color.black)
                 }
         }
         .buttonStyle(.plain)
         .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !canUseChatControls || isRecordingVoice)
-        .opacity(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !canUseChatControls || isRecordingVoice ? 0.45 : 1)
+        .opacity(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !canUseChatControls || isRecordingVoice ? 0.35 : 1)
         .accessibilityLabel("发送")
     }
 
@@ -603,19 +607,12 @@ struct IOSChatTestSection: View {
     }
 
     private var bolaAvatar: some View {
-        ZStack {
-            Circle()
-                .fill(Color.black.opacity(0.92))
-            Circle()
-                .fill(BolaTheme.accent)
-                .frame(width: 5, height: 5)
-                .offset(x: -5, y: -2)
-            Circle()
-                .fill(BolaTheme.accent)
-                .frame(width: 5, height: 5)
-                .offset(x: 5, y: -2)
-        }
-        .shadow(color: Color.black.opacity(0.12), radius: 8, y: 4)
+        Image("BolaLogo")
+            .resizable()
+            .scaledToFill()
+            .clipShape(Circle())
+            .overlay(Circle().stroke(Color.white.opacity(0.72), lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.12), radius: 6, y: 3)
     }
 
     private func messageMetadata(_ turn: ChatTurn, isUser: Bool) -> some View {
