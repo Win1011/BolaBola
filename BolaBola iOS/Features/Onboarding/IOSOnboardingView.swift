@@ -640,7 +640,6 @@ struct WelcomeLoginPage: View {
     @State private var signInErrorMessage: String?
     @State private var hasSignedInWithApple = BolaAppleSignInState.isSignedIn
     @State private var hasAcceptedLegal = true
-
     private let termsURL = URL(string: "https://bolabola.app/terms")!
     private let privacyURL = URL(string: "https://bolabola.app/privacy")!
     private let legalLinkColor = Color(red: 0x5D / 255, green: 0x6A / 255, blue: 0x07 / 255)
