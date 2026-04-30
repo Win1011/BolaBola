@@ -14,6 +14,7 @@ struct WatchFaceComplicationsOverlay: View {
     private let stickerSlotTopYFraction: CGFloat = 0.29
     private let stickerSlotBottomYFraction: CGFloat = 0.73
     private let stickerSlotBaseSize: CGFloat = 27
+    private let titleBadgeScale: CGFloat = 0.92
 
     private var watchTitleConfiguration: TitleBadgeSceneConfiguration {
         TitleBadgeSizing.configuration(for: .realWatch)
@@ -46,13 +47,10 @@ struct WatchFaceComplicationsOverlay: View {
             ZStack {
                 if titleSelection.showsOnWatchFace {
                     titleBadge
-                        .position(x: size.width / 2, y: -18)
+                        .scaleEffect(titleBadgeScale)
+                        .position(x: size.width / 2, y: -23)
                 }
 
-                ForEach(WatchFaceSlotPosition.allCases, id: \.self) { position in
-                    slotMini(position: position)
-                        .position(stickerSlotCenter(for: position, in: size))
-                }
             }
             .frame(width: size.width, height: size.height)
         }
@@ -169,6 +167,84 @@ struct WatchFaceComplicationsOverlay: View {
         case .steps: return "—"
         case .stickerApple, .stickerBottle, .stickerHeart, .stickerBola, .stickerBadge:
             return " "
+        }
+    }
+}
+
+struct WatchFullscreenStickerSlotsOverlay: View {
+    @State private var slots = WatchFaceSlotsStore.load()
+
+    private let stickerFrameSize: CGFloat = 48
+    private let edgeInsetFraction: CGFloat = 0.055
+    private let minEdgeInset: CGFloat = 8
+    private let maxEdgeInset: CGFloat = 14
+    private let bottomStickerYOffset: CGFloat = -3
+
+    var body: some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            let edgeInset = min(max(min(size.width, size.height) * edgeInsetFraction, minEdgeInset), maxEdgeInset)
+
+            ZStack {
+                sticker(at: .topLeft)
+                    .position(stickerCenter(for: .topLeft, in: size, edgeInset: edgeInset))
+
+                sticker(at: .bottomLeft)
+                    .position(stickerCenter(for: .bottomLeft, in: size, edgeInset: edgeInset))
+
+                sticker(at: .bottomRight)
+                    .position(stickerCenter(for: .bottomRight, in: size, edgeInset: edgeInset))
+            }
+            .frame(width: size.width, height: size.height)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
+        .onReceive(NotificationCenter.default.publisher(for: .bolaWatchHomeScreenPayloadDidUpdate)) { _ in
+            slots = WatchFaceSlotsStore.load()
+        }
+        .onAppear {
+            slots = WatchFaceSlotsStore.load()
+        }
+    }
+
+    private func stickerCenter(
+        for position: WatchFaceSlotPosition,
+        in size: CGSize,
+        edgeInset: CGFloat
+    ) -> CGPoint {
+        let halfSize = stickerFrameSize / 2
+        let leftX = edgeInset + halfSize
+        let rightX = size.width - edgeInset - halfSize
+        let topY = edgeInset + halfSize
+        let bottomY = size.height - edgeInset - halfSize + bottomStickerYOffset
+
+        switch position {
+        case .topLeft:
+            return CGPoint(x: leftX, y: topY)
+        case .bottomLeft:
+            return CGPoint(x: leftX, y: bottomY)
+        case .bottomRight:
+            return CGPoint(x: rightX, y: bottomY)
+        }
+    }
+
+    private func sticker(at position: WatchFaceSlotPosition) -> some View {
+        let kind = slots.kind(at: position)
+
+        return Group {
+            if kind == .none {
+                EmptyView()
+            } else if let assetName = kind.stickerAssetName {
+                Image(assetName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(
+                        width: stickerFrameSize,
+                        height: stickerFrameSize
+                    )
+            } else {
+                EmptyView()
+            }
         }
     }
 }

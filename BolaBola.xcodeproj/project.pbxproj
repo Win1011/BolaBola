@@ -511,7 +511,7 @@
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 把你的语音转成文字，再生成回复。";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 需要发送喝水、活动等本地提醒。";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.GathXRTeam.BolaBola;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.gathxr.BolaBola;
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -550,7 +550,7 @@
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 把你的语音转成文字，再生成回复。";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 需要发送喝水、活动等本地提醒。";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.GathXRTeam.BolaBola;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.gathxr.BolaBola;
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -593,7 +593,7 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -636,7 +636,7 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

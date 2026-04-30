@@ -721,7 +721,7 @@ struct IOSMainHomeView: View {
         let tier = CompanionTier.value(for: Int(companion.rounded()))
         switch tier {
         case 0: return "危险"
-        case 1, 2: return "疏远"
+        case 1, 2: return "失落"
         case 3, 4: return "熟悉"
         case 5: return "亲密"
         default: return "超亲密"

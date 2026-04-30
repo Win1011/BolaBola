@@ -1915,6 +1915,10 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea(edges: .bottom)
+        .overlay {
+            WatchFullscreenStickerSlotsOverlay()
+                .allowsHitTesting(false)
+        }
         .sheet(isPresented: $showPanelSheet) {
             WatchPanelSheetView(
                 viewModel: viewModel,
