@@ -50,7 +50,7 @@ struct BolaLocationNudgeModifier: ViewModifier {
                     primaryAction: requestLocation,
                     secondaryLabel: "稍后再说"
                 )
-                .presentationDetents([.medium])
+                .presentationDetents([.height(380)])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(28)
             }
@@ -86,95 +86,122 @@ struct BolaPermissionNudgeSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Capsule()
-                .fill(Color(uiColor: .tertiaryLabel))
-                .frame(width: 36, height: 5)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 10)
-                .padding(.bottom, 20)
+        NavigationStack {
+            VStack(spacing: 18) {
+                Image(systemName: icon)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(.black.opacity(0.78))
+                    .padding(12)
+                    .background(
+                        Circle()
+                            .fill(BolaTheme.accent.opacity(0.82))
+                    )
 
-            HStack(alignment: .top, spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(iconTint.opacity(0.13))
-                        .frame(width: 56, height: 56)
-                    Image(systemName: icon)
-                        .font(.system(size: 26, weight: .semibold))
-                        .foregroundStyle(iconTint)
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.primary)
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(.horizontal, BolaTheme.paddingHorizontal)
-            .padding(.bottom, 20)
+                Text(title)
+                    .font(.title3.weight(.semibold))
+                    .multilineTextAlignment(.center)
 
-            if !features.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(features) { f in
-                        HStack(alignment: .top, spacing: 14) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                    .fill(f.tint.opacity(0.13))
-                                    .frame(width: 36, height: 36)
+                Text(subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                if !features.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(features) { f in
+                            HStack(alignment: .top, spacing: 12) {
                                 Image(systemName: f.icon)
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundStyle(f.tint)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(.black.opacity(0.78))
+                                    .padding(8)
+                                    .background(Circle().fill(BolaTheme.accent.opacity(0.82)))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(f.title)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                    Text(f.desc)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 0)
                             }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(f.title)
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(.primary)
-                                Text(f.desc)
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.secondary)
-                                    .lineSpacing(3)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        .padding(.vertical, 10)
-                        if f.id != features.last?.id {
-                            Divider().padding(.leading, 50)
                         }
                     }
+                    .padding(14)
+                    .background(
+                        RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
+                            .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                    )
                 }
-                .padding(.horizontal, BolaTheme.paddingHorizontal)
-                .padding(.vertical, 4)
-                .background(BolaTheme.surfaceElevated)
-                .clipShape(RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous))
-                .padding(.horizontal, BolaTheme.paddingHorizontal)
-                .padding(.bottom, 24)
-            }
 
-            Spacer(minLength: 0)
+                Button(primaryLabel, action: primaryAction)
+                    .buttonStyle(.borderedProminent)
+                    .tint(BolaTheme.accent)
+                    .foregroundStyle(Color.black)
 
-            VStack(spacing: 10) {
-                Button(action: primaryAction) {
-                    Text(primaryLabel)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(BolaTheme.onAccentForeground)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(BolaTheme.accent)
-                        .clipShape(Capsule())
-                }
                 Button { dismiss() } label: {
                     Text(secondaryLabel)
                         .font(.system(size: 15))
                         .foregroundStyle(.secondary)
                 }
-                .frame(height: 36)
             }
-            .padding(.horizontal, BolaTheme.paddingHorizontal)
-            .padding(.bottom, 20)
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .background(
+                ZStack {
+                    BolaTheme.backgroundGrouped
+                    LinearGradient(
+                        colors: [
+                            BolaTheme.accent.opacity(BolaTheme.accentGlowTopOpacity),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: UnitPoint(x: 0.5, y: 0.42)
+                    )
+                }
+                .overlay(alignment: .top) {
+                    Circle()
+                        .fill(RadialGradient(
+                            colors: [
+                                BolaTheme.accent.opacity(0.36),
+                                BolaTheme.accent.opacity(0.19),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 40,
+                            endRadius: 196
+                        ))
+                        .frame(width: 392, height: 392)
+                        .blur(radius: 18)
+                        .offset(y: -130)
+                        .allowsHitTesting(false)
+                }
+                .overlay(alignment: .bottom) {
+                    Circle()
+                        .fill(RadialGradient(
+                            colors: [
+                                BolaTheme.accent.opacity(0.36),
+                                BolaTheme.accent.opacity(0.19),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 40,
+                            endRadius: 127
+                        ))
+                        .frame(width: 254, height: 254)
+                        .blur(radius: 9)
+                        .offset(y: 100)
+                        .allowsHitTesting(false)
+                }
+                .ignoresSafeArea()
+            )
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("关闭") { dismiss() }
+                }
+            }
         }
     }
 }

@@ -306,10 +306,10 @@ struct IOSSettingsListView: View {
             } footer: {
                 Text("性格与用户档案等功能将后续在此扩展。")
             }
-            .sheet(isPresented: $showHelpCenter) {
-                IOSHelpCenterView()
-                    .presentationDragIndicator(.visible)
-            }
+        }
+        .sheet(isPresented: $showHelpCenter) {
+            IOSHelpCenterView()
+                .presentationDragIndicator(.visible)
         }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.large)
@@ -529,27 +529,23 @@ private final class IOSHealthDiagnosticsModel: ObservableObject {
             return
         }
 
-        do {
-            let requestStatus = await authorizationRequestStatus()
-            guard requestStatus == .unnecessary else {
-                errorText = "尚未完成统一健康授权；请在 onboarding 或健康入口里一次性授权。"
-                return
-            }
-            async let steps = queryTodaySum(.stepCount, unit: .count(), suffix: "步")
-            async let move = queryTodaySum(.activeEnergyBurned, unit: .kilocalorie(), suffix: "kcal")
-            async let exercise = queryTodaySum(.appleExerciseTime, unit: .minute(), suffix: "分")
-            async let stand = queryTodaySum(.appleStandTime, unit: .minute(), suffix: "分")
-            async let sleep = queryLatestSleep()
-            let (stepsVal, moveVal, exerciseVal, standVal, sleepVal) = await (steps, move, exercise, stand, sleep)
-
-            stepsText = stepsVal
-            moveText = moveVal
-            exerciseText = exerciseVal
-            standText = standVal
-            sleepText = sleepVal
-        } catch {
-            errorText = (error as NSError).localizedDescription
+        let requestStatus = await authorizationRequestStatus()
+        guard requestStatus == .unnecessary else {
+            errorText = "尚未完成统一健康授权；请在 onboarding 或健康入口里一次性授权。"
+            return
         }
+        async let steps = queryTodaySum(.stepCount, unit: .count(), suffix: "步")
+        async let move = queryTodaySum(.activeEnergyBurned, unit: .kilocalorie(), suffix: "kcal")
+        async let exercise = queryTodaySum(.appleExerciseTime, unit: .minute(), suffix: "分")
+        async let stand = queryTodaySum(.appleStandTime, unit: .minute(), suffix: "分")
+        async let sleep = queryLatestSleep()
+        let (stepsVal, moveVal, exerciseVal, standVal, sleepVal) = await (steps, move, exercise, stand, sleep)
+
+        stepsText = stepsVal
+        moveText = moveVal
+        exerciseText = exerciseVal
+        standText = standVal
+        sleepText = sleepVal
     }
 
     private func authorizationRequestStatus() async -> HKAuthorizationRequestStatus {
