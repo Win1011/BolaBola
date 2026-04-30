@@ -640,6 +640,8 @@ struct WelcomeLoginPage: View {
     @State private var signInErrorMessage: String?
     @State private var hasSignedInWithApple = BolaAppleSignInState.isSignedIn
     @State private var hasAcceptedLegal = true
+    @State private var isAuthenticatingWithServer = false
+
     private let termsURL = URL(string: "https://bolabola.app/terms")!
     private let privacyURL = URL(string: "https://bolabola.app/privacy")!
     private let legalLinkColor = Color(red: 0x5D / 255, green: 0x6A / 255, blue: 0x07 / 255)
@@ -720,6 +722,17 @@ struct WelcomeLoginPage: View {
                 hasSignedInWithApple = BolaAppleSignInState.isSignedIn
             }
 
+            if isAuthenticatingWithServer {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("正在连接服务器…")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 10)
+            }
+
             if let signInErrorMessage {
                 Text(signInErrorMessage)
                     .font(.system(size: 12, weight: .medium))
@@ -765,13 +778,40 @@ struct WelcomeLoginPage: View {
                 signInErrorMessage = "Apple 登录没有返回有效凭证，请再试一次。"
                 return
             }
+            guard let identityTokenData = credential.identityToken,
+                  let identityToken = String(data: identityTokenData, encoding: .utf8), !identityToken.isEmpty else {
+                signInErrorMessage = "Apple 登录没有返回身份令牌，请重试。"
+                return
+            }
+
             BolaAppleSignInState.markSignedIn(
                 userIdentifier: credential.user,
                 fullName: credential.fullName,
                 email: credential.email
             )
             hasSignedInWithApple = true
-            onContinue()
+
+            isAuthenticatingWithServer = true
+            signInErrorMessage = nil
+            Task {
+                do {
+                    _ = try await BolaAuthService.signInWithApple(
+                        identityToken: identityToken,
+                        device: DeviceInfo(deviceId: credential.user, platform: "ios")
+                    )
+                    await MainActor.run {
+                        isAuthenticatingWithServer = false
+                        onContinue()
+                    }
+                } catch {
+                    await MainActor.run {
+                        isAuthenticatingWithServer = false
+                        signInErrorMessage = "服务器登录失败：\(error.localizedDescription)\n你可以继续使用，但 AI 对话需要重新登录。"
+                        onContinue()
+                    }
+                }
+            }
+
         case .failure(let error):
             if let authorizationError = error as? ASAuthorizationError,
                authorizationError.code == .canceled {

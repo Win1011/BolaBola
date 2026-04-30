@@ -9,6 +9,16 @@ private let bolaConversationSyncLog = Logger(subsystem: "com.GathXRTeam.BolaBola
 private let bolaWatchVoiceLog = Logger(subsystem: "com.GathXRTeam.BolaBola", category: "WatchVoice")
 
 public enum ConversationService {
+    /// 优先使用服务器认证模式，否则回退到直接 API Key 模式
+    private static func resolveLLMClient() throws -> LLMClient {
+        if BolaAuthService.isAuthenticated {
+            if let client = try? LLMClient.loadFromServerAuth() {
+                return client
+            }
+        }
+        return try LLMClient.loadFromKeychain()
+    }
+
     public static func bolaSystemPrompt(companionValue: Int, growthLevel: Int? = nil) -> String {
         let tier = CompanionTier.value(for: companionValue)
         let growthState = BolaGrowthStore.load()
@@ -60,7 +70,7 @@ public enum ConversationService {
     }
 
     public static func replyToUser(utterance: String, companionValue: Int) async throws -> String {
-        let client = try LLMClient.loadFromKeychain()
+        let client = try resolveLLMClient()
         let defaults = BolaSharedDefaults.resolved()
         var messages: [LLMChatMessage] = [
             LLMChatMessage(role: "system", content: bolaSystemPrompt(companionValue: companionValue))
@@ -69,7 +79,22 @@ public enum ConversationService {
             messages.append(LLMChatMessage(role: turn.role, content: turn.content))
         }
         messages.append(LLMChatMessage(role: "user", content: utterance))
-        let rawReply = try await client.chatCompletion(messages: messages)
+
+        let rawReply: String
+        do {
+            rawReply = try await client.chatCompletion(messages: messages)
+        } catch LLMClientError.httpStatus(let code, _) where code == 401 && BolaAuthService.isAuthenticated {
+            bolaConversationSyncLog.info("replyToUser: 401 from server, attempting token refresh")
+            do {
+                try await BolaAuthService.refreshTokens()
+                let refreshedClient = try LLMClient.loadFromServerAuth()
+                rawReply = try await refreshedClient.chatCompletion(messages: messages)
+            } catch {
+                bolaConversationSyncLog.error("replyToUser: refresh failed, falling back to direct API — \(String(describing: error), privacy: .public)")
+                let fallbackClient = try LLMClient.loadFromKeychain()
+                rawReply = try await fallbackClient.chatCompletion(messages: messages)
+            }
+        }
 
         // Check for alarm intent tag in the LLM response
         let reply: String
@@ -120,12 +145,12 @@ public enum ConversationService {
         return reply
     }
 
-    /// 手表录音 → 智谱 ASR 转文字 → 再走 `replyToUser`（需 Base URL 为 `open.bigmodel.cn`）
+    /// 手表录音 → ASR 转文字 → 再走 `replyToUser`
     public static func replyToUserFromRecordedAudio(fileURL: URL, companionValue: Int) async throws -> String {
         bolaWatchVoiceLog.info("replyFromAudio begin file=\(fileURL.lastPathComponent, privacy: .public) companion=\(companionValue, privacy: .public)")
         let client: LLMClient
         do {
-            client = try LLMClient.loadFromKeychain()
+            client = try resolveLLMClient()
         } catch {
             bolaWatchVoiceLog.error("replyFromAudio loadFromKeychain failed \(String(describing: error), privacy: .public)")
             throw error

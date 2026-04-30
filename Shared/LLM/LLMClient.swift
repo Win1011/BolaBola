@@ -66,6 +66,23 @@ public struct LLMClient: Sendable {
         self.useBearerAuth = useBearerAuth
     }
 
+    /// 通过 BolaBola 服务器认证创建客户端：baseURL 指向服务器 AI 代理，apiKey 为 accessToken，model 为服务器路由别名。
+    /// 调用方应先确认 `BolaAuthService.isAuthenticated == true`。
+    public static func loadFromServerAuth() throws -> LLMClient {
+        guard let accessToken = BolaTokenStore.accessToken, !accessToken.isEmpty else {
+            bolaWatchVoiceLog.error("loadFromServerAuth: no access token stored")
+            throw LLMClientError.missingConfiguration
+        }
+        let url = BolaServerConfig.aiProxyBaseURL
+        bolaWatchVoiceLog.info("loadFromServerAuth OK host=\(url.host ?? "?", privacy: .public) model=bola-chat-fast")
+        return LLMClient(
+            baseURL: url,
+            apiKey: accessToken,
+            model: "bola-chat-fast",
+            useBearerAuth: true
+        )
+    }
+
     /// 优先 Keychain（含 iPhone 同步）；若无有效 Key，再读 `LocalLLMDevSecrets.swift` 里的手填项。
     public static func loadFromKeychain() throws -> LLMClient {
         if let raw = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountAPIKey) {

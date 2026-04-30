@@ -2,6 +2,7 @@
 //  IOSSettingsView.swift
 //
 
+import AuthenticationServices
 import Combine
 import HealthKit
 import SwiftUI
@@ -22,6 +23,11 @@ struct IOSSettingsListView: View {
     @State private var confirmResetLifeRecords = false
     @State private var confirmResetGrowth = false
     @State private var showHelpCenter = false
+    @State private var serverURL = BolaServerConfig.baseURLString
+    @State private var serverURLSaveMessage: String?
+    @State private var isSigningOut = false
+    @State private var isAuthenticatingWithServer = false
+    @State private var signInErrorMessage: String?
     @State private var growthSummary: String = ""
     @State private var selectedPersonality = BolaPersonalitySelectionStore.validated()
     @ObservedObject private var debugLog = BolaDebugLog.shared
@@ -29,6 +35,83 @@ struct IOSSettingsListView: View {
 
     var body: some View {
         List {
+            Section {
+                if BolaAuthService.isAuthenticated {
+                    HStack {
+                        Label("服务器账户", systemImage: "person.crop.circle.fill.badge.checkmark")
+                        Spacer()
+                        Text("已登录")
+                            .foregroundStyle(.green)
+                            .font(.subheadline)
+                    }
+                    Button("退出登录", role: .destructive) {
+                        isSigningOut = true
+                    }
+                    .disabled(isSigningOut)
+                } else {
+                    HStack {
+                        Label("服务器账户", systemImage: "person.crop.circle")
+                        Spacer()
+                        Text("未登录")
+                            .foregroundStyle(.secondary)
+                            .font(.subheadline)
+                    }
+                    SignInWithAppleButton(.signIn) { request in
+                        signInErrorMessage = nil
+                        request.requestedScopes = [.fullName, .email]
+                    } onCompletion: { result in
+                        handleSettingsAppleSignIn(result)
+                    }
+                    .signInWithAppleButtonStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    if isAuthenticatingWithServer {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("正在连接服务器…")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if let signInErrorMessage {
+                        Text(signInErrorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                    Text("登录后可使用 AI 对话，无需手动配置 API Key。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("账户")
+            }
+
+            Section {
+                TextField("服务器地址", text: $serverURL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                    .font(.subheadline)
+                Button("保存服务器地址") {
+                    BolaServerConfig.setBaseURL(serverURL)
+                    serverURLSaveMessage = "已保存"
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        serverURLSaveMessage = nil
+                    }
+                }
+                .font(.subheadline)
+                if let serverURLSaveMessage {
+                    Text(serverURLSaveMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("服务器")
+            } footer: {
+                Text("开发环境默认 \(BolaServerConfig.defaultBaseURLString)。修改后需重新登录。")
+                    .font(.caption)
+            }
+
             Section {
                 NavigationLink {
                     IOSAPISettingsPage()
@@ -305,6 +388,60 @@ struct IOSSettingsListView: View {
                 refreshPersonalitySelection()
             }
             Button("取消", role: .cancel) {}
+        }
+        .onChange(of: isSigningOut) { _, signingOut in
+            guard signingOut else { return }
+            Task {
+                try? await BolaAuthService.logout()
+                BolaAppleSignInState.reset()
+                await MainActor.run {
+                    isSigningOut = false
+                    NotificationCenter.default.post(name: .bolaLLMConfigurationDidChange, object: nil)
+                }
+            }
+        }
+    }
+
+    private func handleSettingsAppleSignIn(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case .success(let authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+                signInErrorMessage = "Apple 登录没有返回有效凭证。"
+                return
+            }
+            guard let identityTokenData = credential.identityToken,
+                  let identityToken = String(data: identityTokenData, encoding: .utf8), !identityToken.isEmpty else {
+                signInErrorMessage = "Apple 登录没有返回身份令牌。"
+                return
+            }
+            BolaAppleSignInState.markSignedIn(
+                userIdentifier: credential.user,
+                fullName: credential.fullName,
+                email: credential.email
+            )
+            isAuthenticatingWithServer = true
+            signInErrorMessage = nil
+            Task {
+                do {
+                    _ = try await BolaAuthService.signInWithApple(
+                        identityToken: identityToken,
+                        device: DeviceInfo(deviceId: credential.user, platform: "ios")
+                    )
+                    await MainActor.run {
+                        isAuthenticatingWithServer = false
+                        NotificationCenter.default.post(name: .bolaLLMConfigurationDidChange, object: nil)
+                    }
+                } catch {
+                    await MainActor.run {
+                        isAuthenticatingWithServer = false
+                        signInErrorMessage = "服务器登录失败：\(error.localizedDescription)"
+                    }
+                }
+            }
+        case .failure(let error):
+            if let authorizationError = error as? ASAuthorizationError,
+               authorizationError.code == .canceled { return }
+            signInErrorMessage = "Apple 登录未完成，请重试。"
         }
     }
 

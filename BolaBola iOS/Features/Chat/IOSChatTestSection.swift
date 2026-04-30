@@ -902,6 +902,10 @@ struct IOSChatTestSection: View {
     }
 
     private func refreshLLMConfiguration() {
+        if BolaAuthService.isAuthenticated {
+            isLLMConfigured = true
+            return
+        }
         let key = KeychainHelper.get(service: LLMKeychain.service, account: LLMKeychain.accountAPIKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let devKey = LocalLLMDevSecrets.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
