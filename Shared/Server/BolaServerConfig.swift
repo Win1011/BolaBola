@@ -14,7 +14,7 @@ public enum BolaServerConfig {
     // MARK: - 默认值
 
     /// 开发环境默认地址
-    public static let defaultBaseURLString = "http://localhost:8000"
+    public static let defaultBaseURLString = "https://bolabola-server.fly.dev"
 
     /// 服务器 AI 代理路径（OpenAI 兼容，LLMClient 拼上 /chat/completions 即可）
     public static let aiProxyPath = "/api/v1/ai/v1"
@@ -24,7 +24,17 @@ public enum BolaServerConfig {
     public static var baseURLString: String {
         let stored = KeychainHelper.get(service: service, account: accountBaseURL)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return stored.isEmpty ? defaultBaseURLString : stored
+
+        if stored.isEmpty {
+            return defaultBaseURLString
+        }
+
+        if stored.contains("localhost") || stored.contains("127.0.0.1") {
+            KeychainHelper.remove(service: service, account: accountBaseURL)
+            return defaultBaseURLString
+        }
+
+        return stored
     }
 
     public static var baseURL: URL {

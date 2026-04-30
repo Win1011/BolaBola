@@ -23,8 +23,6 @@ struct IOSSettingsListView: View {
     @State private var confirmResetLifeRecords = false
     @State private var confirmResetGrowth = false
     @State private var showHelpCenter = false
-    @State private var serverURL = BolaServerConfig.baseURLString
-    @State private var serverURLSaveMessage: String?
     @State private var isSigningOut = false
     @State private var isAuthenticatingWithServer = false
     @State private var signInErrorMessage: String?
@@ -86,31 +84,7 @@ struct IOSSettingsListView: View {
                 Text("账户")
             }
 
-            Section {
-                TextField("服务器地址", text: $serverURL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                    .font(.subheadline)
-                Button("保存服务器地址") {
-                    BolaServerConfig.setBaseURL(serverURL)
-                    serverURLSaveMessage = "已保存"
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        serverURLSaveMessage = nil
-                    }
-                }
-                .font(.subheadline)
-                if let serverURLSaveMessage {
-                    Text(serverURLSaveMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } header: {
-                Text("服务器")
-            } footer: {
-                Text("开发环境默认 \(BolaServerConfig.defaultBaseURLString)。修改后需重新登录。")
-                    .font(.caption)
-            }
+
 
             Section {
                 NavigationLink {
