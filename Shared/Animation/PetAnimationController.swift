@@ -84,20 +84,12 @@ public enum PetInteractionEmotion: Sendable, Equatable {
         }
     }
 
-    /// 资源包内该前缀存在的帧数；iPhone `PetFramePlayer` 用来避开空帧。
-    public var frameCount: Int {
-        switch self {
-        case .eatingOnce: return 121
-        default:          return 90
-        }
+    public var fps: Double {
+        PetAnimationConfig.params(forPrefix: animationPrefix).baseFPS
     }
 
-    public var fps: Double {
-        switch self {
-        case .tapJumpOne, .tapJumpTwo: return 30
-        case .eatingHappyIdle:         return 21
-        default:                       return 24
-        }
+    public var frameCount: Int {
+        PetAnimationConfig.params(forPrefix: animationPrefix).maxFrames
     }
 
     public var isLoop: Bool {

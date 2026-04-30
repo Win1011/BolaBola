@@ -326,11 +326,17 @@ struct IOSMainHomeView: View {
     }
 
     private var currentPetAnimationMaxFrames: Int {
-        petHandler.interactionController.activeInteraction?.frameCount ?? 90
+        if let active = petHandler.interactionController.activeInteraction {
+            return active.frameCount
+        }
+        return PetAnimationConfig.params(forPrefix: currentPetAnimationPrefix).maxFrames
     }
 
     private var currentPetAnimationFPS: Double {
-        petHandler.interactionController.activeInteraction?.fps ?? 24
+        if let active = petHandler.interactionController.activeInteraction {
+            return active.fps
+        }
+        return PetAnimationConfig.params(forPrefix: currentPetAnimationPrefix).baseFPS
     }
 
     private var currentPetAnimationIsLoop: Bool {

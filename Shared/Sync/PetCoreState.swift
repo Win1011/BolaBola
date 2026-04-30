@@ -36,6 +36,11 @@ public extension PetCoreState {
         }
     }
 
+    /// 返回该核心状态对应的统一动画参数（fps + maxFrames）。
+    func animationParams(companionValue: Double) -> PetAnimationParams {
+        PetAnimationConfig.params(forPrefix: animationPrefix(companionValue: companionValue))
+    }
+
     /// 返回该核心状态在 iPhone 上应显示的固定台词（若为 nil 则不显示气泡）。
     var localDialogue: String? {
         switch self {
