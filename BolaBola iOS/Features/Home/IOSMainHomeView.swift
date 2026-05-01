@@ -262,6 +262,9 @@ struct IOSMainHomeView: View {
         case .sleepWait:
             petHandler.triggerSleep()
             return
+        case .sleeping:
+            petHandler.wakeUpFromSleep()
+            return
         default:
             break
         }

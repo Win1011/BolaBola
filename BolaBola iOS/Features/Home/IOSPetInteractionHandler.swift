@@ -8,6 +8,16 @@ final class IOSPetInteractionHandler: ObservableObject {
 
     private let coordinator = BolaWCSessionCoordinator.shared
     private let mealCoordinator = IOSMealCoordinator.shared
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        interactionController.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+    }
 
     func handleDrinkButton() {
         interactionController.enterThirsty()
@@ -45,6 +55,11 @@ final class IOSPetInteractionHandler: ObservableObject {
     func triggerSleep() {
         interactionController.applySleepCommand()
         coordinator.sendPetCommand(PetCommandKind.sleep)
+    }
+
+    func wakeUpFromSleep() {
+        interactionController.returnToIdle()
+        coordinator.pushPetCoreState(.idle)
     }
 
     func handleIdleTap(companion: inout Double) -> Bool {
