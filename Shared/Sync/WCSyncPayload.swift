@@ -52,6 +52,8 @@ public enum WCSyncPayload {
     public static let maxEverCompanionValue = "maxEverCompanionValue"
     /// iPhone -> Watch：提醒列表 `[BolaReminder]` JSON 的 Base64。
     public static let remindersListB64 = "remindersListB64"
+    /// iPhone -> Watch：宠物显示名（空值回退 Bola）。
+    public static let companionDisplayName = "companionDisplayName"
 
     /// iPhone -> Watch：餐食配置 `[MealSlot]` JSON 的 Base64。
     public static let mealSlotsB64 = "mealSlotsB64"

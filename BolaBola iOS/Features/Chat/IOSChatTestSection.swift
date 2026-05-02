@@ -76,9 +76,16 @@ struct IOSChatTestSection: View {
     @State private var selectedHistoryDate = Date()
     @State private var voiceWavePhase = false
     @State private var hasPerformedInitialLoad = false
+    @State private var companionNameRefreshToken = 0
+    @StateObject private var hrvSummaryModel = IOSRhythmHRVModel()
 
     private var canUseChatControls: Bool {
         dialogueCaps.canDialogue && isLLMConfigured && !isLoading
+    }
+
+    private var companionDisplayName: String {
+        _ = companionNameRefreshToken
+        return CompanionDisplayNameStore.resolved()
     }
 
     private let contentHorizontalPadding: CGFloat = 16
@@ -214,6 +221,9 @@ struct IOSChatTestSection: View {
         .onReceive(NotificationCenter.default.publisher(for: .bolaLifeRecordsDidChange)) { _ in
             markMemoryCapture(diary: false, lifeRecord: true)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaCompanionDisplayNameDidChange)) { _ in
+            companionNameRefreshToken += 1
+        }
         .onReceive(NotificationCenter.default.publisher(for: .bolaChatOpenHistoryCalendarRequested)) { _ in
             selectedHistoryDate = turns.last?.createdAt ?? Date()
             showHistoryCalendar = true
@@ -315,7 +325,7 @@ struct IOSChatTestSection: View {
             Image(systemName: "lock.fill")
                 .font(.system(size: 30, weight: .semibold))
                 .foregroundStyle(.secondary)
-            Text("Bola 还不会完整说话")
+            Text("\(companionDisplayName) 还不会完整说话")
                 .font(.title3.weight(.bold))
                 .multilineTextAlignment(.center)
             Text("先继续陪陪它、做任务升到 Lv.1，再来解锁对话。")
@@ -338,7 +348,7 @@ struct IOSChatTestSection: View {
             Text("还没有配置对话 API")
                 .font(.title3.weight(.bold))
                 .multilineTextAlignment(.center)
-            Text("先到「设置 → 对话 API」填写密钥和 Base URL，配置完成后就能和 Bola 聊天。")
+            Text("先到「设置 → 对话 API」填写密钥和 Base URL，配置完成后就能和 \(companionDisplayName) 聊天。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -617,7 +627,7 @@ struct IOSChatTestSection: View {
 
     private func messageMetadata(_ turn: ChatTurn, isUser: Bool) -> some View {
         HStack(spacing: 5) {
-            Text(isUser ? "你" : "Bola")
+            Text(isUser ? "你" : companionDisplayName)
                 .font(.caption2.weight(.semibold))
             Text(timestampText(for: turn.createdAt))
                 .font(.caption2)
@@ -1009,6 +1019,9 @@ struct IOSChatTestSection: View {
         }
         let v = Int(companion.rounded())
         do {
+            if shouldRefreshHRVSummary(for: text) {
+                _ = await hrvSummaryModel.refreshWeeklySummaryCache()
+            }
             _ = try await ConversationService.replyToUser(utterance: text, companionValue: v)
             await MainActor.run {
                 reloadFromStore()
@@ -1027,6 +1040,15 @@ struct IOSChatTestSection: View {
                 pendingTurn = nil
             }
         }
+    }
+
+    private func shouldRefreshHRVSummary(for text: String) -> Bool {
+        let lowered = text.lowercased()
+        return lowered.contains("hrv")
+            || text.contains("心率变异")
+            || text.contains("恢复")
+            || text.contains("压力")
+            || text.contains("状态")
     }
 }
 
@@ -1051,10 +1073,12 @@ private struct ChatHistoryCalendarSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
+                Spacer(minLength: 0)
             }
-            .padding(18)
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(BolaTheme.backgroundGrouped)
-            .navigationTitle("聊天日历")
+            .navigationTitle("选择日期")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1084,15 +1108,14 @@ private struct ChatHistoryCalendarSheet: View {
                 moveMonth(by: -1)
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 14, weight: .bold))
-                    .frame(width: 34, height: 34)
+                    .font(.headline)
             }
             .buttonStyle(.plain)
 
             Spacer()
 
             Text(monthTitle(for: visibleMonth))
-                .font(.headline.weight(.bold))
+                .font(.headline)
 
             Spacer()
 
@@ -1100,21 +1123,14 @@ private struct ChatHistoryCalendarSheet: View {
                 moveMonth(by: 1)
             } label: {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .bold))
-                    .frame(width: 34, height: 34)
+                    .font(.headline)
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemBackground))
-        )
     }
 
     private var weekdayHeader: some View {
-        LazyVGrid(columns: calendarColumns, spacing: 8) {
+        LazyVGrid(columns: calendarColumns, spacing: 12) {
             ForEach(weekdaySymbols, id: \.self) { day in
                 Text(day)
                     .font(.caption.weight(.semibold))
@@ -1135,11 +1151,6 @@ private struct ChatHistoryCalendarSheet: View {
                 }
             }
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemBackground))
-        )
     }
 
     private func dayButton(for date: Date) -> some View {
@@ -1150,26 +1161,22 @@ private struct ChatHistoryCalendarSheet: View {
             selectedDate = date
         } label: {
             Text("\(Calendar.current.component(.day, from: date))")
-                .font(.subheadline.weight(hasChat ? .bold : .medium))
-                .foregroundStyle(hasChat ? Color.black : Color.primary.opacity(0.72))
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(dayForeground(isSelected: isSelected, hasChat: hasChat))
                 .frame(width: 38, height: 38)
                 .background(
                     Circle()
-                        .fill(hasChat ? BolaTheme.accent : Color.clear)
+                        .fill(dayBackground(isSelected: isSelected, hasChat: hasChat))
                 )
-                .overlay(
-                    Circle()
-                        .stroke(isSelected ? Color.black.opacity(0.72) : Color.clear, lineWidth: 1.4)
-                )
+                .frame(maxWidth: .infinity, minHeight: 38)
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
     }
 
     private var selectedDateHint: String {
         hasChat(on: selectedDate)
-            ? "这天有聊天记录，点完成跳过去。"
-            : "有聊天的日期会显示主题色圆形。"
+            ? "这天有聊天记录，点完成可查看。"
+            : ""
     }
 
     private var calendarColumns: [GridItem] {
@@ -1192,6 +1199,18 @@ private struct ChatHistoryCalendarSheet: View {
 
     private func hasChat(on date: Date) -> Bool {
         turns.contains { Calendar.current.isDate($0.createdAt, inSameDayAs: date) }
+    }
+
+    private func dayBackground(isSelected: Bool, hasChat: Bool) -> Color {
+        if isSelected { return BolaTheme.accent }
+        if hasChat { return BolaTheme.accent.opacity(0.18) }
+        return .clear
+    }
+
+    private func dayForeground(isSelected: Bool, hasChat: Bool) -> AnyShapeStyle {
+        if isSelected { return AnyShapeStyle(.black) }
+        if hasChat { return AnyShapeStyle(.black) }
+        return AnyShapeStyle(.primary)
     }
 
     private func moveMonth(by value: Int) {

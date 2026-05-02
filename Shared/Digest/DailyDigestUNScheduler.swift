@@ -15,8 +15,9 @@ public enum DailyDigestUNScheduler {
         guard config.isEnabled else { return }
 
         let defaults = BolaSharedDefaults.resolved()
+        let companionName = CompanionDisplayNameStore.resolved(using: defaults)
         let body = defaults.string(forKey: DailyDigestStorageKeys.lastDigestBody).flatMap { $0.isEmpty ? nil : $0 }
-            ?? "今天的信准备好啦，点进来让 Bola 读给你听～"
+            ?? "今天的信准备好啦，点进来让 \(companionName) 读给你听～"
 
         var dc = DateComponents()
         dc.hour = config.hour
@@ -24,7 +25,7 @@ public enum DailyDigestUNScheduler {
         let trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: true)
 
         let content = UNMutableNotificationContent()
-        content.title = "Bola 每日总结"
+        content.title = "\(companionName) 每日总结"
         content.body = body
         content.sound = .default
         content.categoryIdentifier = "bola_digest"

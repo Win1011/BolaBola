@@ -55,6 +55,7 @@ final class IOSMealCoordinator: ObservableObject {
         coordinator.pushPetCoreState(.idle)
 
         coordinator.sendPetCommand(PetCommandKind.feed)
+        BolaTimelineRecorder.recordPetActivity(.feed)
 
         BolaDebugLog.shared.log(.meal, "iOS: feed resolved → \(result.newStatus.rawValue), reward +\(result.reward), companion \(Int(newCompanion))")
     }

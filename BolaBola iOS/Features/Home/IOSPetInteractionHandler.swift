@@ -37,6 +37,7 @@ final class IOSPetInteractionHandler: ObservableObject {
         if isPastBedtime() {
             interactionController.enterSleepWait()
             interactionController.applySleepCommand()
+            BolaTimelineRecorder.recordPetActivity(.sleep)
         } else {
             showActionToast("还没到睡觉时间哦")
         }
@@ -50,11 +51,13 @@ final class IOSPetInteractionHandler: ObservableObject {
     func triggerDrink() {
         interactionController.applyDrinkCommand()
         coordinator.sendPetCommand(PetCommandKind.drink)
+        BolaTimelineRecorder.recordPetActivity(.water)
     }
 
     func triggerSleep() {
         interactionController.applySleepCommand()
         coordinator.sendPetCommand(PetCommandKind.sleep)
+        BolaTimelineRecorder.recordPetActivity(.sleep)
     }
 
     func wakeUpFromSleep() {

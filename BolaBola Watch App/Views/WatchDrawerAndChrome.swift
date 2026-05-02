@@ -181,8 +181,9 @@ struct WatchBottomChromeToolbar: View {
                         watchChromeVoiceLog.error("toggleMic: iPhone fallback not available (WC inactive or no companion app)")
                         await MainActor.run {
                             viewModel.cancelVoiceSession()
+                            let companionName = CompanionDisplayNameStore.resolved()
                             viewModel.showDialogue(
-                                (err as? LocalizedError)?.errorDescription ?? "语音未识别。可打开 iPhone 上的 Bola 再试。",
+                                (err as? LocalizedError)?.errorDescription ?? "语音未识别。可打开 iPhone 上的 \(companionName) 再试。",
                                 duration: 6
                             )
                         }
@@ -225,6 +226,12 @@ struct WatchPanelSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var showRemindersSheet: Bool
     @Binding var showSettingsSheet: Bool
+    @State private var companionNameRefreshToken = 0
+
+    private var companionDisplayName: String {
+        _ = companionNameRefreshToken
+        return CompanionDisplayNameStore.resolved()
+    }
 
     var body: some View {
         NavigationStack {
@@ -393,7 +400,7 @@ struct WatchPanelSheetView: View {
                         NavigationLink {
                             WatchChatHistoryView()
                         } label: {
-                            panelCardLabel(title: "对话记录", subtitle: "与 Bola")
+                            panelCardLabel(title: "对话记录", subtitle: "与 \(companionDisplayName)")
                         }
                         .buttonStyle(.plain)
                     }
@@ -407,6 +414,9 @@ struct WatchPanelSheetView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("完成") { dismiss() }
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .bolaCompanionDisplayNameDidChange)) { _ in
+                companionNameRefreshToken += 1
             }
         }
     }
@@ -483,8 +493,9 @@ struct WatchRemindersListView: View {
 
     private func addInterval(hours: Int) {
         let t = titleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let companionName = CompanionDisplayNameStore.resolved()
         let b = bodyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "到点啦，看看 Bola～"
+            ? "到点啦，看看 \(companionName)～"
             : bodyDraft
         let r = BolaReminder(title: t, notificationBody: b, schedule: .interval(TimeInterval(hours * 3600)))
         reminders.append(r)

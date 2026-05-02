@@ -18,6 +18,12 @@ struct IOSLifeTimePageView: View {
     @State private var showDiaryCalendar = false
     @State private var selectedDiaryDate = Date()
     @State private var activeDayFilter: Date? = Calendar.current.startOfDay(for: Date())
+    @State private var companionNameRefreshToken = 0
+
+    private var companionDisplayName: String {
+        _ = companionNameRefreshToken
+        return CompanionDisplayNameStore.resolved()
+    }
 
     private var groupedRecords: [(title: String, records: [BolaDiaryEntry])] {
         let formatter = DateFormatter()
@@ -79,10 +85,18 @@ struct IOSLifeTimePageView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(useLifePageBackdrop ? Color.clear : BolaTheme.backgroundGrouped)
         .onAppear {
+            BolaTimelineRecorder.syncLifeCards()
             reload()
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaDiaryEntriesDidChange)) { _ in
             reload()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaLifeRecordsDidChange)) { _ in
+            BolaTimelineRecorder.syncLifeCards()
+            reload()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaCompanionDisplayNameDidChange)) { _ in
+            companionNameRefreshToken += 1
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaDiaryOpenCalendarRequested)) { _ in
             selectedDiaryDate = activeDayFilter ?? diaryEntries.first?.createdAt ?? Date()
@@ -104,7 +118,7 @@ struct IOSLifeTimePageView: View {
         VStack(spacing: 10) {
             Text("还没有时光记录")
                 .font(.subheadline.weight(.semibold))
-            Text(isShowingToday ? "今天的时光记录还没有出现，和 Bola 聊聊今天发生了什么，它会把适合留下来的片段自动整理成日记。" : "这一天还没有波拉日记，其他过去的记录也可以直接在日历里看。")
+            Text(isShowingToday ? "今天的时光记录还没有出现，和 \(companionDisplayName) 聊聊今天发生了什么，它会把适合留下来的片段自动整理成日记。" : "这一天还没有波拉日记，其他过去的记录也可以直接在日历里看。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -290,7 +304,7 @@ private struct DiaryCalendarSheet: View {
     private var selectedDateHint: String {
         hasDiary(on: selectedDate)
             ? "这一天有波拉日记，点完成查看。"
-            : "有日记的日期会显示主题色标记。"
+            : ""
     }
 
     private var calendarColumns: [GridItem] {
@@ -323,7 +337,7 @@ private struct DiaryCalendarSheet: View {
 
     private func dayForeground(isSelected: Bool, hasEntry: Bool) -> AnyShapeStyle {
         if isSelected { return AnyShapeStyle(.black) }
-        if hasEntry { return AnyShapeStyle(BolaTheme.accent) }
+        if hasEntry { return AnyShapeStyle(.black) }
         return AnyShapeStyle(.primary)
     }
 

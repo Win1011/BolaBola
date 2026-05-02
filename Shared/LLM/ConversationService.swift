@@ -21,6 +21,7 @@ public enum ConversationService {
 
     public static func bolaSystemPrompt(companionValue: Int, growthLevel: Int? = nil) -> String {
         let tier = CompanionTier.value(for: companionValue)
+        let companionName = CompanionDisplayNameStore.resolved()
         let growthState = BolaGrowthStore.load()
         let level = growthLevel ?? BolaLevelFormula.levelAndRemainder(
             fromTotalXP: growthState.totalXP).level
@@ -42,7 +43,7 @@ public enum ConversationService {
             if caps.hasPersonality && personalitySelection == .tsundere {
                 levelInstruction = """
                 你当前启用了「傲娇」人格：嘴上别扭一点、偶尔先嘴硬再关心，但本质是在乎用户的。
-                不要刻薄，不要攻击用户，不要阴阳怪气过头，也不要变成恋爱陪聊机器人；你仍然是可爱的宠物 Bola。
+                不要刻薄，不要攻击用户，不要阴阳怪气过头，也不要变成恋爱陪聊机器人；你仍然是可爱的宠物 \(companionName)。
                 每次回复不超过 80 字，语气要有傲娇感，但落点要温柔。
                 """
             } else {
@@ -51,9 +52,10 @@ public enum ConversationService {
         }
 
         return """
-        你是手表宠物 Bola，不用 Markdown。\(levelInstruction)
+        你是手表宠物 \(companionName)，不用 Markdown。\(levelInstruction)
         用户陪伴值整数为 \(companionValue)，档位约 \(tier)（越高越亲密）。不要给出医疗诊断；心率等信息仅供参考。
         \(recentLifeContextInstruction())
+        \(recentHRVContextInstruction())
 
         如果用户要求设闹钟、定时器或计时提醒，在回复末尾加上标签（用户看不到标签）：
         - N 分钟/小时后提醒一次：<<ALARM:{"mode":"once","minutes":N,"title":"提醒标题","body":"提醒内容"}>>
@@ -194,11 +196,12 @@ public enum ConversationService {
         parsedBody: String?
     ) -> (title: String, body: String) {
         let action = extractReminderAction(from: utterance)
+        let companionName = CompanionDisplayNameStore.resolved()
 
         let title = {
             if let parsedTitle, !parsedTitle.isEmpty { return String(parsedTitle.prefix(18)) }
             if !action.isEmpty { return String("\(action)提醒".prefix(18)) }
-            return "Bola提醒"
+            return "\(companionName)提醒"
         }()
 
         let body = {
@@ -273,6 +276,16 @@ public enum ConversationService {
         """
     }
 
+    private static func recentHRVContextInstruction() -> String {
+        guard let summary = HRVWeeklySummaryStore.load() else {
+            return """
+
+            最近 HRV 摘要：本机还没有最近 7 天摘要缓存。若用户询问 HRV，请说明需要 Apple Watch 佩戴、健康授权和足够样本；不要诊断。
+            """
+        }
+        return "\n\n\(summary.promptText)"
+    }
+
     private static func persistConversationMemoriesInBackground(
         client: LLMClient,
         utterance: String,
@@ -326,6 +339,7 @@ public enum ConversationService {
         }) {
             records.append(card)
             LifeRecordListStore.save(records, to: defaults)
+            BolaTimelineRecorder.markLifeCardSynced(card, defaults: defaults)
         }
     }
 }

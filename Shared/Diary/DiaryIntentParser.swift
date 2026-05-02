@@ -64,23 +64,26 @@ public enum DiaryIntentParser {
     }
 
     private static var extractionSystemPrompt: String {
-        """
+        let companionName = CompanionDisplayNameStore.resolved()
+        let userName = BolaTimelineRecorder.resolvedUserDisplayName()
+        let userReference = userName == "你" ? "你" : userName
+        return """
         你是 BolaBola 的生活记忆提取器。只输出一个 JSON 对象，不要 Markdown，不要解释。
         你要判断这轮对话是否包含值得记录的真实生活事件、体验、计划、饮食、运动、旅行、电影、购物或习惯。
         如果只是闲聊、问问题、设置闹钟、测试、打招呼、要求分析健康数据，shouldRecord=false。
-        日记必须是 Bola 的陪伴视角：Bola 可以说“我觉得/我猜/我想陪着”，但用户的行为和计划必须称为“主人/你”，禁止把用户行为写成 Bola 自己的行为。
+        日记必须是 \(companionName) 的陪伴视角：\(companionName) 可以说“我觉得/我猜/我想陪着”，但用户的行为和计划必须称为“\(userReference)”，禁止把用户行为写成 \(companionName) 自己的行为。
         日记标题必须是 AI 总结出的短标题，不超过8个字，禁止使用“Bola日记/波拉日记/日记记录/聊天记录”这类泛标题。
-        日记摘要必须是一句话，40字以内。描述用户时统一用“主人”或“你”。
-        如果是用户的计划或经历，要写成“主人计划去吃东北菜”“主人今天去看电影了”。
-        如果是 Bola 做的事，要明确写成“Bola今天提醒主人要早睡”“Bola陪主人复盘了今天的安排”。
-        正例：“主人说想去吃东北菜，我感觉一定会很好吃。”
-        正例：“你今天去爬山了，虽然累，但我觉得你很开心。”
-        正例标题：“想吃东北菜”“准备去爬山”“Bola来提醒”
+        日记摘要必须是一句话，40字以内。描述用户时统一用“\(userReference)”。
+        如果是用户的计划或经历，要写成“\(userReference)计划去吃东北菜”“\(userReference)今天去看电影了”。
+        如果是 \(companionName) 做的事，要明确写成“\(companionName)今天提醒\(userReference)要早睡”“\(companionName)陪\(userReference)复盘了今天的安排”。
+        正例：“\(userReference)说想去吃东北菜，我感觉一定会很好吃。”
+        正例：“\(userReference)今天去爬山了，虽然累，但我觉得很开心。”
+        正例标题：“想吃东北菜”“准备去爬山”“\(companionName)提醒”
         反例：“我计划去吃东北菜。”（错：像用户本人写的）
-        反例：“我今天去爬山了。”（错：把用户经历写成 Bola 经历）
+        反例：“我今天去爬山了。”（错：把用户经历写成 \(companionName) 经历）
         反例标题：“Bola日记”“生活记录”“今日总结”
         JSON schema:
-        {"shouldRecord":true|false,"diary":{"title":"8字以内标题","summary":"Bola 陪伴视角的一句话，中文，40字以内，用户称为主人或你","emoji":"一个 emoji"},"lifeCard":{"kind":"event|habitTodo|food|travel|fitness|movie|shopping","title":"8字以内标题","detail":"中文，40字以内，用户称为主人，Bola 的行为写成 Bola 今天...","emoji":"一个 emoji"}}
+        {"shouldRecord":true|false,"diary":{"title":"8字以内标题","summary":"\(companionName) 陪伴视角的一句话，中文，40字以内，用户称为\(userReference)","emoji":"一个 emoji"},"lifeCard":{"kind":"event|habitTodo|food|travel|fitness|movie|shopping","title":"8字以内标题","detail":"中文，40字以内，用户称为\(userReference)，\(companionName) 的行为写成 \(companionName) 今天...","emoji":"一个 emoji"}}
         """
     }
 
@@ -189,7 +192,8 @@ public enum DiaryIntentParser {
         let trimmedTitle = raw
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "\n", with: "")
-        let bannedTitles: Set<String> = ["Bola日记", "波拉日记", "日记", "生活记录", "聊天记录", "今日总结"]
+        let companionName = CompanionDisplayNameStore.resolved()
+        let bannedTitles: Set<String> = ["Bola日记", "\(companionName)日记", "波拉日记", "日记", "生活记录", "聊天记录", "今日总结"]
         let candidate = String(trimmedTitle.prefix(8))
         if candidate.count >= 2 && !bannedTitles.contains(candidate) {
             return candidate
@@ -201,8 +205,7 @@ public enum DiaryIntentParser {
         let stripped = summary
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "主人", with: "")
-            .replacingOccurrences(of: "Bola今天", with: "Bola")
-            .replacingOccurrences(of: "Bola", with: "Bola")
+            .replacingOccurrences(of: "\(CompanionDisplayNameStore.resolved())今天", with: CompanionDisplayNameStore.resolved())
         let punctuation = CharacterSet(charactersIn: "，。！？、；： ")
         let pieces = stripped.components(separatedBy: punctuation).filter { !$0.isEmpty }
         let base = pieces.first ?? stripped

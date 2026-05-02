@@ -19,6 +19,8 @@ public enum CompanionPersistenceKeys {
 
     /// 用户在 iPhone 上为宠物起的显示名（空则 UI 回退为「Bola」）。
     public static let companionDisplayName = "bola_companion_display_name_v1"
+    /// 最近 7 天 HRV 聚合摘要 JSON；只保存日级统计，不保存 HealthKit 原始样本。
+    public static let hrvWeeklySummaryJSON = "bola_hrv_weekly_summary_json_v1"
 
     public static var allCompanionKeys: [String] {
         [

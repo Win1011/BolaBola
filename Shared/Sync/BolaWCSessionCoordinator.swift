@@ -540,6 +540,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             payload[WCSyncPayload.titleSelectionB64] = data.base64EncodedString()
         }
         payload[WCSyncPayload.personalitySelectionRaw] = BolaPersonalitySelectionStore.validated().rawValue
+        payload[WCSyncPayload.companionDisplayName] = CompanionDisplayNameStore.resolved()
         // Growth state
         let growthState = BolaGrowthStore.load()
         if let data = try? JSONEncoder().encode(growthState) {
@@ -828,6 +829,10 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         if let raw = dict[WCSyncPayload.personalitySelectionRaw] as? String,
            let selection = BolaPersonalitySelection(rawValue: raw) {
             BolaPersonalitySelectionStore.save(selection)
+            changed = true
+        }
+        if let displayName = dict[WCSyncPayload.companionDisplayName] as? String {
+            _ = CompanionDisplayNameStore.save(displayName)
             changed = true
         }
         // 成长状态合并（totalXP 取大值）

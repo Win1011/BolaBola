@@ -33,14 +33,15 @@ public enum DailyDigestRefresh {
         }
 
         let body: String
+        let companionName = CompanionDisplayNameStore.resolved(using: defaults)
         do {
             let client = try LLMClient.loadFromKeychain()
             let prompt = """
-            用中文写一段 Bola 宠物给主人的每日小结，60 字以内，温暖、非医疗、不提诊断。\
+            用中文写一段 \(companionName) 宠物给主人的每日小结，60 字以内，温暖、非医疗、不提诊断。\
             用户今日陪伴值约 \(companionValue)。
             """
             let messages = [
-                LLMChatMessage(role: "system", content: "你是 Bola，简短口语化。"),
+                LLMChatMessage(role: "system", content: "你是 \(companionName)，简短口语化。"),
                 LLMChatMessage(role: "user", content: prompt)
             ]
             body = try await client.chatCompletion(messages: messages)

@@ -8,6 +8,12 @@ import SwiftUI
 struct WatchChatHistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var turns: [ChatTurn] = []
+    @State private var companionNameRefreshToken = 0
+
+    private var companionDisplayName: String {
+        _ = companionNameRefreshToken
+        return CompanionDisplayNameStore.resolved()
+    }
 
     private var grouped: [(day: Date, items: [ChatTurn])] {
         let cal = Calendar.current
@@ -31,7 +37,7 @@ struct WatchChatHistoryView: View {
                     Section {
                         ForEach(group.items) { turn in
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(turn.role == "user" ? "你" : "Bola")
+                                Text(turn.role == "user" ? "你" : companionDisplayName)
                                     .font(.caption2.weight(.semibold))
                                     .foregroundStyle(.secondary)
                                 Text(turn.content)
@@ -67,6 +73,9 @@ struct WatchChatHistoryView: View {
         .onAppear(perform: reload)
         .onReceive(NotificationCenter.default.publisher(for: .bolaChatHistoryDidMerge)) { _ in
             reload()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaCompanionDisplayNameDidChange)) { _ in
+            companionNameRefreshToken += 1
         }
     }
 

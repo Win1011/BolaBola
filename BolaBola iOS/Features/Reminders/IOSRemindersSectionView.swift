@@ -16,6 +16,12 @@ struct IOSRemindersSectionView: View {
         let mealSlot: MealSlot?
     }
 
+    /// 「生活」主页只看你自己的提醒；喝水/活动等走「设置 → 提醒」。
+    enum PresentationScope {
+        case allRemindersAndMeals
+        case personalRemindersOnly
+    }
+
     enum Style {
         case standard
         /// Figma 生活页：白卡圆角 20、小粒「+添加」
@@ -26,6 +32,7 @@ struct IOSRemindersSectionView: View {
 
     @Binding var reminders: [BolaReminder]
     @State private var mealSlots: [MealSlot] = MealSlotStore.load()
+    var presentationScope: PresentationScope = .allRemindersAndMeals
     var sectionTitle: String = "Bola正在关心的事"
     /// 宠物显示名（生活页标题第一行）；默认读 `CompanionDisplayNameStore`。
     var companionDisplayName: String = CompanionDisplayNameStore.resolved()
@@ -37,6 +44,19 @@ struct IOSRemindersSectionView: View {
     private var figmaRowHeight: CGFloat { 36 }
     private var figmaRowSpacing: CGFloat { 7 }
     private var figmaInnerCardCorner: CGFloat { 10 }
+
+    private var scopedReminders: [BolaReminder] {
+        switch presentationScope {
+        case .allRemindersAndMeals:
+            reminders
+        case .personalRemindersOnly:
+            reminders.filter(\.isPersonalLifeReminder)
+        }
+    }
+
+    private var showsMealRows: Bool {
+        presentationScope == .allRemindersAndMeals
+    }
 
     var body: some View {
         content
@@ -120,13 +140,15 @@ struct IOSRemindersSectionView: View {
                             Button("+创建新提醒") {
                                 activeEditor = EditorSheetState(mode: .create)
                             }
-                            Button("+添加餐食") {
-                                addNewMealSlot()
-                            }
-                            Section("模板") {
-                                ForEach(ReminderTemplateLibrary.all) { t in
-                                    Button(t.title) {
-                                        activeEditor = EditorSheetState(mode: .createFromTemplate(t))
+                            if showsMealRows {
+                                Button("+添加餐食") {
+                                    addNewMealSlot()
+                                }
+                                Section("模板") {
+                                    ForEach(ReminderTemplateLibrary.all) { t in
+                                        Button(t.title) {
+                                            activeEditor = EditorSheetState(mode: .createFromTemplate(t))
+                                        }
                                     }
                                 }
                             }
@@ -143,8 +165,12 @@ struct IOSRemindersSectionView: View {
                         .accessibilityLabel("添加提醒")
                     }
 
-                    if reminders.isEmpty && mealSlots.isEmpty {
-                        Text("还没有提醒。点「添加」从模板选一条，或自定义时间。")
+                    if scopedReminders.isEmpty && (!showsMealRows || mealSlots.isEmpty) {
+                        Text(
+                            presentationScope == .personalRemindersOnly
+                            ? "还没有要记的事哦～请点「添加」新建"
+                            : "还没有提醒。点「添加」自定义时间。"
+                        )
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 8)
@@ -152,10 +178,12 @@ struct IOSRemindersSectionView: View {
                     } else {
                         ScrollView(.vertical, showsIndicators: true) {
                             LazyVStack(spacing: figmaRowSpacing) {
-                                ForEach(mealSlots) { slot in
-                                    mealSlotRow(slot)
+                                if showsMealRows {
+                                    ForEach(mealSlots) { slot in
+                                        mealSlotRow(slot)
+                                    }
                                 }
-                                ForEach(reminders) { r in
+                                ForEach(scopedReminders) { r in
                                     reminderRow(r)
                                 }
                             }
@@ -181,10 +209,12 @@ struct IOSRemindersSectionView: View {
                     Button("+创建新提醒") {
                         activeEditor = EditorSheetState(mode: .create)
                     }
-                    Section("模板") {
-                        ForEach(ReminderTemplateLibrary.all) { t in
-                            Button(t.title) {
-                                activeEditor = EditorSheetState(mode: .createFromTemplate(t))
+                    if showsMealRows {
+                        Section("模板") {
+                            ForEach(ReminderTemplateLibrary.all) { t in
+                                Button(t.title) {
+                                    activeEditor = EditorSheetState(mode: .createFromTemplate(t))
+                                }
                             }
                         }
                     }
@@ -198,14 +228,18 @@ struct IOSRemindersSectionView: View {
                 }
             }
 
-            if reminders.isEmpty {
-                Text("还没有提醒。点「添加」从模板选一条，或自定义时间。")
+            if scopedReminders.isEmpty {
+                Text(
+                    presentationScope == .personalRemindersOnly
+                    ? "还没有个人提醒。可在设置中管理喝水、活动等。"
+                    : "还没有提醒。点「添加」从模板选一条，或自定义时间。"
+                )
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 8)
             } else {
                 VStack(spacing: 12) {
-                    ForEach(reminders) { r in
+                    ForEach(scopedReminders) { r in
                         reminderRow(r)
                     }
                 }
@@ -214,7 +248,7 @@ struct IOSRemindersSectionView: View {
     }
 
     private var dashboardCompactCardBody: some View {
-        let primaryReminder = reminders.first
+        let primaryReminder = scopedReminders.first
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
@@ -222,7 +256,7 @@ struct IOSRemindersSectionView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.primary)
                 Spacer()
-                Text("\(reminders.count) 条")
+                Text("\(scopedReminders.count) 条")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
@@ -247,8 +281,8 @@ struct IOSRemindersSectionView: View {
 
                     Spacer(minLength: 0)
 
-                    if reminders.count > 1 {
-                        Text("+\(reminders.count - 1)")
+                    if scopedReminders.count > 1 {
+                        Text("+\(scopedReminders.count - 1)")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 7)
@@ -289,17 +323,28 @@ struct IOSRemindersSectionView: View {
     }
 
     private func rowTitleLine(for r: BolaReminder) -> String {
-        let rawTitle = r.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let escapedName = NSRegularExpression.escapedPattern(for: companionDisplayName)
-        let prefixPattern = "^\(escapedName)\\s*·\\s*"
-        let normalizedTitle: String
-        if let regex = try? NSRegularExpression(pattern: prefixPattern) {
-            let full = NSRange(rawTitle.startIndex..<rawTitle.endIndex, in: rawTitle)
-            normalizedTitle = regex.stringByReplacingMatches(in: rawTitle, options: [], range: full, withTemplate: "")
-        } else {
-            normalizedTitle = rawTitle
-        }
+        let normalizedTitle = normalizedReminderTitle(r.title)
         return "\(companionDisplayName) · \(normalizedTitle)"
+    }
+
+    private func normalizedReminderTitle(_ title: String) -> String {
+        var normalized = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let removablePrefixes = [companionDisplayName, "Bola"]
+            .map { NSRegularExpression.escapedPattern(for: $0) }
+            .joined(separator: "|")
+        guard !removablePrefixes.isEmpty,
+              let regex = try? NSRegularExpression(pattern: #"^(\#(removablePrefixes))\s*·\s*"#) else {
+            return normalized
+        }
+
+        while true {
+            let before = normalized
+            let full = NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
+            normalized = regex.stringByReplacingMatches(in: normalized, options: [], range: full, withTemplate: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if normalized == before { break }
+        }
+        return normalized.isEmpty ? "提醒" : normalized
     }
 
     private func reminderRow(_ r: BolaReminder) -> some View {

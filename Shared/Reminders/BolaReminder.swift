@@ -97,6 +97,12 @@ public extension BolaReminder {
             return "\(fmt.string(from: date)) 一次性闹钟"
         }
     }
+
+    /// 生活页卡片仅展示这一类：用户自拟、对话里设的闹钟、`kind == nil`（含手表自拟）；不含喝水/活动等健康预设。
+    public var isPersonalLifeReminder: Bool {
+        guard let kind else { return true }
+        return kind == .custom
+    }
 }
 
 public enum ReminderStorageKeys {

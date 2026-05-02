@@ -64,4 +64,5 @@ public struct LifeRecordCard: Identifiable, Codable, Equatable, Sendable {
 
 public enum LifeRecordStorageKeys {
     public static let recordsJSON = "bola_life_records_v1"
+    public static let diarySyncedRecordIds = "bola_life_record_diary_synced_ids_v1"
 }

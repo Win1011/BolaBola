@@ -69,6 +69,13 @@ private struct BubbleTail: Shape {
 private enum LifePreviewMocks {
     static let reminders: [BolaReminder] = [
         BolaReminder(
+            title: "取快递",
+            notificationBody: "别忘了取件～",
+            schedule: .once(Date().addingTimeInterval(7200)),
+            kind: .custom,
+            isEnabled: true
+        ),
+        BolaReminder(
             title: "喝水",
             notificationBody: "记得补充水分",
             schedule: .interval(60 * 60),
@@ -81,13 +88,6 @@ private enum LifePreviewMocks {
             schedule: .calendar(hour: 15, minute: 30, weekdays: []),
             kind: .move,
             isEnabled: true
-        ),
-        BolaReminder(
-            title: "睡前放松",
-            notificationBody: "准备休息",
-            schedule: .calendar(hour: 22, minute: 30, weekdays: []),
-            kind: .sleep,
-            isEnabled: false
         ),
     ]
 }
@@ -515,7 +515,11 @@ struct IOSLifeContainerView: View {
         return HStack(alignment: .top, spacing: 12) {
             // 左列：提醒卡固定高度
             dashboardTileContainer(kind: .reminders) {
-                IOSRemindersSectionView(reminders: $reminders, style: .figmaLife)
+                IOSRemindersSectionView(
+                    reminders: $reminders,
+                    presentationScope: .personalRemindersOnly,
+                    style: .figmaLife
+                )
                     .frame(maxWidth: .infinity)
                     .frame(height: fixedHeight, alignment: .topLeading)
             }
@@ -628,6 +632,7 @@ struct IOSLifeContainerView: View {
             dashboardTileContainer(kind: .reminders) {
                 IOSRemindersSectionView(
                     reminders: $reminders,
+                    presentationScope: .personalRemindersOnly,
                     style: .figmaLife
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -1412,6 +1417,7 @@ struct IOSLifeContainerView: View {
                         )
                         lifeRecords.append(card)
                         LifeRecordListStore.save(lifeRecords)
+                        BolaTimelineRecorder.recordLifeCard(card)
                         showAddRecordSheet = false
                         resetAddForm()
                     }
@@ -1960,7 +1966,9 @@ private struct LifeDashboardCalendarSheet: View {
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity)
                     }
+                }
 
+                LazyVGrid(columns: calendarColumns, spacing: 12) {
                     ForEach(monthCells.indices, id: \.self) { index in
                         if let date = monthCells[index] {
                             Button {
@@ -1987,9 +1995,16 @@ private struct LifeDashboardCalendarSheet: View {
                 Spacer()
             }
             .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(BolaTheme.backgroundGrouped)
             .navigationTitle("选择日期")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        dismiss()
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") {
                         dismiss()
@@ -2000,15 +2015,13 @@ private struct LifeDashboardCalendarSheet: View {
     }
 
     private var weekdaySymbols: [String] {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        return formatter.shortStandaloneWeekdaySymbols
+        ["日", "一", "二", "三", "四", "五", "六"]
     }
 
     private var monthTitle: String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "yyyy年M月"
+        formatter.dateFormat = "yyyy年 M月"
         return formatter.string(from: visibleMonth)
     }
 
@@ -2020,9 +2033,8 @@ private struct LifeDashboardCalendarSheet: View {
         }
 
         let firstWeekday = cal.component(.weekday, from: interval.start)
-        let leading = max(0, firstWeekday - cal.firstWeekday)
-        let prefixCount = leading < 0 ? leading + 7 : leading
-        let prefix = Array(repeating: Optional<Date>.none, count: prefixCount)
+        let leadingEmptyCount = max(0, firstWeekday - 1)
+        let prefix = Array(repeating: Optional<Date>.none, count: leadingEmptyCount)
         let dates = days.compactMap { day in
             cal.date(byAdding: .day, value: day - 1, to: interval.start)
         }.map(Optional.some)
@@ -2110,7 +2122,7 @@ private extension LifeDashboardTileKind {
 
     var dashboardDescription: String {
         switch self {
-        case .reminders: return "喝水、活动、睡前等自定义提醒"
+        case .reminders: return "你自定或与宠物约好的备忘；健康管理在设置里"
         case .weather:   return "当地实时天气与温度"
         case .sleep:     return "昨晚睡眠时长与阶段概览"
         case .activity:  return "今日活动环与运动数据"

@@ -258,6 +258,7 @@ struct IOSOnboardingView: View {
         isFinishingOnboarding = true
         dismissKeyboard()
         persistDraft()
+        CompanionDisplayNameStore.save(bolaNickname)
         BolaOnboardingState.markCompleted()
         onDone()
     }
@@ -1268,6 +1269,12 @@ private struct UserNicknamePage: View {
                 isFieldFocused = false
             }
         }
+        .onChange(of: nickname) { _, newValue in
+            let sanitized = CompanionDisplayNameStore.sanitized(newValue)
+            if sanitized != newValue {
+                nickname = sanitized
+            }
+        }
         .task(id: autoFocusRequestID) {
             guard isActive, autoFocusRequestID > 0 else { return }
             await Task.yield()
@@ -1462,6 +1469,12 @@ private struct BolaNicknamePage: View {
         .onChange(of: isActive) { _, newValue in
             if !newValue {
                 isFieldFocused = false
+            }
+        }
+        .onChange(of: nickname) { _, newValue in
+            let sanitized = CompanionDisplayNameStore.sanitized(newValue)
+            if sanitized != newValue {
+                nickname = sanitized
             }
         }
         .task(id: autoFocusRequestID) {

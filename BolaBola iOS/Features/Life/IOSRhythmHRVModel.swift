@@ -147,9 +147,40 @@ final class IOSRhythmHRVModel: ObservableObject {
             let buckets = Self.bucketAverageByHour(samples: samples, calendar: cal, dayStart: start)
             hourlyNormalized = Self.normalizeBuckets(buckets)
             phase = hourlyNormalized.allSatisfy { $0 < 0.02 } ? .empty : .ready
+            saveWeeklySummary(samples: try await fetchRecentHRVSamples(type: hrvType, calendar: cal, now: now), calendar: cal, now: now)
         } catch {
             errorMessage = (error as NSError).localizedDescription
             phase = .empty
+        }
+    }
+
+    @discardableResult
+    func refreshWeeklySummaryCache() async -> HRVWeeklySummary? {
+        guard HKHealthStore.isHealthDataAvailable(),
+              let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) else {
+            let summary = Self.insufficientWeeklySummary()
+            HRVWeeklySummaryStore.save(summary)
+            return summary
+        }
+        let types: Set<HKObjectType> = [hrvType]
+        let requestStatus = await authorizationRequestStatus(types: types)
+        guard requestStatus == .unnecessary else {
+            let summary = Self.insufficientWeeklySummary()
+            HRVWeeklySummaryStore.save(summary)
+            return summary
+        }
+
+        do {
+            let now = Date()
+            let calendar = Calendar.current
+            let samples = try await fetchRecentHRVSamples(type: hrvType, calendar: calendar, now: now)
+            let summary = Self.makeWeeklySummary(samples: samples, calendar: calendar, now: now)
+            HRVWeeklySummaryStore.save(summary)
+            return summary
+        } catch {
+            let summary = Self.insufficientWeeklySummary()
+            HRVWeeklySummaryStore.save(summary)
+            return summary
         }
     }
 
@@ -182,6 +213,17 @@ final class IOSRhythmHRVModel: ObservableObject {
         }
     }
 
+    private func fetchRecentHRVSamples(type: HKQuantityType, calendar: Calendar, now: Date) async throws -> [HKQuantitySample] {
+        let todayStart = calendar.startOfDay(for: now)
+        let start = calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: now)
+        return try await fetchHRVSamples(type: type, predicate: predicate)
+    }
+
+    private func saveWeeklySummary(samples: [HKQuantitySample], calendar: Calendar, now: Date) {
+        HRVWeeklySummaryStore.save(Self.makeWeeklySummary(samples: samples, calendar: calendar, now: now))
+    }
+
     private static func bucketAverageByHour(samples: [HKQuantitySample], calendar: Calendar, dayStart: Date) -> [Double] {
         var sums = Array(repeating: 0.0, count: 24)
         var counts = Array(repeating: 0, count: 24)
@@ -210,5 +252,79 @@ final class IOSRhythmHRVModel: ObservableObject {
             guard v > 0 else { return 0 }
             return min(1, max(0, (v - minV) / span))
         }
+    }
+
+    private static func makeWeeklySummary(samples: [HKQuantitySample], calendar: Calendar, now: Date) -> HRVWeeklySummary {
+        let unit = HKUnit.secondUnit(with: .milli)
+        let todayStart = calendar.startOfDay(for: now)
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        var daily: [HRVDailySummary] = []
+        for offset in stride(from: -6, through: 0, by: 1) {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: todayStart) else { continue }
+            let daySamples = samples.filter { calendar.isDate($0.endDate, inSameDayAs: day) }
+            guard !daySamples.isEmpty else { continue }
+            let values = daySamples.map { $0.quantity.doubleValue(for: unit) }.filter { $0 > 0 }
+            guard !values.isEmpty else { continue }
+            let avg = values.reduce(0, +) / Double(values.count)
+            daily.append(HRVDailySummary(day: formatter.string(from: day), sampleCount: values.count, averageSDNNMilliseconds: avg))
+        }
+
+        guard daily.count >= 2 else {
+            return HRVWeeklySummary(
+                generatedAt: now,
+                days: daily,
+                sevenDayAverageSDNNMilliseconds: daily.first?.averageSDNNMilliseconds,
+                latestDayAverageSDNNMilliseconds: daily.last?.averageSDNNMilliseconds,
+                latestDeviationFromBaselinePercent: nil,
+                dataCompleteness: Double(daily.count) / 7.0,
+                status: .insufficientData
+            )
+        }
+
+        let averages = daily.map(\.averageSDNNMilliseconds)
+        let baseline = averages.reduce(0, +) / Double(averages.count)
+        let latest = averages.last ?? baseline
+        let deviation = baseline > 0 ? ((latest - baseline) / baseline) * 100 : nil
+        let standardDeviation = sqrt(averages.map { pow($0 - baseline, 2) }.reduce(0, +) / Double(averages.count))
+        let coefficientOfVariation = baseline > 0 ? standardDeviation / baseline : 0
+
+        let status: HRVTrendStatus
+        if daily.count < 3 {
+            status = .insufficientData
+        } else if daily.count >= 4 && coefficientOfVariation > 0.25 {
+            status = .variable
+        } else if let deviation, deviation <= -15 {
+            status = .belowBaseline
+        } else if let deviation, deviation >= 15 {
+            status = .aboveBaseline
+        } else {
+            status = .nearBaseline
+        }
+
+        return HRVWeeklySummary(
+            generatedAt: now,
+            days: daily,
+            sevenDayAverageSDNNMilliseconds: baseline,
+            latestDayAverageSDNNMilliseconds: latest,
+            latestDeviationFromBaselinePercent: deviation,
+            dataCompleteness: Double(daily.count) / 7.0,
+            status: status
+        )
+    }
+
+    private static func insufficientWeeklySummary() -> HRVWeeklySummary {
+        HRVWeeklySummary(
+            generatedAt: Date(),
+            days: [],
+            sevenDayAverageSDNNMilliseconds: nil,
+            latestDayAverageSDNNMilliseconds: nil,
+            latestDeviationFromBaselinePercent: nil,
+            dataCompleteness: 0,
+            status: .insufficientData
+        )
     }
 }

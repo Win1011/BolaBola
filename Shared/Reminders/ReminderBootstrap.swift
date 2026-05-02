@@ -12,15 +12,16 @@ public enum ReminderBootstrap {
         guard !defaults.bool(forKey: bootKey) else { return }
         var list = ReminderListStore.load(from: defaults)
         if list.isEmpty {
+            let name = CompanionDisplayNameStore.resolved(using: defaults)
             list = [
                 BolaReminder(
-                    title: "Bola · 喝水",
+                    title: "\(name) · 喝水",
                     notificationBody: "该喝水啦，小口慢饮～",
                     schedule: .calendar(hour: 10, minute: 0, weekdays: []),
                     kind: .water
                 ),
                 BolaReminder(
-                    title: "Bola · 动一动",
+                    title: "\(name) · 动一动",
                     notificationBody: "起来伸展一下，眼睛也休息一下。",
                     schedule: .calendar(hour: 15, minute: 0, weekdays: []),
                     kind: .move

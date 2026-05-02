@@ -5,6 +5,7 @@
 
 import SwiftUI
 import UIKit
+import Combine
 
 struct IOSMainHomeView: View {
     @Environment(\.scenePhase) private var scenePhase
@@ -37,8 +38,40 @@ struct IOSMainHomeView: View {
     @State private var petTapFeedbackScale: CGFloat = 1.0
     @StateObject private var petHandler = IOSPetInteractionHandler()
     @StateObject private var mealCoordinator = IOSMealCoordinator.shared
-
+    @State private var now = Date()
+    @State private var waterSnoozedUntil: Date? = nil
+    @State private var sleepLampDismissed = false
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
+
+    private var isFeedWindowActive: Bool {
+        MealEngine.shared.hasFeedableMeal(now: now)
+    }
+
+    private var isSleepTime: Bool {
+        let cal = Calendar.current
+        let h = cal.component(.hour, from: now)
+        let m = cal.component(.minute, from: now)
+        if h == 23 && m >= 30 { return true }
+        if h < 8 { return true }
+        if h == 8 && m < 30 { return true }
+        return false
+    }
+
+    private var isWaterWindowActive: Bool {
+        if let snoozed = waterSnoozedUntil, now < snoozed { return false }
+        let reminders = ReminderListStore.load()
+        let cal = Calendar.current
+        let nowH = cal.component(.hour, from: now)
+        let nowM = cal.component(.minute, from: now)
+        let nowTotal = nowH * 60 + nowM
+        return reminders.contains { r in
+            guard r.isEnabled, r.kind == .water,
+                  case .calendar(let h, let m, _) = r.schedule else { return false }
+            let target = h * 60 + m
+            let diff = abs(nowTotal - target)
+            return min(diff, 1440 - diff) <= 30
+        }
+    }
 
     private var titleLine: String {
         BolaTitleSelection(wordIdA: titleWordIdA, wordIdB: titleWordIdB, frameId: titleFrameId).resolvedLine()
@@ -95,6 +128,15 @@ struct IOSMainHomeView: View {
             }
             .background(Color.clear)
             .scrollIndicators(.hidden)
+
+            if isSleepTime && !sleepLampDismissed {
+                IOSSleepLampOverlay {
+                    petHandler.handleSleepButton()
+                    sleepLampDismissed = true
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+            }
         }
         .onAppear {
             guard !hasPerformedInitialLoad else { return }
@@ -127,6 +169,12 @@ struct IOSMainHomeView: View {
         }
         .onChange(of: refreshSignal) { _, _ in
             Task { await performWatchSync() }
+        }
+        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { date in
+            now = date
+        }
+        .onChange(of: isSleepTime) { _, isNow in
+            if !isNow { sleepLampDismissed = false }
         }
         .navigationDestination(isPresented: $showTitleLibraryPage) {
             TitleLibraryPage(
@@ -187,21 +235,19 @@ struct IOSMainHomeView: View {
         return Group {
             if !line.isEmpty {
                 Text(line)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.primary)
+                    .font(.caption)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.yellow.opacity(0.22))
-                    )
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.88)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.yellow.opacity(0.85), lineWidth: 1.5)
+                            .stroke(Color(red: 229/255, green: 1, blue: 0), lineWidth: 0.75)
                     )
-                    .frame(maxWidth: 260)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
         .animation(.easeInOut(duration: 0.18), value: coordinator.currentPetCoreState)
@@ -228,7 +274,6 @@ struct IOSMainHomeView: View {
 
     private var watchPreviewBlock: some View {
         VStack(spacing: 10) {
-            petDialogueBubble
             watchMockupCore
                 .scaleEffect(petTapFeedbackScale)
                 .contentShape(Rectangle())
@@ -237,7 +282,41 @@ struct IOSMainHomeView: View {
                         handlePetMockupTap()
                     }
                 )
-            petActionBar
+                .overlay {
+                    GeometryReader { geo in
+                        let screenRight = WatchS10PreviewGeometry.screenRectInFull.maxX * geo.size.width
+                        let trailingPad = geo.size.width - screenRight + 44
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                watchFaceActionButtons
+                                    .padding(.trailing, trailingPad)
+                                    .padding(.bottom, 120)
+                            }
+                        }
+                    }
+                }
+                .overlay(alignment: .top) {
+                    petDialogueBubble
+                        .padding(.horizontal, 72)
+                        .padding(.top, 75)
+                        .allowsHitTesting(false)
+                }
+        }
+    }
+
+
+    private var watchFaceActionButtons: some View {
+        VStack(spacing: 8) {
+            WatchFaceOrbButton(systemImage: "leaf.fill", tint: .green, isActive: isFeedWindowActive) {
+                petHandler.handleFeedButton()
+                now = Date()
+            }
+            WatchFaceOrbButton(systemImage: "drop.fill", tint: .blue, isActive: isWaterWindowActive) {
+                petHandler.handleDrinkButton()
+                waterSnoozedUntil = Date().addingTimeInterval(3600)
+            }
         }
     }
 
@@ -1212,6 +1291,53 @@ private struct CompanionAccelerationBar: View {
     }
 }
 
+// MARK: - Watch Face Orb Button
+
+private struct WatchFaceOrbButton: View {
+    let systemImage: String
+    let tint: Color
+    let isActive: Bool
+    let action: () -> Void
+
+    @State private var rotation: Double = 0
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.3)
+                    .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
+
+                if isActive {
+                    Circle()
+                        .trim(from: 0, to: 0.6)
+                        .stroke(
+                            AngularGradient(
+                                colors: [tint.opacity(0), tint.opacity(0.9), tint.opacity(0)],
+                                center: .center
+                            ),
+                            style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(rotation))
+                        .onAppear {
+                            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                                rotation = 360
+                            }
+                        }
+                }
+
+                Image(systemName: systemImage)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(tint)
+            }
+            .frame(width: 36, height: 36)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 #Preview("Home") {
     NavigationStack {
         IOSMainHomeView(
@@ -1221,6 +1347,7 @@ private struct CompanionAccelerationBar: View {
         )
     }
 }
+
 
 private extension UIColor {
     convenience init(blendedTowardsLabel base: UIColor, fraction: CGFloat) {

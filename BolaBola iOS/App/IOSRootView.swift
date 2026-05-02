@@ -19,8 +19,10 @@ struct IOSRootView: View {
     @State private var reminders: [BolaReminder] = ReminderListStore.load()
     @State private var showDigestSheet = false
     @State private var digestBody = ""
-    @State private var showSettingsSheet = false
+    /// 由各 Tab 的 `NavigationStack` 以 `navigationDestination` 推进设置页（非 Sheet）。
+    @State private var showSettingsPage = false
     @State private var isOnboardingCompleted = BolaOnboardingState.isCompleted
+    @State private var companionNameRefreshToken = 0
     private var bolaDefaults: UserDefaults { BolaSharedDefaults.resolved() }
 
     // 提前在根视图创建，避免 Life tab 首次显示时在主线程同步初始化 HealthKit / CoreLocation 导致卡顿
@@ -48,6 +50,9 @@ struct IOSRootView: View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { lifeToolbarContent }
+            .navigationDestination(isPresented: $showSettingsPage) {
+                IOSSettingsListView(includeDismissToolbar: false)
+            }
         }
         .tint(Color(UIColor.label))
     }
@@ -59,6 +64,9 @@ struct IOSRootView: View {
                 .navigationTitle("")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { growthNavigationToolbar }
+                .navigationDestination(isPresented: $showSettingsPage) {
+                    IOSSettingsListView(includeDismissToolbar: false)
+                }
         }
         .tint(Color(UIColor.label))
         .environmentObject(growthDailyTasksVM)
@@ -73,9 +81,12 @@ struct IOSRootView: View {
                 isSyncing: $isMineHomeSyncing
             )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .navigationTitle("Bola的空间")
+                .navigationTitle("\(companionChatDisplayName)的空间")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { mineToolbarContent }
+                .navigationDestination(isPresented: $showSettingsPage) {
+                    IOSSettingsListView(includeDismissToolbar: false)
+                }
         }
         .tint(Color(UIColor.label))
     }
@@ -89,6 +100,9 @@ struct IOSRootView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbarBackground(.hidden, for: .navigationBar)
                 .toolbar { chatToolbarContent }
+                .navigationDestination(isPresented: $showSettingsPage) {
+                    IOSSettingsListView(includeDismissToolbar: false)
+                }
         }
         .tint(Color(UIColor.label))
     }
@@ -165,10 +179,8 @@ struct IOSRootView: View {
         .bolaIOS26TabBarMinimizeOnScroll()
         .bolaRootTabScrollEdgeStyles()
         .ignoresSafeArea(.keyboard)
-        .sheet(isPresented: $showSettingsSheet) {
-            NavigationStack {
-                IOSSettingsListView()
-            }
+        .onChange(of: selectedTab) { _, _ in
+            showSettingsPage = false
         }
         .sheet(isPresented: $showDigestSheet) {
             NavigationStack {
@@ -207,7 +219,10 @@ struct IOSRootView: View {
             refreshCompanionFromPersistedDefaults()
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaOpenSettingsRequested)) { _ in
-            showSettingsSheet = true
+            showSettingsPage = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaCompanionDisplayNameDidChange)) { _ in
+            companionNameRefreshToken += 1
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaHealthDataRefreshRequested)) { _ in
             Task {
@@ -373,14 +388,13 @@ struct IOSRootView: View {
             font: .system(size: 18, weight: .medium),
             accessibilityLabel: "设置"
         ) {
-            showSettingsSheet = true
+            showSettingsPage = true
         }
     }
 
     private var companionChatDisplayName: String {
-        let name = bolaDefaults.string(forKey: CompanionPersistenceKeys.companionDisplayName)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return name.isEmpty ? "Bola" : name
+        _ = companionNameRefreshToken
+        return CompanionDisplayNameStore.resolved(using: bolaDefaults)
     }
 
     private func refreshCompanionFromPersistedDefaults() {

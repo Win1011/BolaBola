@@ -4,8 +4,8 @@ struct IOSPetActionBarView: View {
     @ObservedObject var handler: IOSPetInteractionHandler
 
     var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 14) {
+        VStack(spacing: 8) {
+            HStack(spacing: 20) {
                 petActionButton(title: "喂食", systemImage: "leaf.fill", tint: .green) {
                     handler.handleFeedButton()
                 }
@@ -30,21 +30,23 @@ struct IOSPetActionBarView: View {
 
     private func petActionButton(title: String, systemImage: String, tint: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 14, weight: .semibold))
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
+            ZStack {
+                Circle()
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.06), radius: 9, y: 4)
+                Circle()
+                    .stroke(BolaTheme.accent, lineWidth: 1.5)
+                VStack(spacing: 3) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(tint)
+                    Text(title)
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(.primary)
+                }
             }
-            .foregroundStyle(tint)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                Capsule().fill(tint.opacity(0.14))
-            )
-            .overlay(
-                Capsule().stroke(tint.opacity(0.45), lineWidth: 1)
-            )
+            .frame(width: 52, height: 52)
+            .contentShape(Circle())
         }
         .buttonStyle(.plain)
     }
