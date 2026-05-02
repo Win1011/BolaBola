@@ -44,6 +44,13 @@ public enum PetInteractionEmotion: Sendable, Equatable {
     // 点击反馈（普通 idle 态点击）
     case tapJumpOne
     case tapJumpTwo
+    case tapSadOne
+    case tapSadTwo
+    case tapIdleOne
+    case tapIdleFour
+    case tapIdleFive
+    case tapLikeOne
+    case tapLikeTwo
 
     // 吃东西流程
     case eatingWait        // idleapple 循环
@@ -68,6 +75,13 @@ public enum PetInteractionEmotion: Sendable, Equatable {
         switch self {
         case .tapJumpOne:        return "jumpone"
         case .tapJumpTwo:        return "jumptwo"
+        case .tapSadOne:         return "sadone"
+        case .tapSadTwo:         return "sadtwo"
+        case .tapIdleOne:        return "idleone"
+        case .tapIdleFour:       return "idlefour"
+        case .tapIdleFive:       return "idlefive"
+        case .tapLikeOne:        return "likeone"
+        case .tapLikeTwo:        return "liketwo"
         case .eatingWait:        return "idleapple"
         case .eatingOnce:        return "eatappletransparent"
         case .eatingHappyIdle:   return "happyidle"
@@ -147,12 +161,23 @@ public final class PetAnimationController: ObservableObject {
 
     // MARK: - 公开事件
 
-    /// 普通 idle 态点击：立即播一轮随机 jump；若当前正处于任何基础交互，视为忽略（一致于手表
-    /// `isTapInteractionAnimating` 的闭锁）。
+    /// 普通 idle 态点击：根据 companion value 选择点击动画；若当前正处于任何基础交互，视为忽略。
     @discardableResult
-    public func handleIdleTap() -> Bool {
+    public func handleIdleTap(companionValue: Double = 100) -> Bool {
         guard activeInteraction == nil else { return false }
-        let variant = randomTapJumpVariant()
+        let v = Int(companionValue.rounded())
+        let variant: PetInteractionEmotion
+        if v <= 2 {
+            return true
+        } else if v <= 9 {
+            variant = Bool.random() ? .tapSadOne : .tapSadTwo
+        } else if v <= 29 {
+            variant = [.tapIdleOne, .tapIdleFour, .tapIdleFive].randomElement() ?? .tapIdleOne
+        } else if v <= 85 {
+            variant = randomTapJumpVariant()
+        } else {
+            variant = [.tapJumpOne, .tapJumpTwo, .tapLikeOne, .tapLikeTwo].randomElement() ?? .tapJumpOne
+        }
         schedule(variant, reason: .tapJumpStarted)
         scheduleOneShotAdvance(after: variant.oneShotDuration) { [weak self] in
             self?.finishTapJump()
@@ -228,8 +253,12 @@ public final class PetAnimationController: ObservableObject {
     // MARK: - 内部过渡
 
     private func finishTapJump() {
-        guard activeInteraction == .tapJumpOne || activeInteraction == .tapJumpTwo else { return }
-        setActive(nil, reason: .tapJumpCompleted)
+        switch activeInteraction {
+        case .tapJumpOne, .tapJumpTwo, .tapSadOne, .tapSadTwo, .tapIdleOne, .tapIdleFour, .tapIdleFive, .tapLikeOne, .tapLikeTwo:
+            setActive(nil, reason: .tapJumpCompleted)
+        default:
+            break
+        }
     }
 
     private func advanceEatingToFinisher() {

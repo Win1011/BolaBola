@@ -71,13 +71,13 @@ public extension PetCoreState {
         if v <= 2 {
             return "die"
         } else if v <= 9 {
-            return v % 2 == 0 ? "sadtwo" : "sadone"
-        } else if v <= 29 {
-            switch (v - 10) % 3 {
+            switch (v - 3) % 3 {
             case 0:  return "hurt"
             case 1:  return "unhappy"
             default: return "unhappytwo"
             }
+        } else if v <= 29 {
+            return v % 2 == 0 ? "sadtwo" : "sadone"
         } else if v <= 85 {
             return "idleone"
         } else {

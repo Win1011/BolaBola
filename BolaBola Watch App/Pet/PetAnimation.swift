@@ -71,6 +71,16 @@ enum PetEmotion {
     case jump1Tap
     /// 与 `jumpTwo` 同一套 `jumptwo` 资源；仅播放模式不同（点一下播一轮即停，非第二套美术）
     case jumpTwoTap
+    /// 点击：sad1 播一轮
+    case sad1Tap
+    /// 点击：sad2 播一轮
+    case sad2Tap
+    /// 点击：idleOne 播一轮
+    case idleOneTap
+    /// 点击：idleFour 播一轮
+    case idleFourTap
+    /// 点击：idleFive 播一轮
+    case idleFiveTap
     /// 点击：三连喜欢，播一轮后回 idle
     case like2Once
     /// 点击：暴怒，播一轮后回 idle
@@ -588,6 +598,36 @@ enum PetAnimations {
         emotion: .jump1Tap,
         displayScale: AnimationScale.jump1,
         source: frameSource(prefix: "jumpone", isLoop: false)
+    )
+
+    static let sad1Tap: PetAnimation = PetAnimation(
+        emotion: .sad1Tap,
+        displayScale: AnimationScale.sad1,
+        source: frameSource(prefix: "sadone", isLoop: false)
+    )
+
+    static let sad2Tap: PetAnimation = PetAnimation(
+        emotion: .sad2Tap,
+        displayScale: AnimationScale.sad2,
+        source: frameSource(prefix: "sadtwo", isLoop: false)
+    )
+
+    static let idleOneTap: PetAnimation = PetAnimation(
+        emotion: .idleOneTap,
+        displayScale: AnimationScale.idleOne,
+        source: frameSource(prefix: "idleone", isLoop: false)
+    )
+
+    static let idleFourTap: PetAnimation = PetAnimation(
+        emotion: .idleFourTap,
+        displayScale: AnimationScale.idleFour,
+        source: frameSource(prefix: "idlefour", isLoop: false)
+    )
+
+    static let idleFiveTap: PetAnimation = PetAnimation(
+        emotion: .idleFiveTap,
+        displayScale: AnimationScale.idleFive,
+        source: frameSource(prefix: "idlefive", isLoop: false)
     )
 
     /// happy1 播一轮（非循环）

@@ -63,7 +63,7 @@ final class IOSPetInteractionHandler: ObservableObject {
     }
 
     func handleIdleTap(companion: inout Double) -> Bool {
-        guard interactionController.handleIdleTap() else { return false }
+        guard interactionController.handleIdleTap(companionValue: companion) else { return false }
         BolaWCSessionCoordinator.shared.incrementCompanionValueLocally(by: 1)
         companion = BolaSharedDefaults.resolved().double(forKey: CompanionPersistenceKeys.companionValue)
         return true

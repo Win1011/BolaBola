@@ -581,6 +581,16 @@ final class PetViewModel: ObservableObject {
             return PetAnimations.jump1Once
         case .jump1Tap:
             return PetAnimations.jump1Tap
+        case .sad1Tap:
+            return PetAnimations.sad1Tap
+        case .sad2Tap:
+            return PetAnimations.sad2Tap
+        case .idleOneTap:
+            return PetAnimations.idleOneTap
+        case .idleFourTap:
+            return PetAnimations.idleFourTap
+        case .idleFiveTap:
+            return PetAnimations.idleFiveTap
         case .like2Once:
             return PetAnimations.like2Once
         case .angry2Once:
@@ -1318,12 +1328,6 @@ final class PetViewModel: ObservableObject {
         }
 
         let nowTs = Date().timeIntervalSince1970
-        let v = Int(companionValue.rounded())
-
-        // die 段：无反应（强化死亡无交互感）
-        if v <= 2 {
-            return
-        }
 
         if voiceConversationActive {
             return
@@ -1382,15 +1386,43 @@ final class PetViewModel: ObservableObject {
             return
         }
 
-        // 普通点击：jump1 / jump2 随机播一轮；+1 陪伴值与 +1 泡泡；台词按档与默认态
+        // 普通点击：根据陪伴值档位选择点击动画；+1 陪伴值与 +1 泡泡；台词按档与默认态
         shouldPlayTapJumpFollowUp = true
         let vBeforeTap = Int(companionValue.rounded())
         applyCompanionBonusFromTapJump()
+        let vForTap = Int(companionValue.rounded())
         selectDefaultEmotion()
         let vNow = Int(companionValue.rounded())
+
+        let tapEmotion: PetEmotion
+        if vForTap <= 2 {
+            tapChainReturnsToRandomIdle = false
+            isTapInteractionAnimating = false
+            if vBeforeTap == 99 && vNow == 100 {
+                previousCompanionRoundedForHundredSpeech = 100
+                lastCompanion100AmbientWallClock = Date().timeIntervalSince1970
+                showDialogue(
+                    BolaDialogueLines.companionValue100Lines.randomElement() ?? "一百啦！",
+                    duration: 8
+                )
+            } else {
+                showDialogue(BolaDialogueLines.tapJumpOpening(v: vNow, defaultEmotion: currentDefaultEmotion))
+            }
+            print("🐾 Tap -> die tier, no animation, +1 companion")
+            return
+        } else if vForTap <= 9 {
+            tapEmotion = Bool.random() ? .sad1Tap : .sad2Tap
+        } else if vForTap <= 29 {
+            tapEmotion = [.idleOneTap, .idleFourTap, .idleFiveTap].randomElement() ?? .idleOneTap
+        } else if vForTap <= 85 {
+            tapEmotion = Bool.random() ? .jump1Tap : .jumpTwoTap
+        } else {
+            tapEmotion = [.jump1Tap, .jumpTwoTap, .like1Once, .like2Once].randomElement() ?? .jump1Tap
+        }
+
         tapChainReturnsToRandomIdle = true
         isTapInteractionAnimating = true
-        currentEmotion = Bool.random() ? .jump1Tap : .jumpTwoTap
+        currentEmotion = tapEmotion
         currentFrameIndex = 0
         if vBeforeTap == 99 && vNow == 100 {
             previousCompanionRoundedForHundredSpeech = 100
@@ -1402,7 +1434,7 @@ final class PetViewModel: ObservableObject {
         } else {
             showDialogue(BolaDialogueLines.tapJumpOpening(v: vNow, defaultEmotion: currentDefaultEmotion))
         }
-        print("🐾 Tap -> jump tap", String(describing: currentEmotion))
+        print("🐾 Tap ->", String(describing: tapEmotion))
     }
 
     private func shouldRecoverStaleTapInteractionLock() -> Bool {
@@ -1757,14 +1789,15 @@ final class PetViewModel: ObservableObject {
         if v <= 2 {
             currentDefaultEmotion = .die
         } else if v <= 9 {
-            currentDefaultEmotion = (v % 2 == 0) ? .sad2 : .sad1
-        } else if v <= 29 {
-            // 不高兴档：`hurt` / `unhappy` / `unhappyTwo`（不开心2）按分数轮换
-            switch (v - 10) % 3 {
+            // 低陪伴档：`hurt` / `unhappy` / `unhappyTwo`（不开心2）按分数轮换
+            switch (v - 3) % 3 {
             case 0: currentDefaultEmotion = .hurt
             case 1: currentDefaultEmotion = .unhappy
             default: currentDefaultEmotion = .unhappyTwo
             }
+        } else if v <= 29 {
+            // 难过档：`sad1` / `sad2` 按分数稳定映射
+            currentDefaultEmotion = (v % 2 == 0) ? .sad2 : .sad1
         } else if v <= 39 {
             currentDefaultEmotion = randomIdleEmotion()
         } else if v <= 85 {

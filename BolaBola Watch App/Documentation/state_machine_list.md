@@ -10,8 +10,8 @@
 
 陪伴值到**默认动画**的映射（与 `ContentView.swift` 中 `selectDefaultEmotion()` 一致；`companionValue` 取四舍五入整数 `v`）：
 - `0...2`：`die`
-- `3...9`：`sad1` / `sad2`（`v % 2` 二选一，稳定）
-- `10...29`：`unhappy` 与 `hurt` 按分数稳定映射（约 35% 为 `hurt`，见 `unhappyTierHurtStride`；避免墙钟反复重算时随机抖动）
+- `3...9`：`hurt` / `unhappy` / `unhappyTwo` 按 `(v-3) % 3` 轮换
+- `10...29`：`sad1` / `sad2`（`v % 2` 二选一，稳定）
 - `30...39`：`idleOne` / `idleTwo` / `idleThree` 随机
 - `40...85`：`idleOne` / `idleTwo` / `idleThree` / `blowbubble1` / `blowbubble2`（`v % 5` 五选一）
 - `86...100`：`like1` / `like2` / `jump1` **或** `jumpTwo`（`v % 5` 的「跳跃」档内随机二选一）/ `blowbubble1` / `blowbubble2`（`v % 5` 五选一）
@@ -71,8 +71,8 @@
 以 `companionValue`（0~100）为主输入，**默认态**按以下区间映射（与实现一致）：
 
 - `0...2`：`die`（持续循环）
-- `3...9`：`sad1` / `sad2`
-- `10...29`：`unhappy` / `hurt`（按分数稳定映射，约 1/3 档为 `hurt`）
+- `3...9`：`hurt` / `unhappy` / `unhappyTwo`
+- `10...29`：`sad1` / `sad2`
 - `30...39`：`idleOne` / `idleTwo` / `idleThree` 随机
 - `40...85`：`idleOne` / `idleTwo` / `idleThree` / `blowbubble1` / `blowbubble2`
 - `86...100`：`like1` / `like2` / `jump1` 或 `jumpTwo` / `blowbubble1` / `blowbubble2`
