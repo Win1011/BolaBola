@@ -16,16 +16,18 @@ public struct PetFramePlayer: View {
     public var maxFrames: Int = 90
     public var fps: Double = 24
     public var isLoop: Bool = true
+    public var displayScale: CGFloat = 1.5
 
     @State private var frameIndex: Int = 0
     @State private var lastUpdate: Date = Date()
     @State private var timerCancellable: AnyCancellable?
 
-    public init(prefix: String, maxFrames: Int = 90, fps: Double = 24, isLoop: Bool = true) {
+    public init(prefix: String, maxFrames: Int = 90, fps: Double = 24, isLoop: Bool = true, displayScale: CGFloat = 1.5) {
         self.prefix = prefix
         self.maxFrames = maxFrames
         self.fps = fps
         self.isLoop = isLoop
+        self.displayScale = displayScale
     }
 
     public var body: some View {
@@ -33,6 +35,7 @@ public struct PetFramePlayer: View {
         Image(frameName)
             .resizable()
             .scaledToFit()
+            .scaleEffect(displayScale)
             // 强制每帧重建 Image，避免纹理缓存残留
             .id(frameName)
             // 禁用隐式动画，避免帧间过渡产生额外纹理

@@ -292,6 +292,7 @@ struct IOSMainHomeView: View {
                     petAnimationMaxFrames: currentPetAnimationMaxFrames,
                     petAnimationFPS: currentPetAnimationFPS,
                     petAnimationIsLoop: currentPetAnimationIsLoop,
+                    petAnimationDisplayScale: currentPetAnimationDisplayScale,
                     maxHeight: 292,
                     horizontalNudgePoints: 1.5,
                     screenContentNudgeX: -6,
@@ -344,6 +345,10 @@ struct IOSMainHomeView: View {
 
     private var currentPetAnimationIsLoop: Bool {
         petHandler.interactionController.activeInteraction?.isLoop ?? true
+    }
+
+    private var currentPetAnimationDisplayScale: CGFloat {
+        PetAnimationConfig.params(forPrefix: currentPetAnimationPrefix).displayScale
     }
 
     private var watchHintText: String? {

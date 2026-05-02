@@ -48,6 +48,7 @@ struct WatchS10MockupView: View {
     var petAnimationMaxFrames: Int = 90
     var petAnimationFPS: Double = 24
     var petAnimationIsLoop: Bool = true
+    var petAnimationDisplayScale: CGFloat = 1.5
 
     var maxHeight: CGFloat = 310
     /// 表冠在右侧时视觉会偏一侧；正值向右、负值向左（与导航标题对齐时可微调）。
@@ -150,7 +151,8 @@ struct WatchS10MockupView: View {
                 prefix: petAnimationPrefix,
                 maxFrames: petAnimationMaxFrames,
                 fps: petAnimationFPS,
-                isLoop: petAnimationIsLoop
+                isLoop: petAnimationIsLoop,
+                displayScale: petAnimationDisplayScale * 0.7
             )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
