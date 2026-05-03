@@ -82,6 +82,23 @@ final class MealEngine {
         BolaDebugLog.shared.log(.meal, "records generated for \(ds): \(todayRecords.count)")
     }
 
+    /// 首次 onboarding 完成时建立「今天从此刻开始」的餐食基线：
+    /// onboarding 之前已经错过的默认饭点不应该立刻把新用户推入 hungry。
+    func finalizePastPendingMealsForOnboardingBaseline(now: Date = Date()) {
+        generateTodayRecordsIfNeeded(now: now)
+
+        var didChange = false
+        for i in todayRecords.indices where todayRecords[i].status == .pending && todayRecords[i].scheduledDate <= now {
+            todayRecords[i].status = .autoFed
+            didChange = true
+            BolaDebugLog.shared.log(.meal, "onboarding baseline: \(todayRecords[i].recordId) → autoFed")
+        }
+
+        if didChange {
+            persistRecords()
+        }
+    }
+
     private func persistRecords() {
         MealRecordStore.save(dateStr: todayDateStr, records: todayRecords, to: defaults)
     }

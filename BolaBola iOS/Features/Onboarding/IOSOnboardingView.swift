@@ -259,6 +259,9 @@ struct IOSOnboardingView: View {
         dismissKeyboard()
         persistDraft()
         CompanionDisplayNameStore.save(bolaNickname)
+        if !BolaOnboardingState.hasRegisteredBefore {
+            MealEngine.shared.finalizePastPendingMealsForOnboardingBaseline(now: Date())
+        }
         BolaOnboardingState.markCompleted()
         onDone()
     }
