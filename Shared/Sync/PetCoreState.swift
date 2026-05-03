@@ -20,6 +20,34 @@ public enum PetCoreState: String, Codable, Sendable {
 
 public extension PetCoreState {
 
+    /// 夜间睡眠核心态只在本地 23:30–次日 08:30 有效；超过窗口的跨设备旧包应回落到 idle。
+    var isNightSleepState: Bool {
+        switch self {
+        case .sleepWait, .sleeping:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// 与手表端清晨自动醒来规则对齐：本地时间 [23:30, 08:30) 才允许保持 sleepWait / sleeping。
+    static func isNightSleepActiveTime(_ date: Date = Date(), calendar: Calendar = .current) -> Bool {
+        let h = calendar.component(.hour, from: date)
+        let m = calendar.component(.minute, from: date)
+        if h == 23 && m >= 30 { return true }
+        if h < 8 { return true }
+        if h == 8 && m < 30 { return true }
+        return false
+    }
+
+    /// 将超出睡眠窗口的旧 sleepWait / sleeping 状态视为过期，避免 Watch 离线时 iPhone 长时间停在睡眠态。
+    func normalizedForLocalClock(_ date: Date = Date(), calendar: Calendar = .current) -> PetCoreState {
+        guard isNightSleepState, !Self.isNightSleepActiveTime(date, calendar: calendar) else {
+            return self
+        }
+        return .idle
+    }
+
     /// 返回 iPhone 端 `PetFramePlayer` 应播放的动画帧前缀。
     func animationPrefix(companionValue: Double) -> String {
         switch self {

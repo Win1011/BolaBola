@@ -148,6 +148,7 @@ struct IOSMainHomeView: View {
             }
             healthPreview.refresh()
             weather.requestAndFetch()
+            coordinator.expireNightSleepStateIfNeeded()
             petHandler.mirrorCoreStateToController(coordinator.currentPetCoreState)
             petHandler.configureInteractionControllerSync()
             mealCoordinator.start()
@@ -165,6 +166,7 @@ struct IOSMainHomeView: View {
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             refreshWatchInstallHint()
+            coordinator.expireNightSleepStateIfNeeded()
             mealCoordinator.handleScenePhaseActive()
         }
         .onChange(of: refreshSignal) { _, _ in
@@ -172,6 +174,7 @@ struct IOSMainHomeView: View {
         }
         .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { date in
             now = date
+            coordinator.expireNightSleepStateIfNeeded()
         }
         .onChange(of: isSleepTime) { _, isNow in
             if !isNow { sleepLampDismissed = false }

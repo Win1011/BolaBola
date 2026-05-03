@@ -201,11 +201,13 @@ struct IOSRootView: View {
             BolaRootTabBarTitleStyle.applyLabelColorToTabTitles()
             consumeDigestNotificationIfNeeded()
             refreshCompanionFromPersistedDefaults()
+            BolaWCSessionCoordinator.shared.expireNightSleepStateIfNeeded()
             BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 BolaWCSessionCoordinator.shared.reapplyLatestReceivedContext()
+                BolaWCSessionCoordinator.shared.expireNightSleepStateIfNeeded()
                 BolaWCSessionCoordinator.shared.pushStoredLLMConfigurationToWatchIfConfigured()
                 refreshCompanionFromPersistedDefaults()
                 BolaWCSessionCoordinator.shared.pushLocalCompanionTowardWatchFromDefaults()
@@ -252,6 +254,7 @@ struct IOSRootView: View {
                 }
             }
             BolaWCSessionCoordinator.shared.activate()
+            BolaWCSessionCoordinator.shared.expireNightSleepStateIfNeeded()
             await BolaReminderUNScheduler.sync(reminders: reminders)
             let digest = DailyDigestStore.load()
             await DailyDigestUNScheduler.sync(config: digest)

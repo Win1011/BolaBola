@@ -246,10 +246,15 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     /// 将当前陪伴值写入本机 defaults 并尽力推到另一端（session 未激活时会排队，激活后发出）。
     public func pushCompanionValue(_ value: Double, forcedForWatch: Bool = false) {
         let ts = Date().timeIntervalSince1970
+        let outgoingState = currentPetCoreState.normalizedForLocalClock()
+        if outgoingState != currentPetCoreState {
+            BolaDebugLog.shared.log(.petState, "过期 sleep coreState → idle (outgoing)")
+            currentPetCoreState = outgoingState
+        }
         var payload: [String: Any] = [
             WCSyncPayload.companionValue: value,
             WCSyncPayload.companionValueUpdatedAt: ts,
-            WCSyncPayload.petCoreState: currentPetCoreState.rawValue
+            WCSyncPayload.petCoreState: outgoingState.rawValue
         ]
         if let data = try? JSONEncoder().encode(SpecialAnimationUnlockStore.loadUnlockedOrderedIds()) {
             payload[WCSyncPayload.specialAnimationUnlockedIdsB64] = data.base64EncodedString()
@@ -329,6 +334,14 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         } else {
             DispatchQueue.main.async(execute: run)
         }
+    }
+
+    /// 本机时钟已超过睡眠窗口时，清理停留在 sleepWait / sleeping 的本地镜像状态。
+    public func expireNightSleepStateIfNeeded() {
+        let normalized = currentPetCoreState.normalizedForLocalClock()
+        guard normalized != currentPetCoreState else { return }
+        BolaDebugLog.shared.log(.petState, "本机时钟唤醒 coreState → \(normalized.rawValue)")
+        pushPetCoreState(normalized)
     }
 
     #if os(iOS)
@@ -771,9 +784,8 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             currentPetEmotionLabel = label
         }
         if let raw = dict[WCSyncPayload.petCoreState] as? String,
-           let state = PetCoreState(rawValue: raw), currentPetCoreState != state {
-            BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue)")
-            currentPetCoreState = state
+           let state = PetCoreState(rawValue: raw) {
+            applyIncomingPetCoreState(state, source: "emotionLabel")
         }
         return true
     }
@@ -855,6 +867,22 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     }
     #endif
 
+    /// 应用对端核心状态；sleepWait / sleeping 若已超出本地睡眠窗口，视为旧离线包并回落到 idle。
+    private func applyIncomingPetCoreState(_ state: PetCoreState, source: String) {
+        let normalized = state.normalizedForLocalClock()
+        if normalized != state {
+            BolaDebugLog.shared.log(.petState, "丢弃过期 \(state.rawValue) coreState → idle (\(source))")
+        }
+        let didChange = currentPetCoreState != normalized
+        if didChange {
+            BolaDebugLog.shared.log(.petState, "coreState → \(normalized.rawValue)")
+        }
+        currentPetCoreState = normalized
+        if didChange {
+            onRemoteCoreStateChange?(normalized)
+        }
+    }
+
     /// 陪伴值写入受时间戳保护（last-write-wins），petCoreState / petEmotionLabel
     /// 与陪伴值时间戳无关，始终先于时间戳守卫应用，确保核心状态即时同步。
     private func ingest(_ dict: [String: Any]) {
@@ -872,14 +900,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         // 它们由对端直接驱动，应始终应用以保证即时同步。
         if let raw = dict[WCSyncPayload.petCoreState] as? String,
            let state = PetCoreState(rawValue: raw) {
-            let didChange = currentPetCoreState != state
-            if didChange {
-                BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue)")
-            }
-            currentPetCoreState = state
-            if didChange {
-                onRemoteCoreStateChange?(state)
-            }
+            applyIncomingPetCoreState(state, source: "ingest")
         }
         #if os(iOS)
         if let label = dict[WCSyncPayload.petEmotionLabel] as? String, !label.isEmpty {
@@ -1102,10 +1123,8 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             BolaDebugLog.shared.log(.recv, "userInfo keys=[\(keys)]")
             // petCoreState 不依赖陪伴值时间戳，在任何专用 ingestor 判断前先应用。
             if let raw = userInfo[WCSyncPayload.petCoreState] as? String,
-               let state = PetCoreState(rawValue: raw), self.currentPetCoreState != state {
-                BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue) (userInfo early)")
-                self.currentPetCoreState = state
-                self.onRemoteCoreStateChange?(state)
+               let state = PetCoreState(rawValue: raw) {
+                self.applyIncomingPetCoreState(state, source: "userInfo early")
             }
             #if os(iOS)
             if (userInfo[WCSyncPayload.requestSync] as? String) == WCSyncPayload.requestSyncValueLLMKeychain {
@@ -1149,10 +1168,8 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             BolaDebugLog.shared.log(.recv, "message keys=[\(keys)]")
             // petCoreState 不依赖陪伴值时间戳，优先应用。
             if let raw = message[WCSyncPayload.petCoreState] as? String,
-               let state = PetCoreState(rawValue: raw), self.currentPetCoreState != state {
-                BolaDebugLog.shared.log(.petState, "coreState → \(state.rawValue) (message early)")
-                self.currentPetCoreState = state
-                self.onRemoteCoreStateChange?(state)
+               let state = PetCoreState(rawValue: raw) {
+                self.applyIncomingPetCoreState(state, source: "message early")
             }
             #if os(watchOS)
             if self.ingestSpeechRelayReplyIfPresent(message) {
