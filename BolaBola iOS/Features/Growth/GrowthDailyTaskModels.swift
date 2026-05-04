@@ -615,7 +615,8 @@ enum GrowthDailyTaskModels {
         GrowthDailyTaskCardDefinition(
             id: "chat_daily",
             tag: "聊天",
-            illustrationAssetName: "bola手拿玫瑰",
+            // 先与全任务池统一为白色 SF Symbol；后续若要自定义插图再填 `illustrationAssetName`。
+            illustrationAssetName: nil,
             placeholderSystemImage: "bubble.left.and.bubble.right.fill",
             detailLine1: "和我聊聊",
             detailLine2: "今日发生什么了",
@@ -632,12 +633,12 @@ enum GrowthDailyTaskModels {
         ),
         GrowthDailyTaskCardDefinition(
             id: "praise_bola",
-            tag: "互动",
+            tag: "聊天",
             illustrationAssetName: nil,
             placeholderSystemImage: "heart.text.square.fill",
             detailLine1: "给我一句夸夸",
             detailLine2: "说给我听听吧",
-            surfaceKind: .interaction
+            surfaceKind: .chat
         ),
         GrowthDailyTaskCardDefinition(
             id: "drink_water_once",

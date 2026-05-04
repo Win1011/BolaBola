@@ -100,7 +100,7 @@ enum HelpCenterContent {
                 .boldLeadBody("每日任务：", "完成当天的活动、睡眠、互动目标，每项可获得 XP 奖励。"),
                 .boldLeadBody("特殊里程碑：", "首次对话、陪伴值达到满分、坚持使用一个月……这些特殊成就会给予额外 XP。"),
                 .h2("升级有什么奖励？"),
-                .body("升级会解锁新的 Bola 称号词条、成就图鉴，以及未来将上线的更多内容。到达 Lv.5 后，你还可以解锁 Bola 的「傲娇」人格模式。"),
+                .body("升级会解锁新的 Bola 称号词条、成就图鉴，以及未来将上线的更多内容。到达 Lv.5 后，你还可以解锁 Bola 的「傲娇」性格模式。"),
             ])),
             HelpItem(title: "手表互动方式", content: HelpArticle(blocks: [
                 .h1("手表互动方式"),

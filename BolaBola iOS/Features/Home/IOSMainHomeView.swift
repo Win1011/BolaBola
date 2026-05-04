@@ -234,7 +234,9 @@ struct IOSMainHomeView: View {
     }
 
     private var petDialogueBubble: some View {
-        let line = shouldShowWaitDialogue ? (coordinator.currentPetCoreState.localDialogue ?? "") : ""
+        let coreLine = shouldShowWaitDialogue ? (coordinator.currentPetCoreState.localDialogue ?? "") : ""
+        let overrideLine = petHandler.watchPreviewBubbleText ?? ""
+        let line = overrideLine.isEmpty ? coreLine : overrideLine
         return Group {
             if !line.isEmpty {
                 Text(line)
@@ -255,6 +257,7 @@ struct IOSMainHomeView: View {
         }
         .animation(.easeInOut(duration: 0.18), value: coordinator.currentPetCoreState)
         .animation(.easeInOut(duration: 0.18), value: shouldShowWaitDialogue)
+        .animation(.easeInOut(duration: 0.18), value: petHandler.watchPreviewBubbleText)
     }
 
     /// 只有控制器处于「等待互动」循环或无交互时，`PetCoreState.localDialogue` 才可信；

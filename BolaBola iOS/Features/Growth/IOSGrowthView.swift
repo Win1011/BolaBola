@@ -531,10 +531,9 @@ private enum GrowthTaskCardPalette {
     )
 
     static func symbolForeground(for kind: GrowthDailyTaskCardSurfaceKind) -> Color {
+        // 每日任务上半区图标统一白色，与黄/粉蓝等底上的其它分类一致。
         switch kind {
-        case .movement:
-            return Color.black.opacity(0.32)
-        case .chat, .interaction, .life:
+        case .movement, .chat, .interaction, .life:
             return Color.white.opacity(0.9)
         }
     }
@@ -873,6 +872,7 @@ private struct GrowthPortraitTaskCard: View {
                 } else {
                     Image(systemName: card.definition.placeholderSystemImage)
                         .font(.system(size: 40, weight: .medium))
+                        .symbolRenderingMode(.monochrome)
                         .foregroundStyle(placeholderSymbolForeground)
                 }
             }

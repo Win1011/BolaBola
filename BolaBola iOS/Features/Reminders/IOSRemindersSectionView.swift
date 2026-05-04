@@ -168,7 +168,7 @@ struct IOSRemindersSectionView: View {
                     if scopedReminders.isEmpty && (!showsMealRows || mealSlots.isEmpty) {
                         Text(
                             presentationScope == .personalRemindersOnly
-                            ? "还没有要记的事哦～请点「添加」新建"
+                            ? "还没有要记的事哦～\n请点「添加」新建"
                             : "还没有提醒。点「添加」自定义时间。"
                         )
                             .font(.caption)

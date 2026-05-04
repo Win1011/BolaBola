@@ -418,24 +418,24 @@ struct IOSBolaProfileSettingsPage: View {
 
             Section {
                 HStack {
-                    Text("当前人格")
+                    Text("当前性格")
                     Spacer()
                     Text(personalityStatusText)
                         .foregroundStyle(.secondary)
                 }
                 if isTsundereUnlocked {
-                    Picker("人格", selection: $selectedPersonality) {
+                    Picker("性格", selection: $selectedPersonality) {
                         Text(BolaPersonalitySelection.default.displayName).tag(BolaPersonalitySelection.default as BolaPersonalitySelection)
                         Text(BolaPersonalitySelection.tsundere.displayName).tag(BolaPersonalitySelection.tsundere as BolaPersonalitySelection)
                     }
                     .pickerStyle(.segmented)
                 }
             } header: {
-                Text("人格")
+                Text("性格")
             } footer: {
                 Text(isTsundereUnlocked
-                     ? "已解锁傲娇人格。切到傲娇后会同步影响 iPhone 与手表对话。"
-                     : "Lv.5 解锁傲娇人格。升级后可在此切换。")
+                     ? "已解锁傲娇性格。切到傲娇后会同步影响 iPhone 与手表对话。"
+                     : "Lv.5 解锁傲娇性格。升级后可在此切换。")
             }
         }
         .navigationTitle("Bola 设置")

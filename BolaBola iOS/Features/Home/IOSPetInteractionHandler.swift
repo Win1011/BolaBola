@@ -4,11 +4,14 @@ import SwiftUI
 
 final class IOSPetInteractionHandler: ObservableObject {
     @Published var actionToastText: String?
+    /// 主界面手表预览上的对话气泡临时文案（与 `PetCoreState.localDialogue` 叠加显示，优先本字段）。
+    @Published var watchPreviewBubbleText: String?
     let interactionController = PetAnimationController()
 
     private let coordinator = BolaWCSessionCoordinator.shared
     private let mealCoordinator = IOSMealCoordinator.shared
     private var cancellables = Set<AnyCancellable>()
+    private var watchPreviewBubbleClearWorkItem: DispatchWorkItem?
 
     init() {
         interactionController.objectWillChange
@@ -25,11 +28,14 @@ final class IOSPetInteractionHandler: ObservableObject {
     }
 
     func handleFeedButton() {
-        if isWithinOneHourOfMeal() {
+        // 与 `MealEngine.hasFeedableMeal` / 主界面 `isFeedWindowActive` 一致（餐前早喂窗口见 `MealEngine.earlyWindowSeconds`）。
+        let now = Date()
+        MealEngine.shared.refreshMealState(now: now)
+        if MealEngine.shared.hasFeedableMeal(now: now) {
             interactionController.enterHungry()
             coordinator.pushPetCoreState(.hungry)
         } else {
-            showActionToast("暂无可喂餐食")
+            showWatchPreviewBubble("还没到吃饭时间哦")
         }
     }
 
@@ -114,24 +120,6 @@ final class IOSPetInteractionHandler: ObservableObject {
         }
     }
 
-    private func isWithinOneHourOfMeal() -> Bool {
-        let engine = MealEngine.shared
-        let now = Date()
-        engine.generateTodayRecordsIfNeeded(now: now)
-        let oneHourFromNow = now.addingTimeInterval(3600)
-
-        return engine.todayRecords.contains { record in
-            switch record.status {
-            case .pending:
-                return record.scheduledDate > now && record.scheduledDate <= oneHourFromNow
-            case .hungryActive:
-                return true
-            default:
-                return false
-            }
-        }
-    }
-
     // 与手表端 23:30–08:30 睡眠窗口对齐
     private func isPastBedtime() -> Bool {
         let cal = Calendar.current
@@ -152,6 +140,22 @@ final class IOSPetInteractionHandler: ObservableObject {
                 self.actionToastText = nil
             }
         }
+    }
+
+    /// 手表预览对话气泡：短时提示，避免与底部 `actionToastText` 叠两层同类文案。
+    private func showWatchPreviewBubble(_ text: String, duration: TimeInterval = 2.6) {
+        watchPreviewBubbleClearWorkItem?.cancel()
+        withAnimation(.easeInOut(duration: 0.2)) {
+            watchPreviewBubbleText = text
+        }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                self.watchPreviewBubbleText = nil
+            }
+        }
+        watchPreviewBubbleClearWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: work)
     }
 
     private func isInWaitingLoop(_ emotion: PetInteractionEmotion?) -> Bool {

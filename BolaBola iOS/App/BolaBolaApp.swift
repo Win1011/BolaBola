@@ -11,7 +11,7 @@ struct BolaBolaApp: App {
 
     var body: some Scene {
         WindowGroup {
-            IOSRootView()
+            IOSSplashLaunchRoot()
         }
     }
 }

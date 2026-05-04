@@ -39,7 +39,7 @@ public enum WCSyncPayload {
     public static let watchFaceSlotsB64 = "watchFaceSlotsB64"
     /// iPhone → Watch：`BolaTitleSelection` JSON 的 Base64。
     public static let titleSelectionB64 = "titleSelectionB64"
-    /// iPhone → Watch：当前人格选择（`default` / `tsundere`）。
+    /// iPhone → Watch：当前性格选择（`default` / `tsundere`）。
     public static let personalitySelectionRaw = "personalitySelectionRaw"
 
     /// 成长系统同步（`applicationContext`）：`BolaGrowthState` JSON 的 Base64。

@@ -19,7 +19,8 @@ final class MealEngine {
     private(set) var todayRecords: [MealRecord] = []
     private var todayDateStr: String = ""
 
-    private let earlyWindowSeconds: TimeInterval = 2 * 3600
+    /// 开餐前「早喂」亮灯/可喂窗口：从设定时刻往前数这段时长起算（与 `findValidMealTarget` pending 分支一致）。
+    private let earlyWindowSeconds: TimeInterval = 1 * 3600
     private let autoFeedAfterSeconds: TimeInterval = 3600
 
     private let defaults = BolaSharedDefaults.resolved()

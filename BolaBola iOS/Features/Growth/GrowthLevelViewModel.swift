@@ -149,7 +149,7 @@ struct LevelUpPresentation: Identifiable, Equatable {
         case ..<3:
             return "继续升到 Lv.3，就能开启称号系统。"
         case ..<5:
-            return "继续升到 Lv.5，就能解锁新人格。"
+            return "继续升到 Lv.5，就能解锁新性格。"
         case ..<10:
             return "继续升到 Lv.10，会开启隐藏对话池。"
         case ..<15:

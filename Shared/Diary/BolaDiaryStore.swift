@@ -41,6 +41,15 @@ public enum BolaDiaryStore {
         save(entries, to: defaults)
     }
 
+    /// 用户左滑删除单条日记后持久化并触发 `bolaDiaryEntriesDidChange`。
+    public static func removeEntry(id: UUID, from defaults: UserDefaults = BolaSharedDefaults.resolved()) {
+        var entries = load(from: defaults)
+        let before = entries.count
+        entries.removeAll { $0.id == id }
+        guard entries.count != before else { return }
+        save(entries, to: defaults)
+    }
+
     private static func containsLikelyDuplicate(_ entry: BolaDiaryEntry, in entries: [BolaDiaryEntry]) -> Bool {
         let normalized = normalize(entry.summary)
         guard !normalized.isEmpty else { return false }

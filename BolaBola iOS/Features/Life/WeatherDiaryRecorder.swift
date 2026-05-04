@@ -22,11 +22,12 @@ enum WeatherDiaryRecorder {
         let temperature = roundedTemperature(weather.temperatureC)
 
         if !hasDailyWeatherEntry(on: date, entries: entries) {
+            let userLabel = BolaTimelineRecorder.resolvedUserDisplayName()
             BolaDiaryStore.append(
                 BolaDiaryEntry(
                     createdAt: date,
-                    title: "今天天气",
-                    summary: "主人今天这边是\(weather.conditionText)，大概\(temperature)度。",
+                    title: dailyWeatherLifeTitle,
+                    summary: "\(userLabel)今天这边是\(weather.conditionText)，大概\(temperature)度。",
                     emoji: weather.emoji,
                     sourceText: "\(dailyPrefix)\(dayKey):\(weather.conditionText):\(temperature)"
                 ),
@@ -35,11 +36,12 @@ enum WeatherDiaryRecorder {
         }
 
         guard shouldRecordChange(for: weather, at: date, entries: entries) else { return }
+        let petName = CompanionDisplayNameStore.resolved(using: defaults)
         BolaDiaryStore.append(
             BolaDiaryEntry(
                 createdAt: date,
-                title: "天气变化",
-                summary: "Bola发现今天的天气变成了\(weather.conditionText)，现在大概\(temperature)度。",
+                title: changedWeatherLifeTitle,
+                summary: "\(petName)发现今天的天气变成了\(weather.conditionText)，现在大概\(temperature)度。",
                 emoji: weather.emoji,
                 sourceText: "\(changePrefix)\(dayKey):\(weather.conditionText):\(temperature)"
             ),

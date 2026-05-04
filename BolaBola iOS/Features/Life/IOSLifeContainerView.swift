@@ -145,6 +145,8 @@ struct IOSLifeContainerView: View {
     @State private var dashboardJigglePhase = false
     @State private var hasPerformedInitialLoad = false
     @State private var showAddDashboardCardSheet = false
+    /// 递增以使「今天天气」等文案在改名后立即刷新。
+    @State private var lifeDisplayNameRefreshToken = 0
 
     /// 半圆节奏进度（0...1）：优先用当前小时 HRV，若当前小时无样本则回退今日均值。
     private var rhythmArcProgress: Double {
@@ -196,6 +198,9 @@ struct IOSLifeContainerView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .bolaLifeRecordsDidReset)) { _ in
             lifeRecords = LifeRecordListStore.load()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaCompanionDisplayNameDidChange)) { _ in
+            lifeDisplayNameRefreshToken += 1
         }
         .onChange(of: isEditingDashboard) { _, isEditing in
             if isEditing {
@@ -1141,12 +1146,15 @@ struct IOSLifeContainerView: View {
     }
 
     private func realtimeWeatherLifeRecordCard() -> LifeRecordCard {
+        _ = lifeDisplayNameRefreshToken
+        let pet = CompanionDisplayNameStore.resolved()
+        let user = BolaTimelineRecorder.resolvedUserDisplayName()
         if let snapshot = weather.weather {
             return LifeRecordCard(
                 kind: .weather,
                 title: WeatherDiaryRecorder.dailyWeatherLifeTitle,
                 subtitle: "\(snapshot.conditionText) · \(Int(snapshot.temperatureC.rounded()))°C",
-                detailNote: "主人今天这边现在是\(snapshot.conditionText)，实时温度大概\(Int(snapshot.temperatureC.rounded()))度。",
+                detailNote: "\(user)今天这边现在是\(snapshot.conditionText)，实时温度大概\(Int(snapshot.temperatureC.rounded()))度。",
                 iconEmoji: snapshot.emoji,
                 createdAt: Date()
             )
@@ -1157,7 +1165,7 @@ struct IOSLifeContainerView: View {
                 kind: .weather,
                 title: WeatherDiaryRecorder.dailyWeatherLifeTitle,
                 subtitle: "加载中 · 实时天气",
-                detailNote: "Bola 正在帮主人更新今天的实时天气。",
+                detailNote: "\(pet)正在更新今天的实时天气。",
                 iconEmoji: "🌤️",
                 createdAt: Date()
             )
@@ -1178,7 +1186,7 @@ struct IOSLifeContainerView: View {
             kind: .weather,
             title: WeatherDiaryRecorder.dailyWeatherLifeTitle,
             subtitle: "轻点刷新 · 实时天气",
-            detailNote: "点一下这张卡，Bola 会帮主人刷新今天的实时天气。",
+            detailNote: "点一下这张卡，\(pet)会帮你刷新今天的实时天气。",
             iconEmoji: "🌤️",
             createdAt: Date()
         )

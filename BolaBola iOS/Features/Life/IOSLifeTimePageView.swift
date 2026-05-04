@@ -1,6 +1,6 @@
 //
 //  IOSLifeTimePageView.swift
-//  时光：Bola 口吻的本地日记时间线。
+//  时光：以宠物昵称为品牌的本地日记时间线。
 //
 
 import SwiftUI
@@ -14,6 +14,17 @@ struct IOSLifeTimePageView: View {
     /// 嵌入生活 Tab 时底层由 `lifePageBackground` 提供，此处勿再铺不透明灰底。
     var useLifePageBackdrop: Bool = false
 
+    /// 行内右缘：只留最小空隙给圆角阴影，主卡尽量贴右。
+    private static let diaryListTrailingShadowGutter: CGFloat = 4
+    /// `List` 滚动区右侧：再收一层，否则主卡右侧体感「长不出来」。
+    private static let diaryListScrollContentTrailingMargin: CGFloat = 4
+    /// 左侧时间列宽度（须容 `HH:mm` caption）。
+    private static let diaryRowTimeColumnWidth: CGFloat = 42
+    /// 时间与主卡间距。
+    private static let diaryRowTimeToCardSpacing: CGFloat = 6
+    /// 日期标题行（如「5月4日 星期一」）与下方日记卡片之间的留白。
+    private static let diarySectionTitleBottomInset: CGFloat = 12
+
     @State private var diaryEntries: [BolaDiaryEntry] = BolaDiaryStore.load()
     @State private var showDiaryCalendar = false
     @State private var selectedDiaryDate = Date()
@@ -25,7 +36,10 @@ struct IOSLifeTimePageView: View {
         return CompanionDisplayNameStore.resolved()
     }
 
-    private var groupedRecords: [(title: String, records: [BolaDiaryEntry])] {
+    /// 顶部标题与日历提示中的「某某日记」——与 `CompanionDisplayNameStore` 一致。
+    private var diaryScreenTitle: String { "\(companionDisplayName)日记" }
+
+    private var groupedRecords: [(id: Date, title: String, records: [BolaDiaryEntry])] {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "M月d日 EEEE"
@@ -44,41 +58,104 @@ struct IOSLifeTimePageView: View {
         return grouped.keys
             .sorted(by: <)
             .map { day in
-                (formatter.string(from: day), grouped[day]?.sorted { $0.createdAt < $1.createdAt } ?? [])
+                (
+                    id: day,
+                    title: formatter.string(from: day),
+                    records: grouped[day]?.sorted { $0.createdAt < $1.createdAt } ?? []
+                )
             }
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("波拉日记")
-                    .font(.headline)
-                Spacer()
-                if !isShowingToday {
-                    Button("回到今天") {
-                        activeDayFilter = Calendar.current.startOfDay(for: Date())
-                    }
-                    .font(.caption.weight(.semibold))
-                    .buttonStyle(.bordered)
-                    .tint(.secondary)
+    private var diaryHeader: some View {
+        HStack {
+            Text(diaryScreenTitle)
+                .font(.headline)
+            Spacer()
+            if !isShowingToday {
+                Button("回到今天") {
+                    activeDayFilter = Calendar.current.startOfDay(for: Date())
                 }
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.bordered)
+                .tint(.secondary)
             }
+        }
+    }
 
+    var body: some View {
+        Group {
             if groupedRecords.isEmpty {
-                emptyState
+                VStack(alignment: .leading, spacing: 16) {
+                    diaryHeader
+                    emptyState
+                }
             } else {
-                VStack(alignment: .leading, spacing: 18) {
-                    ForEach(groupedRecords, id: \.title) { section in
-                        VStack(alignment: .leading, spacing: 12) {
+                List {
+                    Section {
+                        diaryHeader
+                            .listRowInsets(
+                                EdgeInsets(
+                                    top: 0,
+                                    leading: 0,
+                                    bottom: 0,
+                                    trailing: Self.diaryListTrailingShadowGutter
+                                )
+                            )
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                    }
+                    ForEach(Array(groupedRecords.enumerated()), id: \.element.id) { pair in
+                        let sectionIndex = pair.offset
+                        let section = pair.element
+                        Section {
+                            // 不用 `Section(header:)`，避免系统分组标题与正文水平 inset 不一致。
                             Text(section.title)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .listRowInsets(
+                                    EdgeInsets(
+                                        top: sectionIndex == 0 ? 0 : 12,
+                                        leading: 0,
+                                        bottom: Self.diarySectionTitleBottomInset,
+                                        trailing: Self.diaryListTrailingShadowGutter
+                                    )
+                                )
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
                             ForEach(section.records) { record in
                                 row(record)
+                                    .listRowInsets(
+                                        EdgeInsets(
+                                            top: 6,
+                                            leading: 0,
+                                            bottom: 6,
+                                            trailing: Self.diaryListTrailingShadowGutter
+                                        )
+                                    )
+                                    .listRowSeparator(.hidden)
+                                    .listRowBackground(Color.clear)
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        Button(role: .destructive) {
+                                            BolaDiaryStore.removeEntry(id: record.id)
+                                            reload()
+                                        } label: {
+                                            Label("删除", systemImage: "trash")
+                                        }
+                                    }
                             }
                         }
                     }
                 }
+                .listStyle(.plain)
+                .listSectionSpacing(16)
+                .listSectionSeparator(.hidden, edges: .all)
+                .scrollContentBackground(.hidden)
+                .scrollIndicators(.hidden)
+                // 仅设 trailing 时，系统可能仍保留默认 leading content margin，主卡横向「吃不满」。
+                .contentMargins(.leading, 0, for: .scrollContent)
+                .contentMargins(.trailing, Self.diaryListScrollContentTrailingMargin, for: .scrollContent)
+                .environment(\.defaultMinListRowHeight, 10)
             }
         }
         .padding(.top, 4)
@@ -106,6 +183,7 @@ struct IOSLifeTimePageView: View {
             DiaryCalendarSheet(
                 selectedDate: $selectedDiaryDate,
                 entries: diaryEntries,
+                diaryOwnerName: companionDisplayName,
                 onComplete: { date in
                     activeDayFilter = date
                     showDiaryCalendar = false
@@ -118,7 +196,7 @@ struct IOSLifeTimePageView: View {
         VStack(spacing: 10) {
             Text("还没有时光记录")
                 .font(.subheadline.weight(.semibold))
-            Text(isShowingToday ? "今天的时光记录还没有出现，和 \(companionDisplayName) 聊聊今天发生了什么，它会把适合留下来的片段自动整理成日记。" : "这一天还没有波拉日记，其他过去的记录也可以直接在日历里看。")
+            Text(isShowingToday ? "今天的时光记录还没有出现，和 \(companionDisplayName) 聊聊今天发生了什么，它会把适合留下来的片段自动整理成日记。" : "这一天还没有\(diaryScreenTitle)，其他过去的记录也可以直接在日历里看。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -128,7 +206,7 @@ struct IOSLifeTimePageView: View {
     }
 
     private func row(_ entry: BolaDiaryEntry) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Self.diaryRowTimeToCardSpacing) {
             VStack(spacing: 4) {
                 Text(Self.timeFormatter.string(from: entry.createdAt))
                     .font(.caption.weight(.bold))
@@ -137,7 +215,7 @@ struct IOSLifeTimePageView: View {
                     .fill(Color(uiColor: .separator).opacity(0.55))
                     .frame(width: 3, height: 36)
             }
-            .frame(width: 52)
+            .frame(width: Self.diaryRowTimeColumnWidth)
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
@@ -162,6 +240,7 @@ struct IOSLifeTimePageView: View {
                     )
             )
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func reload() {
@@ -189,6 +268,7 @@ private struct DiaryCalendarSheet: View {
     @Binding var selectedDate: Date
 
     let entries: [BolaDiaryEntry]
+    let diaryOwnerName: String
     let onComplete: (Date) -> Void
 
     @State private var visibleMonth = Calendar.current.startOfDay(for: Date())
@@ -303,7 +383,7 @@ private struct DiaryCalendarSheet: View {
 
     private var selectedDateHint: String {
         hasDiary(on: selectedDate)
-            ? "这一天有波拉日记，点完成查看。"
+            ? "这一天有\(diaryOwnerName)日记，点完成查看。"
             : ""
     }
 

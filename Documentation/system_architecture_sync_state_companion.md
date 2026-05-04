@@ -50,7 +50,7 @@
 | 角色 | 权威数据源 | 说明 |
 |------|-----------|------|
 | Watch（手表） | 陪伴值最终权威 | `PetViewModel` 是陪伴值计算的唯一权威；墙钟加分、扣分、点击 +1 均在 Watch 端发生 |
-| iPhone（手机） | 配置 / 设置权威 | LLM 密钥、提醒列表、餐食配置、表盘布局、称号、人格选择等由 iPhone 管理，单向推到 Watch |
+| iPhone（手机） | 配置 / 设置权威 | LLM 密钥、提醒列表、餐食配置、表盘布局、称号、性格选择等由 iPhone 管理，单向推到 Watch |
 | 双向对称 | 聊天记录 | `[ChatTurn]` 双向增量合并（按 UUID 去重） |
 
 ---
@@ -557,7 +557,7 @@ BolaWCSessionCoordinator 使用三种 WCSession 通道：
 |----|------|------|------|
 | `watchFaceSlotsB64` | String (Base64) | iPhone→Watch | `WatchFaceSlotsConfiguration` JSON |
 | `titleSelectionB64` | String (Base64) | iPhone→Watch | `BolaTitleSelection` JSON |
-| `personalitySelectionRaw` | String | iPhone→Watch | 人格选择（"default" / "tsundere"） |
+| `personalitySelectionRaw` | String | iPhone→Watch | 性格选择（"default" / "tsundere"） |
 | `growthStateB64` | String (Base64) | iPhone→Watch | `BolaGrowthState` JSON |
 | `titleUnlockedIdsB64` | String (Base64) | iPhone→Watch | 已解锁称号 ID 数组 JSON |
 | `specialAnimationUnlockedIdsB64` | String (Base64) | 双向 | 已解锁动画 ID 数组 JSON |

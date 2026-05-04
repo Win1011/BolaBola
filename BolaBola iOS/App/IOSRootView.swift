@@ -363,7 +363,7 @@ struct IOSRootView: View {
                 IOSNavigationGlassIconButton(
                     systemName: "calendar",
                     font: .system(size: 17, weight: .semibold),
-                    accessibilityLabel: "波拉日记日历"
+                    accessibilityLabel: "\(CompanionDisplayNameStore.resolved())日记日历"
                 ) {
                     NotificationCenter.default.post(name: .bolaDiaryOpenCalendarRequested, object: nil)
                 }

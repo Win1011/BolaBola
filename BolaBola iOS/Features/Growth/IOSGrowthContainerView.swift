@@ -25,16 +25,14 @@ struct IOSGrowthContainerView: View {
             BolaGrowthAmbientBackground()
                 .ignoresSafeArea(edges: [.top, .bottom])
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    IOSLifeTimePageView(bubbleMode: false, useLifePageBackdrop: true)
-                }
-                .padding(.horizontal, BolaTheme.paddingHorizontal)
+            // 日记列表自带 `List` 滚动，外层勿再包 `ScrollView`，否则与左滑删除手势冲突。
+            IOSLifeTimePageView(bubbleMode: false, useLifePageBackdrop: true)
+                // 左侧略留呼吸；右侧再收一截，主卡才能明显「往屏右缘」变长（对称 padding 会吃满右侧观感）。
+                .padding(.leading, 16)
+                .padding(.trailing, 8)
                 .padding(.top, 14)
                 .padding(.bottom, 24)
-            }
-            .background(Color.clear)
-            .scrollIndicators(.hidden)
+                .background(Color.clear)
         }
     }
 }
