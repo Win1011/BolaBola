@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Resize PNGs to width 400px (match idleone) and rename frame_* imagesets to prefix0..prefixN.
+Resize PNGs to width 320px (match idleone) and rename frame_* imagesets to prefix0..prefixN.
 Run from repo root: python3 Scripts/process_watch_animations.py
 """
 from __future__ import annotations
@@ -74,7 +74,7 @@ def main() -> None:
             dst_png = new_set / f"{prefix}{i}.png"
 
             subprocess.run(
-                ["sips", "--resampleWidth", "400", str(src_png), "--out", str(dst_png)],
+                ["sips", "--resampleWidth", "320", str(src_png), "--out", str(dst_png)],
                 check=True,
                 capture_output=True,
             )

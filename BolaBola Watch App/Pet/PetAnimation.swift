@@ -126,62 +126,63 @@ struct PetAnimation {
 
 // MARK: - 动画大小配置（每个动作单独 `scaleEffect`，按需改数字即可）
 enum AnimationScale {
-    static let idle: CGFloat = 1.5
-    static let idleOne: CGFloat = 1.9
-    static let idleTwo: CGFloat = 1.5
-    static let idleThree: CGFloat = 1.5
-    static let idleFour: CGFloat = 1.5
-    static let idleFive: CGFloat = 1.5
-    static let idleSix: CGFloat = 1.5
-    static let unhappyTwo: CGFloat = 1.5
-    static let happyIdle: CGFloat = 1.5
-    static let thinkOne: CGFloat = 1.5
-    static let thinkTwo: CGFloat = 1.5
-    static let scale: CGFloat = 1.5
+    // 渲染尺寸 = 帧宽 × scale。帧从 400px → 320px，scale × 1.25 保持渲染尺寸不变；再 × 0.7 缩小 display
+    static let idle: CGFloat = 1.3125
+    static let idleOne: CGFloat = 1.6625
+    static let idleTwo: CGFloat = 1.3125
+    static let idleThree: CGFloat = 1.3125
+    static let idleFour: CGFloat = 1.3125
+    static let idleFive: CGFloat = 1.3125
+    static let idleSix: CGFloat = 1.3125
+    static let unhappyTwo: CGFloat = 1.3125
+    static let happyIdle: CGFloat = 1.3125
+    static let thinkOne: CGFloat = 1.3125
+    static let thinkTwo: CGFloat = 1.3125
+    static let scale: CGFloat = 1.3125
 
-    static let die: CGFloat = 1.5
-    static let happy: CGFloat = 1.5
-    static let angry2: CGFloat = 1.5
-    static let unhappy: CGFloat = 1.5
-    static let letter: CGFloat = 1.5
-    static let letterOnce: CGFloat = 1.5
-    static let hurt: CGFloat = 1.5
+    static let die: CGFloat = 1.3125
+    static let happy: CGFloat = 1.3125
+    static let angry2: CGFloat = 1.3125
+    static let unhappy: CGFloat = 1.3125
+    static let letter: CGFloat = 1.3125
+    static let letterOnce: CGFloat = 1.3125
+    static let hurt: CGFloat = 1.3125
 
-    static let question1: CGFloat = 1.5
-    static let question2: CGFloat = 1.5
-    static let question3: CGFloat = 1.5
+    static let question1: CGFloat = 1.3125
+    static let question2: CGFloat = 1.3125
+    static let question3: CGFloat = 1.3125
 
-    static let speak1: CGFloat = 1.5
-    static let speak2: CGFloat = 1.5
-    static let speak3: CGFloat = 1.5
-    static let speak1Once: CGFloat = 1.5
-    static let speak2Once: CGFloat = 1.5
-    static let speak3Once: CGFloat = 1.5
+    static let speak1: CGFloat = 1.3125
+    static let speak2: CGFloat = 1.3125
+    static let speak3: CGFloat = 1.3125
+    static let speak1Once: CGFloat = 1.3125
+    static let speak2Once: CGFloat = 1.3125
+    static let speak3Once: CGFloat = 1.3125
 
-    static let blowbubble1: CGFloat = 1.5
-    static let blowbubble2: CGFloat = 1.5
-    static let like1: CGFloat = 1.5
-    static let like2: CGFloat = 1.5
-    static let surprisedOne: CGFloat = 1.5
-    static let surprisedTwo: CGFloat = 1.5
-    static let sad1: CGFloat = 1.5
-    static let sad2: CGFloat = 1.5
-    static let jumpTwo: CGFloat = 1.5
-    static let happy1: CGFloat = 1.5
-    static let jump1: CGFloat = 1.5
-    static let shakeOnce: CGFloat = 1.5
-    static let happyIdleOnce: CGFloat = 1.5
-    static let like1Once: CGFloat = 1.5
-    static let eatingWait: CGFloat = 1.5
-    static let eatingOnce: CGFloat = 1.5
-    static let idleDrink1: CGFloat = 1.5
-    static let idleDrink2: CGFloat = 1.5
-    static let drinkOnce: CGFloat = 1.5
-    static let sleepy: CGFloat = 1.5
-    static let sleep: CGFloat = 1.5
-    static let nightSleepWait: CGFloat = 1.5
-    static let fallAsleep: CGFloat = 1.5
-    static let sleepLoop: CGFloat = 1.5
+    static let blowbubble1: CGFloat = 1.3125
+    static let blowbubble2: CGFloat = 1.3125
+    static let like1: CGFloat = 1.3125
+    static let like2: CGFloat = 1.3125
+    static let surprisedOne: CGFloat = 1.3125
+    static let surprisedTwo: CGFloat = 1.3125
+    static let sad1: CGFloat = 1.3125
+    static let sad2: CGFloat = 1.3125
+    static let jumpTwo: CGFloat = 1.3125
+    static let happy1: CGFloat = 1.3125
+    static let jump1: CGFloat = 1.3125
+    static let shakeOnce: CGFloat = 1.3125
+    static let happyIdleOnce: CGFloat = 1.3125
+    static let like1Once: CGFloat = 1.3125
+    static let eatingWait: CGFloat = 1.3125
+    static let eatingOnce: CGFloat = 1.3125
+    static let idleDrink1: CGFloat = 1.3125
+    static let idleDrink2: CGFloat = 1.3125
+    static let drinkOnce: CGFloat = 1.3125
+    static let sleepy: CGFloat = 1.3125
+    static let sleep: CGFloat = 1.3125
+    static let nightSleepWait: CGFloat = 1.3125
+    static let fallAsleep: CGFloat = 1.3125
+    static let sleepLoop: CGFloat = 1.3125
 }
 
 // MARK: - 动画帧限制（用于控制 watchOS 内存）

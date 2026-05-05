@@ -1892,8 +1892,7 @@ struct ContentView: View {
         // 底栏贴底；面板与「提醒」相同，用全屏 Sheet + NavigationStack + 完成。
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
-                // Debug: green background to verify transparent frames. Remove when confirmed.
-                Color.green
+                Color.black
                     .ignoresSafeArea()
 
                 PetAnimationView(viewModel: viewModel)
