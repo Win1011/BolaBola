@@ -102,6 +102,9 @@ final class MealEngine {
 
     private func persistRecords() {
         MealRecordStore.save(dateStr: todayDateStr, records: todayRecords, to: defaults)
+        #if os(watchOS)
+        BolaWCSessionCoordinator.shared.pushMealRecordsToPhoneIfPossible(dateStr: todayDateStr, records: todayRecords)
+        #endif
     }
 
     // MARK: - Catch-up / reconciliation

@@ -85,6 +85,7 @@ BolaSharedDefaults.resolved()
 |---|---|---|---|---|
 | `companionValue` | `bola_companionValue` | Double | 50 | 陪伴值（内部精度，0–100） |
 | `lastCompanionWallClock` | `bola_lastCompanionWallClock` | Double (timestamp) | 启动时 `now` | 上次墙钟结算时刻 |
+| `lastCompanionInteractionWallClock` | `bola_lastCompanionInteractionWallClock` | Double (timestamp) | 启动时 `lastCompanionWallClock` | 上次有效互动时刻 |
 | `lastTickTimestamp` | `bola_lastTickTimestamp` | Double (timestamp) | — | 旧版时间戳键，已迁移到 `lastCompanionWallClock` |
 | `totalActiveSeconds` | `bola_totalActiveSeconds` | Double | 0 | 累计活跃秒数（驱动惊喜里程碑） |
 | `activeCarrySeconds` | `bola_activeCarrySeconds` | Double | 0 | 加分结算后的余数（不满 `secondsPerCompanionBonus` 的部分） |
@@ -129,8 +130,9 @@ BolaSharedDefaults.resolved()
 | `companionValueInternal` | Double | 50 | private | 内部精度（支持 0.1 级别的扣分），所有计算基于此值 |
 | `companionValue` | Double | 50 | @Published | 对外暴露值，始终 = `companionValueInternal.rounded()`，驱动 UI |
 | `totalActiveSeconds` | TimeInterval | 0 | private | 累计活跃秒数，驱动惊喜里程碑 |
-| `activeCarrySeconds` | TimeInterval | 0 | private | 不满一个加分周期的余数 |
+| `activeCarrySeconds` | TimeInterval | 0 | private | 惊喜累计的时间余数（不再给 companionValue 被动加分） |
 | `lastCompanionWallClockTime` | TimeInterval | 0 | private | 上次墙钟结算的 Unix 时间戳 |
+| `lastCompanionInteractionTime` | TimeInterval | 0 | private | 上次有效互动的 Unix 时间戳 |
 | `lastSurpriseMilestoneHours` | Double | 0 | private | 上次惊喜触发在多少小时里程碑 |
 
 **iOS 端（IOSRootView）**：
@@ -143,16 +145,14 @@ BolaSharedDefaults.resolved()
 
 | 参数 | 变量名 | 值 | 说明 |
 |------|--------|-----|------|
-| 加分周期 | `secondsPerCompanionBonus` | **600s**（10 分钟 +1） | 测试值；正式可改回 **3600s**（每小时 +1） |
-| 长期离线阈值 | `longAbsenceWithoutForegroundSeconds` | **86400s**（24 小时） | 超过此时间未回到 App 视为长期离线 |
-| 扣分宽限期 | `deductionGraceSeconds` | **7200s**（2 小时） | 有效 Gap 的前 2 小时不扣分 |
-| 扣分粒度 | `deductionChunkSeconds` | **300s**（5 分钟） | 每个扣分单元 |
-| 每单元扣分 | `deductionPerChunk` | **0.1** | 每 5 分钟扣 0.1 分 |
-| 夜间豁免 | 硬编码 | 00:00–07:00 | 扣分 Gap 中剔除此时段 |
+| 惊喜累计周期 | `secondsPerCompanionBonus` | **600s** | 仅用于累计时间余数，不再给 companionValue 被动加分 |
+| 互动后扣分宽限期 | `interactionDecayGraceSeconds` | **3600s**（1 小时） | 最后互动后的前 1 小时不扣分 |
+| 扣分速率 | `companionDecayPerHour` | **5** | 清醒未互动约每小时 -5 分 |
+| 睡眠豁免 | 硬编码 | 23:30–07:00 | 扣分 Gap 中剔除此时段 |
 | 陪伴值范围 | `clampCompanionValue` | **0–100** | 任何计算后都会裁剪到此范围 |
 | 惊喜里程碑间隔 | `surpriseMilestoneHours` | **100 小时** | 100→200→300… |
 
-### 3.3 加分机制（墙钟加分）
+### 3.3 时间累计机制（不再被动加分）
 
 **触发时机**：
 1. **冷启动 hydrate**：`hydrateTotalTimeAndSurpriseState()`
@@ -163,58 +163,47 @@ BolaSharedDefaults.resolved()
 
 ```
 delta = now - lastCompanionWallClockTime
+applyActiveAddition(delta)
+    activeCarrySeconds += delta
+    while activeCarrySeconds >= secondsPerCompanionBonus:
+        activeCarrySeconds -= secondsPerCompanionBonus
+    totalActiveSeconds += delta
 
-if delta > longAbsenceWithoutForegroundSeconds (24h):
-    → 走扣分分支（见 3.4）
-else:
-    → applyActiveAddition(delta)
-        activeCarrySeconds += delta
-        while activeCarrySeconds >= secondsPerCompanionBonus:
-            activeCarrySeconds -= secondsPerCompanionBonus
-            companionValueInternal += 1
-        companionValueInternal = round(companionValueInternal * 10) / 10
-        companionValueInternal = clamp(0...100)
-        companionValue = companionValueInternal.rounded()
-    → totalActiveSeconds += delta
-    → 更新 lastCompanionWallClockTime = now
-    → persistCompanionSnapshot()
+applyInteractionDecayIfNeeded(now)
+→ 更新 lastCompanionWallClockTime = now
+→ persistCompanionSnapshot()
 ```
 
 **关键特性**：
-- **无每日加分上限**（总分仍受 0–100 约束）
-- **24 小时均可加分**（含深夜）
-- 进后台/垂腕/睡眠期间：**不推进** `lastCompanionWallClockTime`；在回到前台时按整段墙钟间隔补算
+- `companionValue` 不再因为打开 App 或挂机被动增加
+- `totalActiveSeconds` 仍按墙钟累计，用于惊喜里程碑
+- 进后台/垂腕/睡眠期间：**不推进** `lastCompanionWallClockTime`；在回到前台时按整段墙钟间隔补算扣分与惊喜时间
 
-### 3.4 扣分机制（长期离线自动扣分）
+### 3.4 扣分机制（未互动自动下降）
 
-**触发条件**：`delta > longAbsenceWithoutForegroundSeconds`（即离线超过 24 小时）
+**触发条件**：`now - lastCompanionInteractionTime > interactionDecayGraceSeconds`（即最后互动超过 1 小时）
 
 **计算流程**：
 
 ```
-from = Date(timeIntervalSince1970: lastCompanionWallClockTime)
-effectiveGap = deductibleSecondsOutsideNightWindow(from: from, to: now)
-    → 遍历 from~to 的每一天
-    → 剔除 00:00–07:00 时段
+decayStart = max(lastCompanionInteractionTime + 1h, lastCompanionWallClockTime)
+effectiveGap = deductibleSecondsOutsideSleepWindow(from: decayStart, to: now)
+    → 遍历 decayStart~now 的每一天
+    → 剔除 23:30–07:00 睡眠时段
     → 返回剩余有效秒数
 
-applyHydrationGapDeduction(effectiveGap):
-    if effectiveGap <= deductionGraceSeconds (2h): 不扣
-    excess = effectiveGap - deductionGraceSeconds
-    deduction = floor(excess / 300) * 0.1
+applyInteractionDecayIfNeeded(now):
+    deduction = effectiveGap / 3600 * 5
     companionValueInternal -= deduction
     companionValueInternal = round(companionValueInternal * 10) / 10
     companionValueInternal = clamp(0...100)
     companionValue = companionValueInternal.rounded()
-
-→ 显示 longAbsenceReturn 台词
-→ lastCompanionWallClockTime = now（重置起点，不再重复扣）
 ```
 
 **关键特性**：
-- **不把这整段超长间隔按挂机加分**（先扣分分支，不加）
-- 扣分无单次上限（离线越久扣越多，最低 0 分）
-- 扣分后显示「长期离线回来」台词
+- 任意有效互动会刷新 `lastCompanionInteractionTime` 与 `lastCompanionWallClockTime`
+- 睡眠时段不扣分
+- 扣分无单次上限（未互动越久扣越多，最低 0 分）
 
 ### 3.5 点击 +1 机制
 
@@ -778,10 +767,10 @@ App 启动
       → hydrateTotalTimeAndSurpriseState()
           → 从 defaults 读取 companionValue (默认 50)
           → 从 defaults 读取 totalActiveSeconds, activeCarrySeconds
-          → migrateLastCompanionWallClockFromDefaults()
+          → migrateCompanionClockStateFromDefaults()
           → creditOrPenalizeWallClockGapIfNeeded()
-              → if delta > 24h: 扣分 + 长期离线台词
-              → else: 加分 + 累计活跃时间
+              → 累计惊喜时间
+              → 若最后互动超过 1h，按清醒未互动时间扣分
           → persistCompanionSnapshot(pushToPhone: false)  // 冷启动不推送
           → lastSurpriseMilestoneHours = defaults.lastSurpriseAtHours
       → selectDefaultEmotion()

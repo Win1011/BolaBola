@@ -8,7 +8,7 @@ import os
 import Combine
 import WatchConnectivity
 
-private let bolaWCChatLog = Logger(subsystem: "com.GathXRTeam.BolaBola.sync", category: "WatchConnectivity")
+private let bolaWCChatLog = Logger(subsystem: "com.GathXRTeam.BolaBolaApp.sync", category: "WatchConnectivity")
 
 /// 通过 `updateApplicationContext`（失败时 `transferUserInfo`）同步陪伴值；激活后消费 `receivedApplicationContext`。
 public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessionDelegate {
@@ -246,6 +246,7 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     /// 将当前陪伴值写入本机 defaults 并尽力推到另一端（session 未激活时会排队，激活后发出）。
     public func pushCompanionValue(_ value: Double, forcedForWatch: Bool = false) {
         let ts = Date().timeIntervalSince1970
+        let defaults = BolaSharedDefaults.resolved()
         let outgoingState = currentPetCoreState.normalizedForLocalClock()
         if outgoingState != currentPetCoreState {
             BolaDebugLog.shared.log(.petState, "过期 sleep coreState → idle (outgoing)")
@@ -256,6 +257,9 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             WCSyncPayload.companionValueUpdatedAt: ts,
             WCSyncPayload.petCoreState: outgoingState.rawValue
         ]
+        if let lastInteraction = defaults.object(forKey: CompanionPersistenceKeys.lastCompanionInteractionWallClock) {
+            payload[CompanionPersistenceKeys.lastCompanionInteractionWallClock] = lastInteraction
+        }
         if let data = try? JSONEncoder().encode(SpecialAnimationUnlockStore.loadUnlockedOrderedIds()) {
             payload[WCSyncPayload.specialAnimationUnlockedIdsB64] = data.base64EncodedString()
         }
@@ -271,7 +275,6 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
             payload[WCSyncPayload.petEmotionLabel] = currentPetEmotionLabel
         }
         #endif
-        let defaults = BolaSharedDefaults.resolved()
         defaults.set(value, forKey: CompanionPersistenceKeys.companionValue)
         defaults.set(ts, forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
 
@@ -345,9 +348,29 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     }
 
     #if os(iOS)
+    /// iPhone 侧发生有效互动时刷新“最后互动时间”，并用当前陪伴值同步给手表。
+    public func markCompanionInteractionLocally(pushToWatch: Bool = true) {
+        let defaults = BolaSharedDefaults.resolved()
+        let ts = Date().timeIntervalSince1970
+        defaults.set(ts, forKey: CompanionPersistenceKeys.lastCompanionInteractionWallClock)
+        defaults.set(ts, forKey: CompanionPersistenceKeys.lastCompanionWallClock)
+
+        guard pushToWatch else { return }
+        let v: Double
+        if defaults.object(forKey: CompanionPersistenceKeys.companionValue) != nil {
+            v = defaults.double(forKey: CompanionPersistenceKeys.companionValue)
+        } else {
+            v = 50
+        }
+        pushCompanionValue(v)
+    }
+
     /// iPhone 点击宠物时本机直接 +1 陪伴值（乐观更新），并同步到手表。
     public func incrementCompanionValueLocally(by delta: Double = 1) {
         let defaults = BolaSharedDefaults.resolved()
+        let ts = Date().timeIntervalSince1970
+        defaults.set(ts, forKey: CompanionPersistenceKeys.lastCompanionInteractionWallClock)
+        defaults.set(ts, forKey: CompanionPersistenceKeys.lastCompanionWallClock)
         var v: Double
         if defaults.object(forKey: CompanionPersistenceKeys.companionValue) != nil {
             v = defaults.double(forKey: CompanionPersistenceKeys.companionValue)
@@ -568,6 +591,29 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         let defaults = BolaSharedDefaults.resolved()
         let maxCV = defaults.double(forKey: "bola_max_ever_companion_v1")
         payload[WCSyncPayload.maxEverCompanionValue] = maxCV
+    }
+    #endif
+
+    #if os(watchOS)
+    /// 餐食记录在 Watch 侧完成后推回 iPhone，让 iPhone 列表显示今日完成状态。
+    func pushMealRecordsToPhoneIfPossible(dateStr: String, records: [MealRecord]) {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated,
+              session.isCompanionAppInstalled else { return }
+        guard let data = try? JSONEncoder().encode(records) else { return }
+        let payload: [String: Any] = [
+            WCSyncPayload.mealRecordsDate: dateStr,
+            WCSyncPayload.mealRecordsB64: data.base64EncodedString()
+        ]
+        if session.isReachable {
+            session.sendMessage(payload, replyHandler: nil) { _ in
+                session.transferUserInfo(payload)
+            }
+        } else {
+            session.transferUserInfo(payload)
+        }
+        BolaDebugLog.shared.log(.meal, "pushMealRecords → iPhone date=\(dateStr) count=\(records.count)")
     }
     #endif
 
@@ -886,6 +932,12 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
     /// 陪伴值写入受时间戳保护（last-write-wins），petCoreState / petEmotionLabel
     /// 与陪伴值时间戳无关，始终先于时间戳守卫应用，确保核心状态即时同步。
     private func ingest(_ dict: [String: Any]) {
+        #if os(iOS)
+        if Self.ingestMealRecordsIfPresent(dict) {
+            return
+        }
+        #endif
+
         #if os(watchOS)
         if Self.ingestRemindersIfPresent(dict) {
             return
@@ -936,6 +988,10 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         }
 
         defaults.set(v, forKey: CompanionPersistenceKeys.companionValue)
+        if let lastInteraction = Self.doubleValue(dict[CompanionPersistenceKeys.lastCompanionInteractionWallClock]) {
+            defaults.set(lastInteraction, forKey: CompanionPersistenceKeys.lastCompanionInteractionWallClock)
+            defaults.set(lastInteraction, forKey: CompanionPersistenceKeys.lastCompanionWallClock)
+        }
         // 强制同步时用「当下」时间戳，避免手表刚写入的旧 remoteTs 在后续往返中输给仍带旧戳的延迟包。
         let storedTs = forcedFromPhone ? Date().timeIntervalSince1970 : remoteTs
         defaults.set(storedTs, forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
@@ -987,6 +1043,38 @@ public final class BolaWCSessionCoordinator: NSObject, ObservableObject, WCSessi
         MealSlotStore.save(slots)
         BolaDebugLog.shared.log(.meal, "ingestMealSlots from iPhone count=\(slots.count)")
         NotificationCenter.default.post(name: .bolaMealSlotsDidUpdate, object: nil)
+        return true
+    }
+    #endif
+
+    #if os(iOS)
+    @discardableResult
+    private static func ingestMealRecordsIfPresent(_ dict: [String: Any]) -> Bool {
+        guard let dateStr = dict[WCSyncPayload.mealRecordsDate] as? String,
+              let b64 = dict[WCSyncPayload.mealRecordsB64] as? String,
+              let data = Data(base64Encoded: b64),
+              let remoteRecords = try? JSONDecoder().decode([MealRecord].self, from: data) else { return false }
+
+        let localRecords: [MealRecord]
+        if let saved = MealRecordStore.load(from: BolaSharedDefaults.resolved()), saved.dateStr == dateStr {
+            localRecords = saved.records
+        } else {
+            localRecords = []
+        }
+
+        var mergedById = Dictionary(uniqueKeysWithValues: localRecords.map { ($0.recordId, $0) })
+        for remote in remoteRecords {
+            if let local = mergedById[remote.recordId],
+               local.status.isFinalized,
+               !remote.status.isFinalized {
+                continue
+            }
+            mergedById[remote.recordId] = remote
+        }
+
+        let mergedRecords = mergedById.values.sorted { $0.scheduledDate < $1.scheduledDate }
+        MealRecordStore.save(dateStr: dateStr, records: mergedRecords)
+        BolaDebugLog.shared.log(.meal, "ingestMealRecords from Watch date=\(dateStr) count=\(remoteRecords.count)")
         return true
     }
     #endif

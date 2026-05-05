@@ -5,7 +5,7 @@
 import Foundation
 import os
 
-private let bolaChatStoreLog = Logger(subsystem: "com.GathXRTeam.BolaBola.sync", category: "ChatStore")
+private let bolaChatStoreLog = Logger(subsystem: "com.GathXRTeam.BolaBolaApp.sync", category: "ChatStore")
 
 public extension Notification.Name {
     /// 任意聊天记录写入本地存储后发出，供任务/列表等统一刷新。
@@ -22,6 +22,8 @@ public extension Notification.Name {
     static let bolaPetCommandReceived = Notification.Name("bolaPetCommandReceived")
     /// 手表端：收到 iPhone 经 WC 发来的餐食配置更新。
     static let bolaMealSlotsDidUpdate = Notification.Name("bolaMealSlotsDidUpdate")
+    /// iOS / watchOS：今日餐食记录状态变化后发出，供餐食列表刷新完成状态。
+    static let bolaMealRecordsDidChange = Notification.Name("bolaMealRecordsDidChange")
 }
 
 public enum PetCommandNotificationKey {

@@ -8,6 +8,7 @@ import Foundation
 public enum CompanionPersistenceKeys {
     public static let companionValue = "bola_companionValue"
     public static let lastCompanionWallClock = "bola_lastCompanionWallClock"
+    public static let lastCompanionInteractionWallClock = "bola_lastCompanionInteractionWallClock"
     public static let lastTickTimestamp = "bola_lastTickTimestamp"
     public static let totalActiveSeconds = "bola_totalActiveSeconds"
     public static let activeCarrySeconds = "bola_activeCarrySeconds"
@@ -26,6 +27,7 @@ public enum CompanionPersistenceKeys {
         [
             companionValue,
             lastCompanionWallClock,
+            lastCompanionInteractionWallClock,
             lastTickTimestamp,
             totalActiveSeconds,
             activeCarrySeconds,

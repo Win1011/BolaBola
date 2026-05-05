@@ -6,7 +6,7 @@
 import Foundation
 
 public enum BolaTokenStore {
-    private static let service = "com.GathXRTeam.BolaBola.server"
+    private static let service = "com.GathXRTeam.BolaBolaApp.server"
     private static let accountAccessToken = "accessToken"
     private static let accountRefreshToken = "refreshToken"
 

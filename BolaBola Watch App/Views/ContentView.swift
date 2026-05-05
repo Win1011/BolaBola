@@ -16,7 +16,7 @@ final class PetViewModel: ObservableObject {
     @Published var currentEmotion: PetEmotion = .idle
     @Published var currentFrameIndex: Int = 0
     @Published var companionValue: Double = 50
-    // 内部陪伴值允许小数（用于 5 分钟级别的 +/-0.1/-0.1 平滑），对外与状态机使用“四舍五入后的整数值”。
+    // 内部陪伴值允许小数（用于时间结算的平滑加扣分），对外与状态机使用“四舍五入后的整数值”。
     private var companionValueInternal: Double = 50
 
     /// 惊喜里程碑间隔（小时）。与 Debug/Release 一致，避免启动时被「快速惊喜」抢占默认动画。
@@ -26,13 +26,9 @@ final class PetViewModel: ObservableObject {
 
     /// 加分：每满该秒数 +1（无每日上限）。**当前 600s = 10 分钟 +1（便于测试）；正式可调回 3600（每小时 +1）。**
     private let secondsPerCompanionBonus: TimeInterval = 600
-    /// 距上次墙钟打点超过此时长（秒），视为「长期未回到 App」，自动按 Gap 扣分且不把这整段当挂机加分（无需用户点按钮）。
-    private let longAbsenceWithoutForegroundSeconds: TimeInterval = 24 * 3600
-
-    /// 扣分：有效 Gap 超过 2 小时的部分，每 300 秒 -0.1（无单次上限，随离线变长而增加；最终仍受 0～100 裁剪）
-    private let deductionGraceSeconds: TimeInterval = 2 * 3600
-    private let deductionChunkSeconds: TimeInterval = 300
-    private let deductionPerChunk: Double = 0.1
+    /// 扣分：最后一次有效互动 1 小时后开始；睡眠时段不扣，清醒未互动约每小时 -5。
+    private let interactionDecayGraceSeconds: TimeInterval = 1 * 3600
+    private let companionDecayPerHour: Double = 5
 
     private var totalActiveSeconds: TimeInterval = 0
     private var activeCarrySeconds: TimeInterval = 0
@@ -139,6 +135,8 @@ final class PetViewModel: ObservableObject {
     private var mealHungryScheduleCancellable: AnyCancellable?
     /// 上次已结算的墙钟时刻（与 `lastCompanionWallClockKey` 同步）
     private var lastCompanionWallClockTime: TimeInterval = 0
+    /// 上次有效互动时间：点击、聊天、喂食、喝水、睡觉等都会刷新；扣分只从该时间之后开始计算。
+    private var lastCompanionInteractionTime: TimeInterval = 0
 
     /// 点击宠物时轮换的动作列表（你后续加动作只要往这里补）
     private let tapCycleEmotions: [PetEmotion] = [
@@ -184,7 +182,7 @@ final class PetViewModel: ObservableObject {
 
         configureInteractionController()
 
-        // 初始化：按「会话墙钟」累计陪伴与惊喜；超长离线由 `longAbsenceWithoutForegroundSeconds` 自动检测并扣分。
+        // 初始化：按「会话墙钟」累计惊喜时长；陪伴值按最后互动时间自动衰减。
         hydrateTotalTimeAndSurpriseState()
 
         previousCompanionRoundedForHundredSpeech = Int(companionValue.rounded())
@@ -230,9 +228,16 @@ final class PetViewModel: ObservableObject {
     }
 
     private func applyRemoteCompanionValue(_ v: Double) {
+        let defaults = bolaDefaults
+        if defaults.object(forKey: CompanionPersistenceKeys.lastCompanionInteractionWallClock) != nil {
+            lastCompanionInteractionTime = defaults.double(forKey: CompanionPersistenceKeys.lastCompanionInteractionWallClock)
+        }
+        if defaults.object(forKey: CompanionPersistenceKeys.lastCompanionWallClock) != nil {
+            lastCompanionWallClockTime = defaults.double(forKey: CompanionPersistenceKeys.lastCompanionWallClock)
+        }
         companionValueInternal = clampCompanionValue(v)
         companionValue = companionValueInternal.rounded()
-        persistCompanionSnapshot(bolaDefaults, pushToPhone: false)
+        persistCompanionSnapshot(defaults, pushToPhone: false)
         guard !isInEatingState, !isInDrinkWaterState, !isInNightSleepState else {
             trackCompanionTierSpeechIfNeeded()
             return
@@ -316,6 +321,7 @@ final class PetViewModel: ObservableObject {
     /// 来自 iPhone 的指令：直接跳转到结果状态（不播放中间动画）。
     /// feed/eat → idle；drink → idle；sleep → sleeping。
     private func handleRemotePetCommand(_ kind: String) {
+        recordCompanionInteraction(pushToPhone: false)
         switch kind {
         case PetCommandKind.eat, PetCommandKind.feed:
             if isInEatingState {
@@ -832,6 +838,7 @@ final class PetViewModel: ObservableObject {
     /// 语音：点麦克风后 → 随机 question 系列（用户在说）
     func beginVoiceListeningSession() {
         guard !voiceConversationActive else { return }
+        recordCompanionInteraction()
         voiceConversationActive = true
         isTapInteractionAnimating = true
         surprisePending = false
@@ -847,6 +854,7 @@ final class PetViewModel: ObservableObject {
 
     /// 语音：Bola 开口回复时 → 随机 speakOnce 系列
     func playVoiceAssistantReply(_ text: String) {
+        recordCompanionInteraction()
         voiceReplyPlaying = true
         showDialogue(text, duration: 10)
         currentEmotion = [.speak1Once, .speak2Once, .speak3Once].randomElement() ?? .speak1Once
@@ -1043,6 +1051,7 @@ final class PetViewModel: ObservableObject {
             return
         }
 
+        recordCompanionInteraction(pushToPhone: false)
         addMealCompanionReward(result.reward)
 
         switch result.newStatus {
@@ -1299,6 +1308,7 @@ final class PetViewModel: ObservableObject {
     }
 
     func cycleEmotionOnTap() {
+        recordCompanionInteraction()
         // 夜间睡眠状态：等待中点击 → 入睡；已睡着点击 → 叫醒
         if isInNightSleepState {
             if currentEmotion == .nightSleepWait {
@@ -1495,27 +1505,43 @@ final class PetViewModel: ObservableObject {
         persistCompanionSnapshot(bolaDefaults)
     }
 
-    // Timer / 墙钟：每累计 1 小时 +1，不足部分进位（无每日上限）。
+    /// 有效互动会刷新扣分起点；下一次未互动扣分从 1 小时宽限后重新开始。
+    private func recordCompanionInteraction(at date: Date = Date(), pushToPhone: Bool = true) {
+        let ts = date.timeIntervalSince1970
+        lastCompanionInteractionTime = ts
+        lastCompanionWallClockTime = ts
+        let defaults = bolaDefaults
+        defaults.set(ts, forKey: CompanionPersistenceKeys.lastCompanionInteractionWallClock)
+        defaults.set(ts, forKey: CompanionPersistenceKeys.lastCompanionWallClock)
+        if pushToPhone {
+            persistCompanionSnapshot(defaults)
+        }
+    }
+
+    // Timer / 墙钟：仅累计总陪伴时长与惊喜里程碑，不再给 companionValue 被动加分。
     private func applyActiveAddition(_ seconds: TimeInterval) {
         activeCarrySeconds += seconds
         while activeCarrySeconds >= secondsPerCompanionBonus {
             activeCarrySeconds -= secondsPerCompanionBonus
-            companionValueInternal += 1
         }
 
-        companionValueInternal = (companionValueInternal * 10).rounded() / 10
-        companionValueInternal = clampCompanionValue(companionValueInternal)
-        companionValue = companionValueInternal.rounded()
-        trackCompanionTierSpeechIfNeeded()
+        totalActiveSeconds += seconds
     }
 
-    /// 长期离线分支：按「离开 Gap」扣分（剔除 00:00~07:00 后，2 小时内不扣，超出部分每 5 分钟 -0.1）
-    private func applyHydrationGapDeduction(effectiveGapSeconds: TimeInterval) {
-        guard effectiveGapSeconds > deductionGraceSeconds else { return }
-        let excess = effectiveGapSeconds - deductionGraceSeconds
-        let rawDeduction = floor(excess / deductionChunkSeconds) * deductionPerChunk
-        let deduction = rawDeduction
+    /// 未互动扣分：最后一次互动 1 小时后开始，睡眠时段外约每小时 -5。
+    private func applyInteractionDecayIfNeeded(now: Date) {
+        guard lastCompanionInteractionTime > 0 else { return }
+        let nowTs = now.timeIntervalSince1970
+        let decayStartTs = max(lastCompanionInteractionTime + interactionDecayGraceSeconds, lastCompanionWallClockTime)
+        guard nowTs > decayStartTs else { return }
+
+        let effectiveGap = deductibleSecondsOutsideSleepWindow(
+            from: Date(timeIntervalSince1970: decayStartTs),
+            to: now
+        )
+        let deduction = (effectiveGap / 3600) * companionDecayPerHour
         guard deduction > 0 else { return }
+
         companionValueInternal -= deduction
         companionValueInternal = (companionValueInternal * 10).rounded() / 10
         companionValueInternal = clampCompanionValue(companionValueInternal)
@@ -1523,8 +1549,8 @@ final class PetViewModel: ObservableObject {
         trackCompanionTierSpeechIfNeeded()
     }
 
-    /// 用于扣分：Gap 内剔除每日 00:00~07:00 后的秒数（与 `Documentation/companion_value_rules.md` 一致）
-    private func deductibleSecondsOutsideNightWindow(from: Date, to: Date) -> TimeInterval {
+    /// 用于扣分：Gap 内剔除每日 23:30~07:00 睡眠时段后的秒数。
+    private func deductibleSecondsOutsideSleepWindow(from: Date, to: Date) -> TimeInterval {
         if to <= from { return 0 }
         let calendar = Calendar.current
         var noDeduct: TimeInterval = 0
@@ -1535,14 +1561,18 @@ final class PetViewModel: ObservableObject {
             guard let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart) else { break }
 
             let chunkEnd = min(to, nextDay)
-            let windowStart = dayStart
-            let windowEnd = dayStart.addingTimeInterval(7 * 3600)
+            let sleepWindows = [
+                (dayStart, dayStart.addingTimeInterval(7 * 3600)),
+                (dayStart.addingTimeInterval(23.5 * 3600), nextDay)
+            ]
 
-            let overlapStart = max(cursor, windowStart)
-            let overlapEnd = min(chunkEnd, windowEnd)
+            for (windowStart, windowEnd) in sleepWindows {
+                let overlapStart = max(cursor, windowStart)
+                let overlapEnd = min(chunkEnd, windowEnd)
 
-            if overlapEnd > overlapStart {
-                noDeduct += overlapEnd.timeIntervalSince(overlapStart)
+                if overlapEnd > overlapStart {
+                    noDeduct += overlapEnd.timeIntervalSince(overlapStart)
+                }
             }
             cursor = chunkEnd
         }
@@ -1555,6 +1585,7 @@ final class PetViewModel: ObservableObject {
         defaults.set(totalActiveSeconds, forKey: CompanionPersistenceKeys.totalActiveSeconds)
         defaults.set(activeCarrySeconds, forKey: CompanionPersistenceKeys.activeCarrySeconds)
         defaults.set(lastCompanionWallClockTime, forKey: CompanionPersistenceKeys.lastCompanionWallClock)
+        defaults.set(lastCompanionInteractionTime, forKey: CompanionPersistenceKeys.lastCompanionInteractionWallClock)
         #if os(watchOS)
         WidgetCenter.shared.reloadAllTimelines()
         if pushToPhone {
@@ -1564,48 +1595,37 @@ final class PetViewModel: ObservableObject {
         #endif
     }
 
-    /// 从磁盘恢复 `lastCompanionWallClockTime`；若无新键则从旧版 `lastTickTimestamp` 迁移。
-    private func migrateLastCompanionWallClockFromDefaults(_ defaults: UserDefaults, nowTs: TimeInterval) {
+    /// 从磁盘恢复墙钟结算时刻与最后互动时刻；若无新键则从旧版 `lastTickTimestamp` 迁移。
+    private func migrateCompanionClockStateFromDefaults(_ defaults: UserDefaults, nowTs: TimeInterval) {
         defaults.removeObject(forKey: "bola_lastBackgroundTimestamp")
         defaults.removeObject(forKey: "bola_sessionExplicitlyEndedAt")
         defaults.removeObject(forKey: "bola_bonusGainToday")
         defaults.removeObject(forKey: "bola_bonusCalendarDay")
         if defaults.object(forKey: CompanionPersistenceKeys.lastCompanionWallClock) != nil {
             lastCompanionWallClockTime = defaults.double(forKey: CompanionPersistenceKeys.lastCompanionWallClock)
-            return
-        }
-        if defaults.object(forKey: CompanionPersistenceKeys.lastTickTimestamp) != nil {
+        } else if defaults.object(forKey: CompanionPersistenceKeys.lastTickTimestamp) != nil {
             lastCompanionWallClockTime = defaults.double(forKey: CompanionPersistenceKeys.lastTickTimestamp)
             defaults.set(lastCompanionWallClockTime, forKey: CompanionPersistenceKeys.lastCompanionWallClock)
-            return
+        } else {
+            lastCompanionWallClockTime = nowTs
         }
-        lastCompanionWallClockTime = nowTs
+
+        if defaults.object(forKey: CompanionPersistenceKeys.lastCompanionInteractionWallClock) != nil {
+            lastCompanionInteractionTime = defaults.double(forKey: CompanionPersistenceKeys.lastCompanionInteractionWallClock)
+        } else {
+            lastCompanionInteractionTime = lastCompanionWallClockTime
+            defaults.set(lastCompanionInteractionTime, forKey: CompanionPersistenceKeys.lastCompanionInteractionWallClock)
+        }
     }
 
-    /// 自上次墙钟打点以来的间隔：若超过 `longAbsenceWithoutForegroundSeconds` 则自动按 Gap 扣分且不把这整段当挂机加分；否则计入陪伴与惊喜。
+    /// 自上次墙钟打点以来的间隔：累计惊喜时长；若最后一次互动已超过宽限期，则按未互动时长扣分。
     private func creditOrPenalizeWallClockGapIfNeeded(now: Date, nowTs: TimeInterval, defaults: UserDefaults) {
         let delta = max(0, nowTs - lastCompanionWallClockTime)
         guard delta > 0 else { return }
 
-        if delta > longAbsenceWithoutForegroundSeconds {
-            let from = Date(timeIntervalSince1970: lastCompanionWallClockTime)
-            let effectiveGap = deductibleSecondsOutsideNightWindow(from: from, to: now)
-            applyHydrationGapDeduction(effectiveGapSeconds: effectiveGap)
-            lastCompanionWallClockTime = nowTs
-            persistCompanionSnapshot(defaults)
-            selectDefaultEmotion()
-            if currentEmotion == currentDefaultEmotion {
-                applyDefaultEmotionDisplay()
-                currentFrameIndex = 0
-            }
-            showDialogue(BolaDialogueLines.longAbsenceReturn.randomElement() ?? "")
-            trackCompanionTierSpeechIfNeeded()
-            return
-        }
-
         let oldDefaultEmotion = currentDefaultEmotion
         applyActiveAddition(delta)
-        totalActiveSeconds += delta
+        applyInteractionDecayIfNeeded(now: now)
         selectDefaultEmotion()
         if currentEmotion == oldDefaultEmotion {
             applyDefaultEmotionDisplay()
@@ -1703,8 +1723,8 @@ final class PetViewModel: ObservableObject {
         companionValueInternal = clampCompanionValue(companionValueInternal)
         companionValue = companionValueInternal.rounded()
 
-        // 2) 冷启动：墙钟迁移 + 加分或「长期离线」自动扣分（见 `creditOrPenalizeWallClockGapIfNeeded`）
-        migrateLastCompanionWallClockFromDefaults(defaults, nowTs: nowTs)
+        // 2) 冷启动：墙钟迁移 + 未互动自动扣分（见 `creditOrPenalizeWallClockGapIfNeeded`）
+        migrateCompanionClockStateFromDefaults(defaults, nowTs: nowTs)
 
         creditOrPenalizeWallClockGapIfNeeded(now: now, nowTs: nowTs, defaults: defaults)
 

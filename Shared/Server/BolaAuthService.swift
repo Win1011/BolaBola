@@ -6,7 +6,7 @@
 import Foundation
 import os
 
-private let bolaAuthLog = Logger(subsystem: "com.GathXRTeam.BolaBola", category: "Auth")
+private let bolaAuthLog = Logger(subsystem: "com.GathXRTeam.BolaBolaApp", category: "Auth")
 
 public enum BolaAuthError: Error, LocalizedError {
     case missingIdentityToken

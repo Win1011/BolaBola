@@ -23,23 +23,28 @@ final class IOSPetInteractionHandler: ObservableObject {
     }
 
     func handleDrinkButton() {
+        coordinator.markCompanionInteractionLocally()
         interactionController.enterThirsty()
         coordinator.pushPetCoreState(.thirsty)
     }
 
-    func handleFeedButton() {
+    func handleFeedButton(companion: inout Double) {
+        coordinator.markCompanionInteractionLocally(pushToWatch: false)
         // 与 `MealEngine.hasFeedableMeal` / 主界面 `isFeedWindowActive` 一致（餐前早喂窗口见 `MealEngine.earlyWindowSeconds`）。
         let now = Date()
         MealEngine.shared.refreshMealState(now: now)
         if MealEngine.shared.hasFeedableMeal(now: now) {
             interactionController.enterHungry()
-            coordinator.pushPetCoreState(.hungry)
+            if mealCoordinator.performMealFeed(companion: &companion) {
+                interactionController.applyEatCommand()
+            }
         } else {
             showWatchPreviewBubble("还没到吃饭时间哦")
         }
     }
 
     func handleSleepButton() {
+        coordinator.markCompanionInteractionLocally()
         if isPastBedtime() {
             interactionController.enterSleepWait()
             interactionController.applySleepCommand()
@@ -50,23 +55,28 @@ final class IOSPetInteractionHandler: ObservableObject {
     }
 
     func triggerEat(companion: inout Double) {
-        mealCoordinator.performMealFeed(companion: &companion)
-        interactionController.applyEatCommand()
+        coordinator.markCompanionInteractionLocally(pushToWatch: false)
+        if mealCoordinator.performMealFeed(companion: &companion) {
+            interactionController.applyEatCommand()
+        }
     }
 
     func triggerDrink() {
+        coordinator.markCompanionInteractionLocally()
         interactionController.applyDrinkCommand()
         coordinator.sendPetCommand(PetCommandKind.drink)
         BolaTimelineRecorder.recordPetActivity(.water)
     }
 
     func triggerSleep() {
+        coordinator.markCompanionInteractionLocally()
         interactionController.applySleepCommand()
         coordinator.sendPetCommand(PetCommandKind.sleep)
         BolaTimelineRecorder.recordPetActivity(.sleep)
     }
 
     func wakeUpFromSleep() {
+        coordinator.markCompanionInteractionLocally()
         interactionController.returnToIdle()
         coordinator.pushPetCoreState(.idle)
     }

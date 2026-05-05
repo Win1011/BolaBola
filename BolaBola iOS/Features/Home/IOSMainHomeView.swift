@@ -274,7 +274,9 @@ struct IOSMainHomeView: View {
         }
     }
 
-    private var petActionBar: IOSPetActionBarView { IOSPetActionBarView(handler: petHandler) }
+    private var petActionBar: IOSPetActionBarView {
+        IOSPetActionBarView(handler: petHandler, companion: $companion)
+    }
 
 
 
@@ -316,7 +318,7 @@ struct IOSMainHomeView: View {
     private var watchFaceActionButtons: some View {
         VStack(spacing: 8) {
             WatchFaceOrbButton(systemImage: "leaf.fill", tint: .green, isActive: isFeedWindowActive) {
-                petHandler.handleFeedButton()
+                petHandler.handleFeedButton(companion: &companion)
                 now = Date()
             }
             WatchFaceOrbButton(systemImage: "drop.fill", tint: .blue, isActive: isWaterWindowActive) {

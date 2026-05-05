@@ -73,6 +73,44 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		8C2A8D102FBA000100000001 /* Exceptions for "BolaBola Watch App" folder in "BolaBola Watch App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				.DS_Store,
+				Animations/shake/shake0.png,
+				Animations/shake/shake1.png,
+				Animations/shake/shake10.png,
+				Animations/shake/shake11.png,
+				Animations/shake/shake12.png,
+				Animations/shake/shake13.png,
+				Animations/shake/shake14.png,
+				Animations/shake/shake15.png,
+				Animations/shake/shake16.png,
+				Animations/shake/shake17.png,
+				Animations/shake/shake18.png,
+				Animations/shake/shake19.png,
+				Animations/shake/shake2.png,
+				Animations/shake/shake20.png,
+				Animations/shake/shake21.png,
+				Animations/shake/shake22.png,
+				Animations/shake/shake3.png,
+				Animations/shake/shake4.png,
+				Animations/shake/shake5.png,
+				Animations/shake/shake6.png,
+				Animations/shake/shake7.png,
+				Animations/shake/shake8.png,
+				Animations/shake/shake9.png,
+				Documentation/PRD_v1.md,
+				Documentation/README.md,
+				Documentation/animation_list.md,
+				Documentation/bola_dialogue_rules.md,
+				Documentation/companion_value_rules.md,
+				Documentation/health_reminders_platform.md,
+				Documentation/state_machine_list.md,
+				Documentation/tap_interaction_rules.md,
+			);
+			target = 2F55E2522F667F99001E5A32 /* BolaBola Watch App */;
+		};
 		A05C53A62F7D19000042AB26 /* Exceptions for "BolaBola Watch Widget" folder in "BolaBola Watch WidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -85,6 +123,9 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		2F55E2572F667F99001E5A32 /* BolaBola Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8C2A8D102FBA000100000001 /* Exceptions for "BolaBola Watch App" folder in "BolaBola Watch App" target */,
+			);
 			path = "BolaBola Watch App";
 			sourceTree = "<group>";
 		};
@@ -411,7 +452,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = MX4C45DA78;
+				DEVELOPMENT_TEAM = 695A9ZTHAK;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -474,7 +515,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = MX4C45DA78;
+				DEVELOPMENT_TEAM = 695A9ZTHAK;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -502,23 +543,24 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch App/BolaBola Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MJ852SN88S;
+				DEVELOPMENT_TEAM = 695A9ZTHAK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Bola 会读取心率、步数等健康数据，用于非医疗性的界面提示与提醒。";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Bola 会写入你主动创建的提醒或陪伴记录，用于在健康相关流程中保持本地数据同步。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bola 需要麦克风以识别你对它说的话。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 把你的语音转成文字，再生成回复。";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 需要发送喝水、活动等本地提醒。";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.gathxr.BolaBola;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.GathXRTeam.BolaBolaApp;
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBolaApp.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -541,23 +583,24 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch App/BolaBola Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MJ852SN88S;
+				DEVELOPMENT_TEAM = 695A9ZTHAK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Bola 会读取心率、步数等健康数据，用于非医疗性的界面提示与提醒。";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Bola 会写入你主动创建的提醒或陪伴记录，用于在健康相关流程中保持本地数据同步。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bola 需要麦克风以识别你对它说的话。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 把你的语音转成文字，再生成回复。";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Bola 需要发送喝水、活动等本地提醒。";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.gathxr.BolaBola;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.GathXRTeam.BolaBolaApp;
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBolaApp.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -582,11 +625,12 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MJ852SN88S;
+				DEVELOPMENT_TEAM = 695A9ZTHAK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Bola 读取步数、站立时间、心率、心率变异性（HRV）与睡眠等数据，用于状态页图表与生活页节奏条展示，非医疗诊断。";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Bola 会写入你主动创建的提醒或陪伴记录，用于在健康相关流程中保持本地数据同步。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Bola 使用你的大致位置以显示当地天气（生活页天气卡片）。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bola 需要麦克风以转写从手表发来的语音。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 在 iPhone 上将语音转为文字，再与手表同步。";
@@ -604,7 +648,7 @@
 					"$(inherited)",
 					"-ObjC",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBolaApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
@@ -627,11 +671,12 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MJ852SN88S;
+				DEVELOPMENT_TEAM = 695A9ZTHAK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BolaBola;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Bola 读取步数、站立时间、心率、心率变异性（HRV）与睡眠等数据，用于状态页图表与生活页节奏条展示，非医疗诊断。";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Bola 会写入你主动创建的提醒或陪伴记录，用于在健康相关流程中保持本地数据同步。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Bola 使用你的大致位置以显示当地天气（生活页天气卡片）。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bola 需要麦克风以转写从手表发来的语音。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Bola 在 iPhone 上将语音转为文字，再与手表同步。";
@@ -649,7 +694,7 @@
 					"$(inherited)",
 					"-ObjC",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBolaApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
@@ -672,7 +717,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch WidgetExtension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MJ852SN88S;
+				DEVELOPMENT_TEAM = 695A9ZTHAK;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "BolaBola Watch Widget/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "BolaBola Watch Widget";
@@ -684,7 +729,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola.watchkitapp.WidgetExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBolaApp.watchkitapp.WidgetExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -706,7 +751,7 @@
 				CODE_SIGN_ENTITLEMENTS = "BolaBola Watch WidgetExtension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MJ852SN88S;
+				DEVELOPMENT_TEAM = 695A9ZTHAK;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "BolaBola Watch Widget/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "BolaBola Watch Widget";
@@ -718,7 +763,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBola.watchkitapp.WidgetExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GathXRTeam.BolaBolaApp.watchkitapp.WidgetExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;

@@ -2,12 +2,13 @@ import SwiftUI
 
 struct IOSPetActionBarView: View {
     @ObservedObject var handler: IOSPetInteractionHandler
+    @Binding var companion: Double
 
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 20) {
                 petActionButton(title: "喂食", systemImage: "leaf.fill", tint: .green) {
-                    handler.handleFeedButton()
+                    handler.handleFeedButton(companion: &companion)
                 }
                 petActionButton(title: "喝水", systemImage: "drop.fill", tint: .blue) {
                     handler.handleDrinkButton()

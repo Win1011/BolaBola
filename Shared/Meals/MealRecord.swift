@@ -45,5 +45,8 @@ enum MealRecordStore {
         defaults.set(data, forKey: recordsKey)
         defaults.set(dateStr, forKey: dateKey)
         BolaDebugLog.shared.log(.meal, "meal records saved date=\(dateStr) count=\(records.count)")
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .bolaMealRecordsDidChange, object: nil)
+        }
     }
 }

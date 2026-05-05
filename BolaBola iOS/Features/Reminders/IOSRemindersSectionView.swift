@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct IOSRemindersSectionView: View {
     private struct EditorSheetState: Identifiable {
@@ -32,6 +33,7 @@ struct IOSRemindersSectionView: View {
 
     @Binding var reminders: [BolaReminder]
     @State private var mealSlots: [MealSlot] = MealSlotStore.load()
+    @State private var todayMealRecords: [MealRecord] = Self.loadTodayMealRecords()
     var presentationScope: PresentationScope = .allRemindersAndMeals
     var sectionTitle: String = "Bola正在关心的事"
     /// 宠物显示名（生活页标题第一行）；默认读 `CompanionDisplayNameStore`。
@@ -100,6 +102,16 @@ struct IOSRemindersSectionView: View {
                         }
                     }
                 )
+            }
+            .onAppear {
+                refreshTodayMealRecords()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .bolaMealRecordsDidChange)) { _ in
+                refreshTodayMealRecords()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .bolaMealSlotsDidUpdate)) { _ in
+                mealSlots = MealSlotStore.load()
+                refreshTodayMealRecords()
             }
     }
 
@@ -441,8 +453,33 @@ struct IOSRemindersSectionView: View {
         activeMealEditor = MealEditorSheetState(mealSlot: newSlot)
     }
 
+    private static func loadTodayMealRecords(now: Date = Date()) -> [MealRecord] {
+        guard let saved = MealRecordStore.load(),
+              saved.dateStr == mealDateString(now) else {
+            return []
+        }
+        return saved.records
+    }
+
+    private static func mealDateString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    private func refreshTodayMealRecords() {
+        todayMealRecords = Self.loadTodayMealRecords()
+    }
+
+    private func isMealCompleted(_ slot: MealSlot) -> Bool {
+        todayMealRecords.first(where: { $0.mealId == slot.id })?.status.isFinalized == true
+    }
+
     @ViewBuilder
     private func mealSlotRow(_ slot: MealSlot) -> some View {
+        let isCompleted = isMealCompleted(slot)
+        let borderColor = isCompleted ? Color.green : Color.orange
+
         HStack(alignment: style == .figmaLife ? .center : .top, spacing: style == .figmaLife ? 8 : 14) {
             Image(systemName: "fork.knife")
                 .font(style == .figmaLife ? .system(size: 12, weight: .semibold) : .title2)
@@ -455,10 +492,21 @@ struct IOSRemindersSectionView: View {
                     .font(style == .figmaLife ? .system(size: 12, weight: .semibold) : .subheadline.weight(.semibold))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                Text("每天 \(slot.timeString)")
-                    .font(style == .figmaLife ? .system(size: 10, weight: .regular) : .caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(spacing: style == .figmaLife ? 5 : 7) {
+                    Text("每天 \(slot.timeString)")
+                        .font(style == .figmaLife ? .system(size: 10, weight: .regular) : .caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    if isCompleted {
+                        Text("Completed")
+                            .font(style == .figmaLife ? .system(size: 8, weight: .semibold) : .caption2.weight(.semibold))
+                            .foregroundStyle(Color.green)
+                            .lineLimit(1)
+                            .padding(.horizontal, style == .figmaLife ? 5 : 7)
+                            .padding(.vertical, style == .figmaLife ? 1 : 2)
+                            .background(Capsule().fill(Color.green.opacity(0.12)))
+                    }
+                }
             }
             Spacer(minLength: 0)
             if style == .figmaLife {
@@ -481,7 +529,7 @@ struct IOSRemindersSectionView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: style == .figmaLife ? figmaInnerCardCorner : BolaTheme.cornerCard, style: .continuous)
-                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                .stroke(borderColor.opacity(isCompleted ? 0.65 : 0.3), lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onTapGesture {

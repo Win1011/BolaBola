@@ -5,7 +5,7 @@
 import Foundation
 
 public enum BolaAppleSignInState {
-    private static let service = "com.GathXRTeam.BolaBola.auth.apple"
+    private static let service = "com.GathXRTeam.BolaBolaApp.auth.apple"
     private static let userIdentifierAccount = "appleUserIdentifier"
     private static let fullNameKey = "bola_apple_sign_in_full_name_v1"
     private static let emailKey = "bola_apple_sign_in_email_v1"

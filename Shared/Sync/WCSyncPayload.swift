@@ -57,6 +57,10 @@ public enum WCSyncPayload {
 
     /// iPhone -> Watch：餐食配置 `[MealSlot]` JSON 的 Base64。
     public static let mealSlotsB64 = "mealSlotsB64"
+    /// Watch -> iPhone：今日餐食记录 `[MealRecord]` JSON 的 Base64。
+    public static let mealRecordsB64 = "mealRecordsB64"
+    /// Watch -> iPhone：今日餐食记录对应日期（yyyy-MM-dd）。
+    public static let mealRecordsDate = "mealRecordsDate"
 
     /// 双向：宠物核心状态（`PetCoreState.rawValue`，如 `"idle"`、`"hungry"`）。
     public static let petCoreState = "petCoreState"

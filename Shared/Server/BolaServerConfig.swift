@@ -8,7 +8,7 @@ import Foundation
 public enum BolaServerConfig {
     // MARK: - Keychain 存储 key
 
-    private static let service = "com.GathXRTeam.BolaBola.server"
+    private static let service = "com.GathXRTeam.BolaBolaApp.server"
     private static let accountBaseURL = "baseURL"
 
     // MARK: - 默认值

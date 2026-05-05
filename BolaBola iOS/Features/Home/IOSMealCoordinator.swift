@@ -43,10 +43,11 @@ final class IOSMealCoordinator: ObservableObject {
         scheduleMealHungryTimerIfNeeded(now: Date())
     }
 
-    func performMealFeed(companion: inout Double) {
+    @discardableResult
+    func performMealFeed(companion: inout Double) -> Bool {
         guard let result = mealEngine.resolveFeedAction(now: Date()) else {
             BolaDebugLog.shared.log(.meal, "iOS: performMealFeed — no valid meal to feed")
-            return
+            return false
         }
 
         let newCompanion = addCompanionRewardLocally(result.reward)
@@ -58,6 +59,7 @@ final class IOSMealCoordinator: ObservableObject {
         BolaTimelineRecorder.recordPetActivity(.feed)
 
         BolaDebugLog.shared.log(.meal, "iOS: feed resolved → \(result.newStatus.rawValue), reward +\(result.reward), companion \(Int(newCompanion))")
+        return true
     }
 
     // MARK: - Private
@@ -86,8 +88,11 @@ final class IOSMealCoordinator: ObservableObject {
             v = 50
         }
         v = min(max(v + amount, 0), 100)
+        let ts = Date().timeIntervalSince1970
         defaults.set(v, forKey: CompanionPersistenceKeys.companionValue)
-        defaults.set(Date().timeIntervalSince1970, forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
+        defaults.set(ts, forKey: CompanionPersistenceKeys.lastCompanionInteractionWallClock)
+        defaults.set(ts, forKey: CompanionPersistenceKeys.lastCompanionWallClock)
+        defaults.set(ts, forKey: CompanionPersistenceKeys.companionWCUpdatedAt)
         BolaDebugLog.shared.log(.meal, "iOS: companion reward +\(amount) → \(Int(v.rounded()))")
         return v
     }

@@ -5,8 +5,8 @@
 import Foundation
 import os
 
-private let bolaConversationSyncLog = Logger(subsystem: "com.GathXRTeam.BolaBola.sync", category: "Conversation")
-private let bolaWatchVoiceLog = Logger(subsystem: "com.GathXRTeam.BolaBola", category: "WatchVoice")
+private let bolaConversationSyncLog = Logger(subsystem: "com.GathXRTeam.BolaBolaApp.sync", category: "Conversation")
+private let bolaWatchVoiceLog = Logger(subsystem: "com.GathXRTeam.BolaBolaApp", category: "WatchVoice")
 
 public enum ConversationService {
     /// 优先使用服务器认证模式，否则回退到直接 API Key 模式
