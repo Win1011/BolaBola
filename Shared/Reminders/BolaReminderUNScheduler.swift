@@ -11,6 +11,10 @@ public enum BolaReminderUNScheduler {
     private static let idPrefix = "bola_r_"
 
     public static func sync(reminders: [BolaReminder]) async {
+        await sync(reminders: reminders, mealSlots: MealSlotStore.load())
+    }
+
+    public static func sync(reminders: [BolaReminder], mealSlots: [MealSlot]) async {
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests()
         let toRemove = pending.map(\.identifier).filter { $0.hasPrefix(idPrefix) }
@@ -18,6 +22,30 @@ public enum BolaReminderUNScheduler {
 
         for rem in reminders where rem.isEnabled {
             await schedule(rem, center: center)
+        }
+        for rem in mealReminders(from: mealSlots) {
+            await schedule(rem, center: center)
+        }
+    }
+
+    private static func mealReminders(from slots: [MealSlot]) -> [BolaReminder] {
+        let name = CompanionDisplayNameStore.resolved()
+        return slots.map { slot in
+            BolaReminder(
+                title: "\(name) · \(mealLabel(for: slot))",
+                notificationBody: "到点吃饭啦，也可以喂 \(name) 吃饭～",
+                schedule: .calendar(hour: slot.hour, minute: slot.minute, weekdays: []),
+                kind: .meal
+            )
+        }
+    }
+
+    private static func mealLabel(for slot: MealSlot) -> String {
+        switch slot.id {
+        case "meal1": return "早餐"
+        case "meal2": return "午餐"
+        case "meal3": return "晚餐"
+        default: return "餐食"
         }
     }
 

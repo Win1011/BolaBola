@@ -242,7 +242,15 @@ final class MealEngine {
             let scheduled = cal.date(bySettingHour: slot.hour, minute: slot.minute, second: 0, of: today) ?? today
 
             if let existing = todayRecords.first(where: { $0.mealId == slot.id }) {
-                if existing.status.isFinalized {
+                let didMoveTime = abs(existing.scheduledDate.timeIntervalSince(scheduled)) > 60
+                if didMoveTime {
+                    newRecords.append(MealRecord(
+                        recordId: recordId,
+                        mealId: slot.id,
+                        scheduledDate: scheduled,
+                        status: statusForRegeneratedSlot(scheduled: scheduled, now: now)
+                    ))
+                } else if existing.status.isFinalized {
                     newRecords.append(existing)
                 } else if existing.status == .hungryActive {
                     var updated = existing
@@ -270,5 +278,15 @@ final class MealEngine {
         todayDateStr = ds
         persistRecords()
         BolaDebugLog.shared.log(.meal, "records regenerated after slot update: \(todayRecords.count)")
+    }
+
+    private func statusForRegeneratedSlot(scheduled: Date, now: Date) -> MealRecordStatus {
+        if now < scheduled {
+            return .pending
+        }
+        if now < scheduled.addingTimeInterval(autoFeedAfterSeconds) {
+            return .hungryActive
+        }
+        return .autoFed
     }
 }

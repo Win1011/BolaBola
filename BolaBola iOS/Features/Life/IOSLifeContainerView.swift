@@ -243,7 +243,7 @@ struct IOSLifeContainerView: View {
         .alert("节奏条", isPresented: $showRhythmInfo) {
             Button("好的", role: .cancel) {}
         } message: {
-            Text("基于今日心率变异性（HRV）样本按小时汇总，仅作状态参考，非医疗诊断。")
+            Text("基于 Apple 健康 HRV（SDNN）样本按小时汇总；有足够历史数据时会参考你的个人基线，仅作状态参考，非医疗诊断。")
         }
     }
 
@@ -382,17 +382,18 @@ struct IOSLifeContainerView: View {
                 } label: {
                     let stage = rhythmStage
                     let imageName = UIImage(named: stage.imageName) != nil ? stage.imageName : "GrowthHeroIsland"
+                    let imageScale = CGFloat(stage.heroImageWidthMultiplier)
                     Image(imageName)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: min(w * 0.54, 204))
+                        .frame(width: min(w * 0.54 * imageScale, 204 * imageScale))
                         .animation(.easeInOut(duration: 0.4), value: stage.imageName)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("打开对话 · 当前节奏：\(rhythmStage.label)")
                 .padding(.bottom, strokeW / 2 + 2)
-                .offset(x: 10)
-                .offset(y: heroContentDropY)
+                .offset(x: 10 + CGFloat(rhythmStage.heroImageXOffset))
+                .offset(y: heroContentDropY + CGFloat(rhythmStage.heroImageYOffset))
 
                 // 节奏条标签（左下角）
                 HStack(spacing: 0) {

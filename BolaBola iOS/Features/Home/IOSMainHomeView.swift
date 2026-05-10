@@ -175,6 +175,11 @@ struct IOSMainHomeView: View {
         .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { date in
             now = date
             coordinator.expireNightSleepStateIfNeeded()
+            mealCoordinator.handleScenePhaseActive()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bolaMealSlotsDidUpdate)) { _ in
+            now = Date()
+            mealCoordinator.handleScenePhaseActive()
         }
         .onChange(of: isSleepTime) { _, isNow in
             if !isNow { sleepLampDismissed = false }
@@ -330,6 +335,7 @@ struct IOSMainHomeView: View {
 
     private func handlePetMockupTap() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        DailyInteractionTaskStore.recordTouch()
         withAnimation(.spring(response: 0.18, dampingFraction: 0.55)) {
             petTapFeedbackScale = 0.94
         }

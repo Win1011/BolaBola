@@ -1052,6 +1052,7 @@ final class PetViewModel: ObservableObject {
         }
 
         recordCompanionInteraction(pushToPhone: false)
+        DailyInteractionTaskStore.recordFeed(defaults: bolaDefaults)
         addMealCompanionReward(result.reward)
 
         switch result.newStatus {
@@ -1133,6 +1134,8 @@ final class PetViewModel: ObservableObject {
     /// 喝水等待中被点击：播一轮 drink
     private func handleDrinkWaterTap() {
         interactionController.applyDrinkCommand()
+        DailyInteractionTaskStore.recordDrink(defaults: bolaDefaults)
+        BolaWCSessionCoordinator.shared.schedulePushCompanionGameStateSnapshotToPhoneDebounced()
     }
 
     // MARK: - 夜间睡眠
@@ -1309,6 +1312,8 @@ final class PetViewModel: ObservableObject {
 
     func cycleEmotionOnTap() {
         recordCompanionInteraction()
+        DailyInteractionTaskStore.recordTouch(defaults: bolaDefaults)
+        BolaWCSessionCoordinator.shared.schedulePushCompanionGameStateSnapshotToPhoneDebounced()
         // 夜间睡眠状态：等待中点击 → 入睡；已睡着点击 → 叫醒
         if isInNightSleepState {
             if currentEmotion == .nightSleepWait {

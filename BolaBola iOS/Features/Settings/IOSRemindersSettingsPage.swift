@@ -213,6 +213,7 @@ struct IOSRemindersSettingsPage: View {
     private func persistMealSlots() {
         MealSlotStore.save(mealSlots)
         BolaWCSessionCoordinator.shared.pushMealSlotsToWatchIfPossible()
+        Task { await BolaReminderUNScheduler.sync(reminders: reminders, mealSlots: mealSlots) }
         NotificationCenter.default.post(name: .bolaMealSlotsDidUpdate, object: nil)
     }
 }

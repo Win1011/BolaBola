@@ -65,6 +65,7 @@ final class IOSPetInteractionHandler: ObservableObject {
         coordinator.markCompanionInteractionLocally()
         interactionController.applyDrinkCommand()
         coordinator.sendPetCommand(PetCommandKind.drink)
+        DailyInteractionTaskStore.recordDrink()
         BolaTimelineRecorder.recordPetActivity(.water)
     }
 

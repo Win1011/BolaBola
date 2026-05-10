@@ -17,6 +17,15 @@ final class IOSRhythmHRVModel: ObservableObject {
         case ready
     }
 
+    /// HRV 节奏条个人基线：使用 Apple HealthKit SDNN（ms）最近历史日均值生成。
+    struct HRVRhythmBaseline: Equatable {
+        var medianSDNNMilliseconds: Double
+        var lowerBalancedSDNNMilliseconds: Double
+        var upperBalancedSDNNMilliseconds: Double
+        var availableDays: Int
+        var lookbackDays: Int
+    }
+
     /// HRV 节奏阶段：基于归一化值（0–1）划分，参考 Garmin / Oura / Whoop 分层逻辑。
     enum HRVStage {
         /// 无数据 / 未授权
@@ -34,12 +43,43 @@ final class IOSRhythmHRVModel: ObservableObject {
 
         var imageName: String {
             switch self {
-            case .noData:    return "GrowthHeroIsland"
-            case .depleted:  return "RhythmBola_Depleted"
-            case .low:       return "RhythmBola_Low"
-            case .balanced:  return "RhythmBola_Balanced"
-            case .good:      return "RhythmBola_Good"
-            case .vibrant:   return "RhythmBola_Vibrant"
+            case .noData, .balanced:
+                return "GrowthHeroIsland"
+            case .depleted, .low:
+                return "RhythmBola_Low"
+            case .good, .vibrant:
+                return "RhythmBola_Good"
+            }
+        }
+
+        var heroImageWidthMultiplier: Double {
+            switch self {
+            case .noData, .balanced:
+                return 1
+            case .good, .vibrant:
+                return 1.5
+            case .depleted, .low:
+                return 1.99
+            }
+        }
+
+        var heroImageYOffset: Double {
+            switch self {
+            case .depleted, .low:
+                return 12
+            default:
+                return 0
+            }
+        }
+
+        var heroImageXOffset: Double {
+            switch self {
+            case .noData, .balanced:
+                return 3
+            case .depleted, .low:
+                return -5
+            default:
+                return 0
             }
         }
 
@@ -113,10 +153,16 @@ final class IOSRhythmHRVModel: ObservableObject {
         }
     }
 
-    /// 24 个值，对应今天 0–23 时，0...1 用于条高
+    /// 24 个值，对应今天 0–23 时，0...1 用于条高；优先表示相对个人 HRV 基线的位置。
     @Published private(set) var hourlyNormalized: [Double] = Array(repeating: 0, count: 24)
+    /// 24 个 Apple HealthKit SDNN 原始小时均值（ms），供后续 HRV 卡片复用。
+    @Published private(set) var hourlyAverageSDNNMilliseconds: [Double] = Array(repeating: 0, count: 24)
+    @Published private(set) var rhythmBaseline: HRVRhythmBaseline?
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var errorMessage: String?
+
+    private static let rhythmBaselineLookbackDays = 28
+    private static let minimumBaselineDays = 7
 
     private let store = HKHealthStore()
 
@@ -145,9 +191,13 @@ final class IOSRhythmHRVModel: ObservableObject {
         do {
             let samples = try await fetchHRVSamples(type: hrvType, predicate: pred)
             let buckets = Self.bucketAverageByHour(samples: samples, calendar: cal, dayStart: start)
-            hourlyNormalized = Self.normalizeBuckets(buckets)
-            phase = hourlyNormalized.allSatisfy { $0 < 0.02 } ? .empty : .ready
-            saveWeeklySummary(samples: try await fetchRecentHRVSamples(type: hrvType, calendar: cal, now: now), calendar: cal, now: now)
+            let recentSamples = try await fetchRecentHRVSamples(type: hrvType, daysBack: Self.rhythmBaselineLookbackDays, calendar: cal, now: now)
+            let baseline = Self.makeRhythmBaseline(samples: recentSamples, calendar: cal, now: now)
+            hourlyAverageSDNNMilliseconds = buckets
+            rhythmBaseline = baseline
+            hourlyNormalized = Self.normalizeBuckets(buckets, baseline: baseline)
+            phase = buckets.allSatisfy { $0 <= 0 } ? .empty : .ready
+            saveWeeklySummary(samples: Self.samplesFromRecentSevenDays(recentSamples, calendar: cal, now: now), calendar: cal, now: now)
         } catch {
             errorMessage = (error as NSError).localizedDescription
             phase = .empty
@@ -173,7 +223,7 @@ final class IOSRhythmHRVModel: ObservableObject {
         do {
             let now = Date()
             let calendar = Calendar.current
-            let samples = try await fetchRecentHRVSamples(type: hrvType, calendar: calendar, now: now)
+            let samples = try await fetchRecentHRVSamples(type: hrvType, daysBack: 6, calendar: calendar, now: now)
             let summary = Self.makeWeeklySummary(samples: samples, calendar: calendar, now: now)
             HRVWeeklySummaryStore.save(summary)
             return summary
@@ -213,9 +263,9 @@ final class IOSRhythmHRVModel: ObservableObject {
         }
     }
 
-    private func fetchRecentHRVSamples(type: HKQuantityType, calendar: Calendar, now: Date) async throws -> [HKQuantitySample] {
+    private func fetchRecentHRVSamples(type: HKQuantityType, daysBack: Int, calendar: Calendar, now: Date) async throws -> [HKQuantitySample] {
         let todayStart = calendar.startOfDay(for: now)
-        let start = calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart
+        let start = calendar.date(byAdding: .day, value: -daysBack, to: todayStart) ?? todayStart
         let predicate = HKQuery.predicateForSamples(withStart: start, end: now)
         return try await fetchHRVSamples(type: type, predicate: predicate)
     }
@@ -240,18 +290,104 @@ final class IOSRhythmHRVModel: ObservableObject {
         }
     }
 
-    /// 将毫秒值转为 0...1，使用当日最大/最小拉伸；全 0 则保持 0
-    private static func normalizeBuckets(_ raw: [Double]) -> [Double] {
+    /// 将毫秒值转为 0...1：优先使用个人基线；基线不足时回到当天内部相对波动。
+    private static func normalizeBuckets(_ raw: [Double], baseline: HRVRhythmBaseline?) -> [Double] {
+        guard let baseline else {
+            return normalizeBucketsWithinToday(raw)
+        }
+        return raw.map { value in
+            rhythmPosition(for: value, baseline: baseline)
+        }
+    }
+
+    private static func rhythmPosition(for value: Double, baseline: HRVRhythmBaseline) -> Double {
+        guard value > 0 else { return 0 }
+        if baseline.medianSDNNMilliseconds > 0 {
+            let deviation = (value - baseline.medianSDNNMilliseconds) / baseline.medianSDNNMilliseconds
+            return min(0.95, max(0.05, 0.5 + deviation))
+        }
+        return 0
+    }
+
+    /// 历史样本不足时回到当天内部相对波动，只表达今天样本之间的高低，不做个人状态判断。
+    private static func normalizeBucketsWithinToday(_ raw: [Double]) -> [Double] {
         let positive = raw.filter { $0 > 0 }
         guard let maxV = positive.max(), maxV > 0 else {
             return raw.map { _ in 0 }
         }
         let minV = positive.min() ?? 0
         let span = max(maxV - minV, 1)
-        return raw.map { v in
-            guard v > 0 else { return 0 }
-            return min(1, max(0, (v - minV) / span))
+        return raw.map { value in
+            guard value > 0 else { return 0 }
+            return min(1, max(0, (value - minV) / span))
         }
+    }
+
+    private static func makeRhythmBaseline(samples: [HKQuantitySample], calendar: Calendar, now: Date) -> HRVRhythmBaseline? {
+        let todayStart = calendar.startOfDay(for: now)
+        let dailyAverages = dailyAverageSDNNMilliseconds(
+            samples: samples,
+            calendar: calendar,
+            startOffset: -rhythmBaselineLookbackDays,
+            endOffset: -1,
+            todayStart: todayStart
+        )
+        guard dailyAverages.count >= minimumBaselineDays else { return nil }
+
+        let median = percentile(dailyAverages, percentile: 0.5)
+        let deviations = dailyAverages.map { abs($0 - median) }
+        let robustSpread = percentile(deviations, percentile: 0.5) * 1.4826
+        let balancedHalfWidth = max(median * 0.12, robustSpread)
+
+        return HRVRhythmBaseline(
+            medianSDNNMilliseconds: median,
+            lowerBalancedSDNNMilliseconds: max(0, median - balancedHalfWidth),
+            upperBalancedSDNNMilliseconds: median + balancedHalfWidth,
+            availableDays: dailyAverages.count,
+            lookbackDays: rhythmBaselineLookbackDays
+        )
+    }
+
+    private static func dailyAverageSDNNMilliseconds(
+        samples: [HKQuantitySample],
+        calendar: Calendar,
+        startOffset: Int,
+        endOffset: Int,
+        todayStart: Date
+    ) -> [Double] {
+        let unit = HKUnit.secondUnit(with: .milli)
+        var averages: [Double] = []
+        for offset in stride(from: startOffset, through: endOffset, by: 1) {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: todayStart) else { continue }
+            let values = samples
+                .filter { calendar.isDate($0.endDate, inSameDayAs: day) }
+                .map { $0.quantity.doubleValue(for: unit) }
+                .filter { $0 > 0 }
+            guard !values.isEmpty else { continue }
+            averages.append(values.reduce(0, +) / Double(values.count))
+        }
+        return averages
+    }
+
+    private static func percentile(_ values: [Double], percentile: Double) -> Double {
+        let sorted = values.sorted()
+        guard let first = sorted.first else { return 0 }
+        guard sorted.count > 1 else { return first }
+        let clampedPercentile = min(1, max(0, percentile))
+        let rawIndex = clampedPercentile * Double(sorted.count - 1)
+        let lowerIndex = Int(floor(rawIndex))
+        let upperIndex = Int(ceil(rawIndex))
+        guard lowerIndex != upperIndex else { return sorted[lowerIndex] }
+        let fraction = rawIndex - Double(lowerIndex)
+        return sorted[lowerIndex] + (sorted[upperIndex] - sorted[lowerIndex]) * fraction
+    }
+
+    private static func samplesFromRecentSevenDays(_ samples: [HKQuantitySample], calendar: Calendar, now: Date) -> [HKQuantitySample] {
+        let todayStart = calendar.startOfDay(for: now)
+        guard let start = calendar.date(byAdding: .day, value: -6, to: todayStart) else {
+            return samples
+        }
+        return samples.filter { $0.endDate >= start }
     }
 
     private static func makeWeeklySummary(samples: [HKQuantitySample], calendar: Calendar, now: Date) -> HRVWeeklySummary {

@@ -44,7 +44,7 @@ struct IOSRhythmBarSection: View {
         .alert("节奏条", isPresented: $showInfo) {
             Button("好的", role: .cancel) {}
         } message: {
-            Text("基于今日心率变异性（HRV）样本按小时汇总，仅作状态参考，非医疗诊断。")
+            Text("基于 Apple 健康 HRV（SDNN）样本按小时汇总；有足够历史数据时会参考你的个人基线，仅作状态参考，非医疗诊断。")
         }
     }
 

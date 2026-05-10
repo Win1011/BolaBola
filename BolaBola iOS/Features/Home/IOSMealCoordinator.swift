@@ -45,6 +45,7 @@ final class IOSMealCoordinator: ObservableObject {
 
     @discardableResult
     func performMealFeed(companion: inout Double) -> Bool {
+        mealEngine.refreshMealState(now: Date())
         guard let result = mealEngine.resolveFeedAction(now: Date()) else {
             BolaDebugLog.shared.log(.meal, "iOS: performMealFeed — no valid meal to feed")
             return false
@@ -56,6 +57,7 @@ final class IOSMealCoordinator: ObservableObject {
         coordinator.pushPetCoreState(.idle)
 
         coordinator.sendPetCommand(PetCommandKind.feed)
+        DailyInteractionTaskStore.recordFeed()
         BolaTimelineRecorder.recordPetActivity(.feed)
 
         BolaDebugLog.shared.log(.meal, "iOS: feed resolved → \(result.newStatus.rawValue), reward +\(result.reward), companion \(Int(newCompanion))")
