@@ -156,9 +156,7 @@ struct WatchBottomChromeToolbar: View {
                             Task { @MainActor in
                                 if text.isEmpty {
                                     watchChromeVoiceLog.error("toggleMic: iPhone fallback empty transcript")
-                                    viewModel.cancelVoiceSession()
-                                    let msg = (err as? LocalizedError)?.errorDescription ?? "语音未识别"
-                                    viewModel.showDialogue(msg, duration: 6)
+                                    viewModel.playVoiceAutoReply()
                                 } else {
                                     watchChromeVoiceLog.info("toggleMic: iPhone fallback OK chars=\(text.count, privacy: .public)")
                                     viewModel.setVoiceThinkingEmotion()
@@ -180,12 +178,7 @@ struct WatchBottomChromeToolbar: View {
                     if !fallbackOk {
                         watchChromeVoiceLog.error("toggleMic: iPhone fallback not available (WC inactive or no companion app)")
                         await MainActor.run {
-                            viewModel.cancelVoiceSession()
-                            let companionName = CompanionDisplayNameStore.resolved()
-                            viewModel.showDialogue(
-                                (err as? LocalizedError)?.errorDescription ?? "语音未识别。可打开 iPhone 上的 \(companionName) 再试。",
-                                duration: 6
-                            )
+                            viewModel.playVoiceAutoReply()
                         }
                         try? FileManager.default.removeItem(at: url)
                     }

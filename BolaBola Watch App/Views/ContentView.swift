@@ -9,6 +9,7 @@ import SwiftUI
 import Combine
 import WatchKit
 import WidgetKit
+import os
 
 // MARK: - ViewModel（简单状态机雏形）
 
@@ -69,6 +70,10 @@ final class PetViewModel: ObservableObject {
     /// 按住说话流程中：屏蔽宠物点击交互
     @Published private(set) var voiceConversationActive: Bool = false
     private var voiceReplyPlaying: Bool = false
+    /// 语音会话超时保护：若 LLM/ASR 无响应，自动取消会话避免动画卡死
+    private var voiceTimeoutWorkItem: DispatchWorkItem?
+    private let voiceSessionTimeoutSeconds: TimeInterval = 15
+    private let watchVoiceTimeoutLog = Logger(subsystem: "com.GathXRTeam.BolaBolaApp", category: "VoiceTimeout")
 
     /// 吃东西状态机：waiting → eating → finished
     private(set) var isInEatingState: Bool = false
@@ -844,6 +849,7 @@ final class PetViewModel: ObservableObject {
         surprisePending = false
         currentEmotion = [.question1, .question2, .question3].randomElement() ?? .question1
         currentFrameIndex = 0
+        scheduleVoiceSessionTimeout()
     }
 
     /// 语音：用户说完、等待/生成回复时 → 随机 think 系列（thinking）
@@ -854,6 +860,8 @@ final class PetViewModel: ObservableObject {
 
     /// 语音：Bola 开口回复时 → 随机 speakOnce 系列
     func playVoiceAssistantReply(_ text: String) {
+        voiceTimeoutWorkItem?.cancel()
+        voiceTimeoutWorkItem = nil
         recordCompanionInteraction()
         voiceReplyPlaying = true
         showDialogue(text, duration: 10)
@@ -862,6 +870,8 @@ final class PetViewModel: ObservableObject {
     }
 
     func cancelVoiceSession() {
+        voiceTimeoutWorkItem?.cancel()
+        voiceTimeoutWorkItem = nil
         voiceConversationActive = false
         voiceReplyPlaying = false
         isTapInteractionAnimating = false
@@ -869,6 +879,58 @@ final class PetViewModel: ObservableObject {
         applyDefaultEmotionDisplay()
         currentFrameIndex = 0
     }
+
+    func playVoiceAutoReply() {
+        voiceTimeoutWorkItem?.cancel()
+        voiceTimeoutWorkItem = nil
+        voiceConversationActive = false
+        voiceReplyPlaying = true
+        let reply = Self.voiceTimeoutAutoReplies.randomElement() ?? "唔……可以再说一次吗？"
+        showDialogue(reply, duration: 8)
+        currentEmotion = [.speak1Once, .speak2Once, .speak3Once].randomElement() ?? .speak1Once
+        currentFrameIndex = 0
+    }
+
+    private func scheduleVoiceSessionTimeout() {
+        voiceTimeoutWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, self.voiceConversationActive else { return }
+            watchVoiceTimeoutLog.warning("Voice session timed out after \(self.voiceSessionTimeoutSeconds)s, using auto-reply")
+            let reply = Self.voiceTimeoutAutoReplies.randomElement() ?? "唔……可以再说一次吗？"
+            self.voiceTimeoutWorkItem?.cancel()
+            self.voiceTimeoutWorkItem = nil
+            self.voiceConversationActive = false
+            self.voiceReplyPlaying = true
+            self.showDialogue(reply, duration: 8)
+            self.currentEmotion = [.speak1Once, .speak2Once, .speak3Once].randomElement() ?? .speak1Once
+            self.currentFrameIndex = 0
+        }
+        voiceTimeoutWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + voiceSessionTimeoutSeconds, execute: item)
+    }
+
+    private static let voiceTimeoutAutoReplies = [
+        "唔……我刚刚走神了。",
+        "等等，我刚刚没跟上。",
+        "Bola刚刚发了一小会儿呆。",
+        "啊，我刚刚慢了一拍。",
+        "我刚刚没有接住你的话。",
+        "诶……我刚刚在想别的东西。",
+        "Bola的小脑袋卡了一下。",
+        "等等哦，我重新集中注意力。",
+        "我刚刚短暂飘走啦。",
+        "唔……脑袋空白了一秒。",
+        "我刚刚差点睡着了。",
+        "诶？我好像错过了什么。",
+        "让我重新听你说一次。",
+        "Bola刚刚断线了一秒钟。",
+        "我刚刚没反应过来。",
+        "等等，我回来啦。",
+        "我刚刚有一点恍神。",
+        "唔……可以再说一次吗？",
+        "Bola刚刚迷路了一下。",
+        "我刚刚没能好好听见。",
+    ]
 
     /// 每日总结：展示正文并播 `letterOnce`；同时把正文写入本机 + 经 WC 推送到 iPhone 的聊天记录。
     func playDailyDigestLetter(body: String) {
@@ -1655,12 +1717,23 @@ final class PetViewModel: ObservableObject {
         switch phase {
         case .background:
             isForegroundActive = false
+            if voiceConversationActive {
+                cancelVoiceSession()
+            }
             endOpenAppGrowthSessionIfNeeded()
             stopHeartRateForegroundMonitoring()
             defaults.set(lastCompanionWallClockTime, forKey: CompanionPersistenceKeys.lastCompanionWallClock)
             persistCompanionSnapshot(defaults)
         case .active:
             isForegroundActive = true
+            if voiceConversationActive {
+                cancelVoiceSession()
+            }
+            if isTapInteractionAnimating && shouldRecoverStaleTapInteractionLock() {
+                tapChainReturnsToRandomIdle = false
+                shouldPlayTapJumpFollowUp = false
+                isTapInteractionAnimating = false
+            }
             beginOpenAppGrowthSessionIfNeeded()
             #if os(watchOS)
             BolaWCSessionCoordinator.shared.reapplyLatestReceivedContext()
