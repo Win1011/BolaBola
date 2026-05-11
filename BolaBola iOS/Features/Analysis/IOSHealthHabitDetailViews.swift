@@ -156,6 +156,8 @@ enum IOSHealthHabitSnapshot {
 
 enum IOSHealthChartScales {
     static let chartHeight: CGFloat = 168
+    static let chartCardVerticalPadding: CGFloat = 16
+    static let chartCardHorizontalPadding: CGFloat = 16
 
     static func yPositive(_ values: [IOSHealthKitWeekQueries.DayValue]) -> ClosedRange<Double> {
         let m = values.map(\.value).max() ?? 0
@@ -174,15 +176,31 @@ enum IOSHealthChartScales {
     }
 }
 
+// MARK: - 图表范围
+
+enum IOSHealthChartRange: String, CaseIterable, Identifiable {
+    case week = "Week"
+    case month = "Month"
+    case year = "Year"
+
+    var id: String { rawValue }
+}
+
 // MARK: - 轴样式（ViewModifier，避免自定义 AxisContent 兼容性）
 
 private struct IOSHealthChartWeekdayXModifier: ViewModifier {
     func body(content: Content) -> some View {
         content.chartXAxis {
-            AxisMarks(values: .stride(by: .day)) { _ in
+            AxisMarks(values: .stride(by: .day)) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(.secondary.opacity(0.25))
-                AxisValueLabel(format: .dateTime.weekday(.narrow))
+                    .foregroundStyle(Color.primary.opacity(0.07))
+                AxisValueLabel {
+                    if let date = value.as(Date.self) {
+                        Text(date, format: .dateTime.weekday(.narrow))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }
@@ -193,11 +211,12 @@ private struct IOSHealthChartIntYModifier: ViewModifier {
         content.chartYAxis {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 5)) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(.secondary.opacity(0.2))
+                    .foregroundStyle(Color.primary.opacity(0.07))
                 AxisValueLabel {
                     if let n = value.as(Double.self) {
                         Text("\(Int(n))")
                             .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -210,14 +229,140 @@ private struct IOSHealthChartFloatYModifier: ViewModifier {
         content.chartYAxis {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 5)) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(.secondary.opacity(0.2))
+                    .foregroundStyle(Color.primary.opacity(0.07))
                 AxisValueLabel {
                     if let n = value.as(Double.self) {
                         Text(String(format: "%.1f", n))
                             .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - 图表卡片
+
+private struct IOSHealthChartCard<Content: View>: View {
+    let title: String
+    let assetName: String
+    let tint: Color
+    let imageOpacity: Double
+    let imageAlignment: Alignment
+    let imageWidth: CGFloat
+    let chartHeight: CGFloat
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(BolaTheme.accent)
+                    .frame(width: 6, height: 18)
+
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
+
+            ZStack(alignment: imageAlignment) {
+                RoundedRectangle(cornerRadius: BolaTheme.cornerCompact, style: .continuous)
+                    .fill(Color.primary.opacity(0.025))
+
+                Image(assetName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: imageWidth)
+                    .opacity(imageOpacity)
+                    .padding(.trailing, 8)
+                    .padding(.bottom, 4)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+
+                content()
+                    .chartPlotStyle { plotArea in
+                        plotArea
+                            .background(.clear)
+                    }
+                    .padding(8)
+                    .frame(height: chartHeight)
+            }
+            .overlay(alignment: .topTrailing) {
+                Capsule()
+                    .fill(tint.opacity(0.14))
+                    .frame(width: 46, height: 6)
+                    .padding(.top, 10)
+                    .padding(.trailing, 12)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: BolaTheme.cornerCompact, style: .continuous))
+        }
+        .padding(.horizontal, IOSHealthChartScales.chartCardHorizontalPadding)
+        .padding(.vertical, IOSHealthChartScales.chartCardVerticalPadding)
+        .background(chartBackground)
+        .overlay {
+            RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
+                .stroke(Color(uiColor: .separator).opacity(0.4), lineWidth: 0.5)
+        }
+        .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 3)
+    }
+
+    private var chartBackground: some View {
+        ZStack(alignment: .topTrailing) {
+            RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
+                .fill(BolaTheme.surfaceCard)
+
+            RoundedRectangle(cornerRadius: BolaTheme.cornerCard, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            BolaTheme.accent.opacity(0.10),
+                            tint.opacity(0.045),
+                            Color.clear
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        }
+    }
+}
+
+private struct IOSHealthChartRangePicker: View {
+    @Binding var selection: IOSHealthChartRange
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(IOSHealthChartRange.allCases) { range in
+                Button {
+                    withAnimation(.snappy(duration: 0.18)) {
+                        selection = range
+                    }
+                } label: {
+                    Text(range.rawValue)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.black.opacity(range == selection ? 0.9 : 0.62))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .background {
+                    if range == selection {
+                        Capsule()
+                            .fill(BolaTheme.accent.opacity(0.92))
+                    }
+                }
+            }
+        }
+        .padding(4)
+        .background {
+            Capsule()
+                .fill(BolaTheme.surfaceElevated)
+        }
+        .overlay {
+            Capsule()
+                .stroke(Color(uiColor: .separator).opacity(0.35), lineWidth: 0.5)
         }
     }
 }
@@ -346,70 +491,112 @@ struct IOSHealthSummaryDetailView: View {
 
 struct IOSHealthActivityDetailView: View {
     @ObservedObject var model: IOSHealthHabitAnalysisModel
+    @State private var selectedRange: IOSHealthChartRange = .week
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("步数")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Chart(model.stepsWeek) { item in
-                    BarMark(
-                        x: .value("日", item.date, unit: .day),
-                        y: .value("步", item.value)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 1, green: 0.38, blue: 0.45),
-                                Color(red: 1, green: 0.38, blue: 0.45).opacity(0.42)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .cornerRadius(7)
-                }
-                .iosHealthWeekdayXAxis()
-                .iosHealthIntYAxis()
-                .chartYScale(domain: IOSHealthChartScales.yPositive(model.stepsWeek))
-                .frame(height: IOSHealthChartScales.chartHeight)
+        ZStack {
+            BolaLifeAmbientBackground()
+                .ignoresSafeArea(edges: [.top, .bottom])
 
-                Text("站立（分钟 · 多来自 Apple Watch）")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Chart(model.standMinutesWeek) { item in
-                    BarMark(
-                        x: .value("日", item.date, unit: .day),
-                        y: .value("分钟", item.value)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.5, green: 0.9, blue: 0.32),
-                                Color(red: 0.5, green: 0.9, blue: 0.32).opacity(0.4)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .cornerRadius(7)
-                }
-                .iosHealthWeekdayXAxis()
-                .iosHealthIntYAxis()
-                .chartYScale(domain: IOSHealthChartScales.yPositive(model.standMinutesWeek))
-                .frame(height: IOSHealthChartScales.chartHeight)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    IOSHealthChartRangePicker(selection: $selectedRange)
 
-                Text("若未佩戴手表，站立可能长期为 0。")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    IOSHealthChartCard(
+                        title: "步数",
+                        assetName: "BolaRunning",
+                        tint: Color(red: 0.92, green: 0.45, blue: 0.22),
+                        imageOpacity: 0.18,
+                        imageAlignment: .bottomTrailing,
+                        imageWidth: 104,
+                        chartHeight: IOSHealthChartScales.chartHeight
+                    ) {
+                        Chart(stepsValues) { item in
+                            BarMark(
+                                x: .value("日", item.date, unit: .day),
+                                y: .value("步", item.value)
+                            )
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.92, green: 0.45, blue: 0.22).opacity(0.88),
+                                        BolaTheme.accent.opacity(0.42)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .cornerRadius(8)
+                        }
+                        .iosHealthWeekdayXAxis()
+                        .iosHealthIntYAxis()
+                        .chartYScale(domain: IOSHealthChartScales.yPositive(stepsValues))
+                        .id(selectedRange)
+                    }
+
+                    IOSHealthChartCard(
+                        title: "站立（分钟 · 多来自 Apple Watch）",
+                        assetName: "BolaRunning",
+                        tint: Color.green,
+                        imageOpacity: 0.16,
+                        imageAlignment: .trailing,
+                        imageWidth: 98,
+                        chartHeight: IOSHealthChartScales.chartHeight
+                    ) {
+                        Chart(standValues) { item in
+                            BarMark(
+                                x: .value("日", item.date, unit: .day),
+                                y: .value("分钟", item.value)
+                            )
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.green.opacity(0.62),
+                                        BolaTheme.accent.opacity(0.34)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .cornerRadius(8)
+                        }
+                        .iosHealthWeekdayXAxis()
+                        .iosHealthIntYAxis()
+                        .chartYScale(domain: IOSHealthChartScales.yPositive(standValues))
+                        .id(selectedRange)
+                    }
+
+                    Text("若未佩戴手表，站立可能长期为 0。")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(BolaTheme.paddingHorizontal)
+                .padding(.vertical, 12)
             }
-            .padding(BolaTheme.paddingHorizontal)
-            .padding(.vertical, 12)
+            .scrollContentBackground(.hidden)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("活动与站立")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var stepsValues: [IOSHealthKitWeekQueries.DayValue] {
+        switch selectedRange {
+        case .week:
+            return model.stepsWeek
+        case .month, .year:
+            // TODO: 接入 HealthKit 月 / 年聚合后替换为对应粒度数据；当前保留近 7 日安全回退。
+            return model.stepsWeek
+        }
+    }
+
+    private var standValues: [IOSHealthKitWeekQueries.DayValue] {
+        switch selectedRange {
+        case .week:
+            return model.standMinutesWeek
+        case .month, .year:
+            // TODO: 接入 HealthKit 月 / 年聚合后替换为对应粒度数据；当前保留近 7 日安全回退。
+            return model.standMinutesWeek
+        }
     }
 }
 
@@ -470,41 +657,70 @@ struct IOSHealthHeartDetailView: View {
 
 struct IOSHealthSleepDetailView: View {
     @ObservedObject var model: IOSHealthHabitAnalysisModel
+    @State private var selectedRange: IOSHealthChartRange = .week
 
     var body: some View {
-        ScrollView {
-            Chart(model.sleepHoursWeek) { item in
-                BarMark(
-                    x: .value("日", item.date, unit: .day),
-                    y: .value("小时", item.value)
-                )
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.35, green: 0.55, blue: 0.98),
-                            Color(red: 0.55, green: 0.4, blue: 0.95).opacity(0.55)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .cornerRadius(7)
-            }
-            .iosHealthWeekdayXAxis()
-            .iosHealthFloatYAxis()
-            .chartYScale(domain: IOSHealthChartScales.ySleep(model.sleepHoursWeek))
-            .frame(height: IOSHealthChartScales.chartHeight + 24)
-            .padding(BolaTheme.paddingHorizontal)
-            .padding(.top, 12)
+        ZStack {
+            BolaLifeAmbientBackground()
+                .ignoresSafeArea(edges: [.top, .bottom])
 
-            Text("估算睡眠时长来自「睡眠」分析；仅供参考，不能替代医疗建议。")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .padding(.horizontal, BolaTheme.paddingHorizontal)
-                .padding(.bottom, 24)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    IOSHealthChartRangePicker(selection: $selectedRange)
+
+                    IOSHealthChartCard(
+                        title: "近 7 日睡眠",
+                        assetName: "BolaSleeping",
+                        tint: Color(red: 0.42, green: 0.48, blue: 0.82),
+                        imageOpacity: 0.18,
+                        imageAlignment: .bottomTrailing,
+                        imageWidth: 112,
+                        chartHeight: IOSHealthChartScales.chartHeight + 24
+                    ) {
+                        Chart(sleepValues) { item in
+                            BarMark(
+                                x: .value("日", item.date, unit: .day),
+                                y: .value("小时", item.value)
+                            )
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.42, green: 0.48, blue: 0.82).opacity(0.78),
+                                        Color(red: 0.62, green: 0.56, blue: 0.86).opacity(0.38)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .cornerRadius(8)
+                        }
+                        .iosHealthWeekdayXAxis()
+                        .iosHealthFloatYAxis()
+                        .chartYScale(domain: IOSHealthChartScales.ySleep(sleepValues))
+                        .id(selectedRange)
+                    }
+
+                    Text("估算睡眠时长来自「睡眠」分析；仅供参考，不能替代医疗建议。")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .padding(.bottom, 24)
+                }
+                .padding(BolaTheme.paddingHorizontal)
+                .padding(.top, 12)
+            }
+            .scrollContentBackground(.hidden)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("睡眠节奏")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var sleepValues: [IOSHealthKitWeekQueries.DayValue] {
+        switch selectedRange {
+        case .week:
+            return model.sleepHoursWeek
+        case .month, .year:
+            // TODO: 接入 HealthKit 月 / 年聚合后替换为对应粒度数据；当前保留近 7 日安全回退。
+            return model.sleepHoursWeek
+        }
     }
 }
